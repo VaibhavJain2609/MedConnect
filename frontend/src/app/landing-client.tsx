@@ -1,8 +1,33 @@
 "use client";
 
-import { loginRedirect, signupRedirect } from "@/lib/auth";
+import { useRouter } from "next/navigation";
+import { loginRedirect, signupRedirect, logout } from "@/lib/auth";
+import { useAuthStore } from "@/stores/auth-store";
 
 export function LandingNav() {
+  const router = useRouter();
+  const { user } = useAuthStore();
+
+  const handleLogout = () => {
+    logout();
+  };
+
+  if (user) {
+    return (
+      <div className="flex items-center gap-4">
+        <span className="text-sm font-medium text-gray-700">
+          {user.full_name}
+        </span>
+        <button
+          onClick={handleLogout}
+          className="rounded-lg px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+        >
+          Logout
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="flex gap-3">
       <button

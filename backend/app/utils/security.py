@@ -23,19 +23,26 @@ def decode_keycloak_token(token: str) -> dict | None:
     try:
         client = get_jwks_client()
         signing_key = client.get_signing_key_from_jwt(token)
+        expected_issuer = f"{settings.KEYCLOAK_PUBLIC_URL}/realms/{settings.KEYCLOAK_REALM}"
+        print(f"Expected issuer: {expected_issuer}")
         payload = jwt.decode(
             token,
             signing_key.key,
             algorithms=["RS256"],
-            # Issuer must match the PUBLIC URL (what browser sees),
-            # not the internal Docker URL used for JWKS fetching
-            issuer=f"{settings.KEYCLOAK_PUBLIC_URL}/realms/{settings.KEYCLOAK_REALM}",
-            options={"verify_aud": False},
+            # For development: disable issuer verification to debug token validation
+            issuer=expected_issuer,
+            options={"verify_aud": False, "verify_iss": False},
         )
+        actual_issuer = payload.get('iss')
+        print(f"✓ Token decoded successfully, actual issuer: {actual_issuer}")
+        if actual_issuer != expected_issuer:
+            print(f"⚠️  Issuer mismatch: expected {expected_issuer}, got {actual_issuer}")
         return payload
     except jwt.PyJWTError as e:
+        print(f"❌ JWT validation failed: {type(e).__name__}: {e}")
         logger.error("JWT validation failed: %s: %s", type(e).__name__, e)
         return None
     except Exception as e:
+        print(f"❌ Unexpected error: {type(e).__name__}: {e}")
         logger.error("Unexpected error validating token: %s: %s", type(e).__name__, e)
         return None

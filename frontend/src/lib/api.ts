@@ -1,5 +1,5 @@
 import axios from "axios";
-import { getKeycloak } from "./keycloak";
+import keycloak from "./keycloak";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -10,23 +10,22 @@ const api = axios.create({
 
 api.interceptors.request.use(async (config) => {
   if (typeof window === "undefined") return config;
-  const keycloak = await getKeycloak();
-  if (keycloak.authenticated) {
+
+  if (keycloak.authenticated && keycloak.token) {
     try {
       await keycloak.updateToken(30);
-    } catch {
-      // Token refresh failed, will get 401
+    } catch (error) {
+      console.warn("Token refresh failed:", error);
     }
     config.headers.Authorization = `Bearer ${keycloak.token}`;
   }
+
   return config;
 });
 
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    // Don't auto-redirect on 401 — let the caller handle it
-    // This prevents redirect loops during initAuth
     return Promise.reject(error);
   }
 );

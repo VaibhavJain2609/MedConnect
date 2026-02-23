@@ -16,18 +16,22 @@ async def get_current_user(
     db: AsyncSession = Depends(get_db),
 ) -> User:
     if not credentials:
+        print("❌ Authorization header missing")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error": {"code": "UNAUTHORIZED", "message": "Authorization header missing"}},
             headers={"WWW-Authenticate": "Bearer"},
         )
+    print(f"✓ Token received: {credentials.credentials[:50]}...")
     payload = decode_keycloak_token(credentials.credentials)
     if payload is None:
+        print(f"❌ Token validation failed")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error": {"code": "UNAUTHORIZED", "message": "Invalid or expired token"}},
             headers={"WWW-Authenticate": "Bearer"},
         )
+    print(f"✓ Token valid, issuer: {payload.get('iss')}")
 
     sub = payload.get("sub")
     if not sub:

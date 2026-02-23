@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { type User, initKeycloak, getMe } from "@/lib/auth";
+import { type User, initKeycloak, getMe, getAccessToken } from "@/lib/auth";
 
 interface AuthState {
   user: User | null;
@@ -20,13 +20,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   initAuth: async () => {
     try {
       const authenticated = await initKeycloak();
-      if (authenticated) {
-        const user = await getMe();
-        set({ user, loading: false, initialized: true });
+      console.log("initAuth - authenticated:", authenticated, "token:", !!getAccessToken());
+
+      if (authenticated && getAccessToken()) {
+        try {
+          const user = await getMe();
+          console.log("initAuth - user loaded:", user);
+          set({ user, loading: false, initialized: true });
+        } catch (error) {
+          console.error("initAuth - getMe failed:", error);
+          set({ user: null, loading: false, initialized: true, error: "Failed to load user" });
+        }
       } else {
         set({ user: null, loading: false, initialized: true });
       }
-    } catch {
+    } catch (error) {
+      console.error("initAuth error:", error);
       set({ user: null, loading: false, initialized: true, error: "Auth initialization failed" });
     }
   },

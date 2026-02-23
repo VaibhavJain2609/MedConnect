@@ -13,15 +13,16 @@ export function AuthGuard({
   requiredRole?: "patient" | "doctor" | "admin";
 }) {
   const router = useRouter();
-  const { user, loading, initialized, fetchUser } = useAuthStore();
+  const { user, loading, initialized } = useAuthStore();
 
   useEffect(() => {
-    if (!initialized) return;
-    if (!user && !loading) {
-      loginRedirect();
-      return;
+    if (!initialized || loading) return;
+    if (!user) {
+      // Not authenticated — redirect to login page (not Keycloak directly)
+      // This avoids redirect loops: the login page handles the Keycloak redirect
+      router.push("/login");
     }
-  }, [user, loading, initialized, fetchUser]);
+  }, [user, loading, initialized, router]);
 
   useEffect(() => {
     if (!loading && user && requiredRole && user.role !== requiredRole) {

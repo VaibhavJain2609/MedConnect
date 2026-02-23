@@ -1,6 +1,5 @@
-import { getKeycloak } from "./keycloak";
+import keycloak from "./keycloak";
 import api from "./api";
-import type Keycloak from "keycloak-js";
 
 export interface User {
   id: string;
@@ -12,56 +11,67 @@ export interface User {
 }
 
 let initialized = false;
-let _keycloak: Keycloak | null = null;
 
 export async function initKeycloak(): Promise<boolean> {
-  _keycloak = await getKeycloak();
-  if (initialized) return _keycloak.authenticated ?? false;
+  if (typeof window === "undefined") return false;
 
-  const authenticated = await _keycloak.init({
-    onLoad: "check-sso",
-    silentCheckSsoRedirectUri:
-      typeof window !== "undefined"
-        ? `${window.location.origin}/silent-check-sso.html`
-        : undefined,
-    pkceMethod: "S256",
-  });
+  // Already initialized — just return current state
+  if (initialized) {
+    return !!keycloak.authenticated;
+  }
 
-  initialized = true;
-
-  // Auto-refresh token before it expires
-  _keycloak.onTokenExpired = () => {
-    _keycloak!.updateToken(30).catch(() => {
-      _keycloak!.login();
+  try {
+    const authenticated = await keycloak.init({
+      onLoad: "check-sso",
+      pkceMethod: "S256",
+      checkLoginIframe: false,
+      redirectUri: window.location.origin + "/auth/callback",
     });
-  };
 
-  return authenticated;
+    initialized = true;
+
+    console.log("Keycloak init done:", {
+      authenticated,
+      hasToken: !!keycloak.token,
+      hasRefreshToken: !!keycloak.refreshToken,
+      hasIdToken: !!keycloak.idToken,
+    });
+
+    if (authenticated && keycloak.token) {
+      // Set up auto-refresh
+      keycloak.onTokenExpired = () => {
+        keycloak.updateToken(30).catch(() => {
+          console.warn("Token refresh failed");
+        });
+      };
+    }
+
+    return authenticated;
+  } catch (error) {
+    console.error("Keycloak init error:", error);
+    initialized = true;
+    return false;
+  }
 }
 
-export async function loginRedirect() {
-  const kc = await getKeycloak();
-  kc.login();
+export function loginRedirect() {
+  keycloak.login({ redirectUri: window.location.origin + "/auth/callback" });
 }
 
-export async function signupRedirect() {
-  const kc = await getKeycloak();
-  kc.register();
+export function signupRedirect() {
+  keycloak.register({ redirectUri: window.location.origin + "/auth/callback" });
 }
 
-export async function logout() {
-  const kc = await getKeycloak();
-  kc.logout({ redirectUri: window.location.origin });
+export function logout() {
+  keycloak.logout({ redirectUri: window.location.origin });
 }
 
-export async function getAccessToken(): Promise<string | undefined> {
-  const kc = await getKeycloak();
-  return kc.token;
+export function getAccessToken(): string | undefined {
+  return keycloak.token;
 }
 
-export async function isAuthenticated(): Promise<boolean> {
-  const kc = await getKeycloak();
-  return !!kc.authenticated;
+export function isAuthenticated(): boolean {
+  return !!keycloak.authenticated;
 }
 
 export async function getMe(): Promise<User> {

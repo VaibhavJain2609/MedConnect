@@ -9,8 +9,12 @@ export default function AuthCallbackPage() {
   const { user, initialized } = useAuthStore();
 
   useEffect(() => {
-    if (initialized && user) {
-      router.replace(user.role === "doctor" ? "/doctor/dashboard" : "/patient/timeline");
+    if (initialized) {
+      if (user) {
+        router.replace(user.role === "doctor" ? "/doctor/dashboard" : "/patient/timeline");
+      } else {
+        router.replace("/");
+      }
     }
   }, [initialized, user, router]);
 
