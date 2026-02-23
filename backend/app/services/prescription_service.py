@@ -1,0 +1,89 @@
+from datetime import date
+from uuid import UUID
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.medical_record import MedicalRecord
+from app.models.prescription import Prescription
+from app.models.user import User
+from app.utils.fhir import create_fhir_bundle
+
+
+async def create_prescription(
+    db: AsyncSession,
+    doctor_id: UUID,
+    patient_id: UUID,
+    medicines: list[dict],
+    diagnosis: str | None = None,
+    notes: str | None = None,
+    valid_until: date | None = None,
+) -> Prescription:
+    patient = await db.execute(
+        select(User).where(User.id == patient_id, User.role == "patient", User.deleted_at.is_(None))
+    )
+    if not patient.scalar_one_or_none():
+        raise ValueError("Patient not found")
+
+    fhir_bundle = create_fhir_bundle(
+        record_type="prescription",
+        data={"medicines": medicines},
+        patient_id=patient_id,
+        doctor_id=doctor_id,
+    )
+
+    record = MedicalRecord(
+        patient_id=patient_id,
+        doctor_id=doctor_id,
+        record_type="prescription",
+        title=f"Prescription — {diagnosis or 'General'}",
+        description=notes,
+        fhir_bundle=fhir_bundle,
+        source="doctor",
+    )
+    db.add(record)
+    await db.flush()
+
+    prescription = Prescription(
+        record_id=record.id,
+        doctor_id=doctor_id,
+        patient_id=patient_id,
+        medicines=medicines,
+        diagnosis=diagnosis,
+        notes=notes,
+        valid_until=valid_until,
+    )
+    db.add(prescription)
+    await db.flush()
+    return prescription
+
+
+async def get_patient_prescriptions(
+    db: AsyncSession,
+    patient_id: UUID,
+    cursor: UUID | None = None,
+    limit: int = 20,
+) -> tuple[list[Prescription], str | None, bool]:
+    stmt = (
+        select(Prescription)
+        .where(Prescription.patient_id == patient_id, Prescription.deleted_at.is_(None))
+        .order_by(Prescription.created_at.desc())
+        .limit(limit + 1)
+    )
+
+    if cursor:
+        cursor_result = await db.execute(
+            select(Prescription.created_at).where(Prescription.id == cursor)
+        )
+        cursor_time = cursor_result.scalar_one_or_none()
+        if cursor_time:
+            stmt = stmt.where(Prescription.created_at <= cursor_time, Prescription.id != cursor)
+
+    result = await db.execute(stmt)
+    items = result.scalars().all()
+
+    has_more = len(items) > limit
+    prescriptions = list(items[:limit])
+    next_cursor = str(prescriptions[-1].id) if prescriptions and has_more else None
+
+    return prescriptions, next_cursor, has_more

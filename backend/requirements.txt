@@ -1,0 +1,15 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+psycopg2-binary==2.9.10
+alembic==1.14.1
+pydantic[email]==2.10.4
+pydantic-settings==2.7.1
+PyJWT[crypto]==2.9.0
+python-multipart==0.0.20
+redis==5.2.1
+httpx==0.28.1
+structlog==24.4.0
+sentry-sdk[fastapi]==2.19.2
+pgvector==0.3.6
