@@ -212,9 +212,9 @@ def save_component_map(component_id_map: Dict[str, str], output_path: str):
 def main():
     """Main execution"""
     # Paths
-    project_root = Path(__file__).parent.parent.parent
-    csv_path = project_root / "Dataset" / "Extensive_A_Z_medicines_dataset_of_India.csv"
-    output_path = project_root / "backend" / "scripts" / "component_id_map.json"
+    project_root = Path(__file__).parent.parent
+    csv_path = project_root / "Extensive_A_Z_medicines_dataset_of_India.csv"
+    output_path = project_root / "scripts" / "component_id_map.json"
 
     if not csv_path.exists():
         print(f"❌ CSV file not found: {csv_path}")

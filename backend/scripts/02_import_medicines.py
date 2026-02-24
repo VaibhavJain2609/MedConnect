@@ -232,6 +232,8 @@ def import_medicines_with_components(csv_path: str, component_id_map: Dict[str, 
         medicine_records.append(medicine)
 
         # Create medicine_component records
+        # Use a set to track already added components for this medicine (avoid duplicates)
+        medicine_comp_ids = set()
         sequence = 1
 
         # Component 1
@@ -239,7 +241,7 @@ def import_medicines_with_components(csv_path: str, component_id_map: Dict[str, 
             comp_name = normalize_component_name(comp1[0])
             component_id = component_id_map.get(comp_name)
 
-            if component_id:
+            if component_id and component_id not in medicine_comp_ids:
                 medicine_component_records.append({
                     'id': generate_uuid(),
                     'medicine_id': medicine_id,
@@ -248,8 +250,9 @@ def import_medicines_with_components(csv_path: str, component_id_map: Dict[str, 
                     'unit': comp1[2],
                     'sequence': sequence
                 })
+                medicine_comp_ids.add(component_id)
                 sequence += 1
-            else:
+            elif not component_id:
                 missing_components.add(comp_name)
 
         # Component 2
@@ -257,7 +260,7 @@ def import_medicines_with_components(csv_path: str, component_id_map: Dict[str, 
             comp_name = normalize_component_name(comp2[0])
             component_id = component_id_map.get(comp_name)
 
-            if component_id:
+            if component_id and component_id not in medicine_comp_ids:
                 medicine_component_records.append({
                     'id': generate_uuid(),
                     'medicine_id': medicine_id,
@@ -266,7 +269,8 @@ def import_medicines_with_components(csv_path: str, component_id_map: Dict[str, 
                     'unit': comp2[2],
                     'sequence': sequence
                 })
-            else:
+                medicine_comp_ids.add(component_id)
+            elif not component_id:
                 missing_components.add(comp_name)
 
         # Progress indicator
@@ -299,7 +303,7 @@ def import_medicines_with_components(csv_path: str, component_id_map: Dict[str, 
                                          alternatives, interactions)
                     VALUES (:id, :brand_name, :manufacturer, :dosage_form, :strength, :pack_size,
                            :therapeutic_class, :schedule, :mrp, :is_discontinued, :habit_forming,
-                           :alternatives::jsonb, :interactions::jsonb)
+                           CAST(:alternatives AS jsonb), CAST(:interactions AS jsonb))
                 """),
                 batch
             )
@@ -342,9 +346,9 @@ def import_medicines_with_components(csv_path: str, component_id_map: Dict[str, 
 
 def main():
     """Main execution"""
-    project_root = Path(__file__).parent.parent.parent
-    csv_path = project_root / "Dataset" / "Extensive_A_Z_medicines_dataset_of_India.csv"
-    component_map_path = project_root / "backend" / "scripts" / "component_id_map.json"
+    project_root = Path(__file__).parent.parent
+    csv_path = project_root / "Extensive_A_Z_medicines_dataset_of_India.csv"
+    component_map_path = project_root / "scripts" / "component_id_map.json"
 
     if not csv_path.exists():
         print(f"❌ CSV file not found: {csv_path}")
