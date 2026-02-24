@@ -49,7 +49,13 @@ async def get_current_user(
     # Extract role from token claims
     realm_access = payload.get("realm_access", {})
     roles = realm_access.get("roles", [])
-    role = "doctor" if "doctor" in roles else "patient"
+    # Priority: admin > doctor > patient (default)
+    if "admin" in roles:
+        role = "admin"
+    elif "doctor" in roles:
+        role = "doctor"
+    else:
+        role = "patient"
 
     if not user:
         # Auto-provision: create local user from Keycloak token claims
@@ -120,5 +126,15 @@ async def require_patient(user: User = Depends(get_current_user)) -> User:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"error": {"code": "FORBIDDEN", "message": "Patient access required"}},
+        )
+    return user
+
+
+async def require_admin(user: User = Depends(get_current_user)) -> User:
+    """Require admin role for access (MD-32)"""
+    if user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": {"code": "FORBIDDEN", "message": "Admin access required"}},
         )
     return user
