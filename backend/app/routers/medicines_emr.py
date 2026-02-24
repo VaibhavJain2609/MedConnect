@@ -40,6 +40,64 @@ async def search_medicines(
     return result
 
 
+@router.get("/medicines/autocomplete")
+async def autocomplete_medicines(
+    q: str = Query(..., min_length=2, description="Search query (minimum 2 characters)"),
+    db: AsyncSession = Depends(get_medicine_db),
+):
+    """
+    Optimized autocomplete endpoint for prescription forms.
+
+    Returns top 10 brand matches with essential info only:
+    - Brand name
+    - Salt composition
+    - Manufacturer
+    - Brand ID
+
+    Designed for <100ms response time using trigram indexes.
+    """
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload, joinedload
+    from app.models.medicine.commercial import Brand, BrandComposition, Manufacturer
+    from app.models.medicine.salts import SaltStrength, Salt
+
+    # Query brands with trigram similarity for fast prefix/fuzzy matching
+    query = (
+        select(Brand)
+        .options(
+            joinedload(Brand.manufacturer),
+            selectinload(Brand.compositions)
+            .joinedload(BrandComposition.salt_strength)
+            .joinedload(SaltStrength.salt),
+        )
+        .where(Brand.brand_name.ilike(f"%{q}%"), Brand.is_discontinued == False)
+        .order_by(Brand.brand_name)
+        .limit(10)
+    )
+
+    result = await db.execute(query)
+    brands = result.unique().scalars().all()
+
+    # Build concise response
+    autocomplete_results = []
+    for brand in brands:
+        # Build salt composition string
+        salt_comp = " + ".join([
+            f"{bc.salt_strength.salt.salt_name} ({bc.salt_strength.display_strength})"
+            for bc in sorted(brand.compositions, key=lambda x: x.sequence)
+        ])
+
+        autocomplete_results.append({
+            "brand_id": str(brand.brand_id),
+            "brand_name": brand.brand_name,
+            "salt_composition": salt_comp,
+            "manufacturer_name": brand.manufacturer.manufacturer_name,
+            "manufacturer_id": str(brand.manufacturer_id),
+        })
+
+    return {"results": autocomplete_results, "count": len(autocomplete_results)}
+
+
 # ============================================================================
 # SALTS
 # ============================================================================
