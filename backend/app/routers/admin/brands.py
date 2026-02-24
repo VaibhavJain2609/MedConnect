@@ -9,6 +9,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from pydantic import BaseModel, Field
+import re
 
 from app.database import get_medicine_db
 from app.dependencies import require_admin
@@ -330,3 +331,203 @@ async def delete_brand(
     await db.delete(brand)
     await db.commit()
     return None
+
+
+class BulkImportRow(BaseModel):
+    """Single row in bulk import CSV."""
+    brand_name: str
+    manufacturer_name: str
+    salt_compositions: str  # Format: "Salt1(strength1) + Salt2(strength2)"
+    drug_type: str = "allopathy"
+    is_discontinued: bool = False
+    launch_date: Optional[str] = None
+
+
+class BulkImportResult(BaseModel):
+    """Result for a single row."""
+    row: int
+    brand_name: str
+    status: str  # "success", "error", "skipped"
+    message: str
+    brand_id: Optional[str] = None
+
+
+class BulkImportResponse(BaseModel):
+    """Response for bulk import operation."""
+    total: int
+    successful: int
+    failed: int
+    skipped: int
+    results: list[BulkImportResult]
+
+
+@router.post("/bulk-import", response_model=BulkImportResponse)
+async def bulk_import_brands(
+    rows: list[BulkImportRow],
+    db: AsyncSession = Depends(get_medicine_db),
+    admin: User = Depends(require_admin),
+):
+    """
+    Bulk import brands from CSV data - Admin only.
+
+    Expected CSV format:
+    brand_name,manufacturer_name,salt_compositions,drug_type,is_discontinued,launch_date
+    Crocin 500,GSK,Paracetamol(500mg),allopathy,false,2020-01-01
+
+    - Creates manufacturers if they don't exist
+    - Creates salts and strengths if they don't exist
+    - Skips duplicate brands
+    - Returns detailed results for each row
+    """
+    results: list[BulkImportResult] = []
+    successful = 0
+    failed = 0
+    skipped = 0
+
+    for idx, row in enumerate(rows, start=1):
+        try:
+            # Find or create manufacturer
+            mfr_result = await db.execute(
+                select(Manufacturer).where(
+                    func.lower(Manufacturer.manufacturer_name) == row.manufacturer_name.lower()
+                )
+            )
+            manufacturer = mfr_result.scalar_one_or_none()
+
+            if not manufacturer:
+                manufacturer = Manufacturer(
+                    manufacturer_name=row.manufacturer_name,
+                    is_active=True,
+                )
+                db.add(manufacturer)
+                await db.flush()
+
+            # Check for existing brand
+            existing_result = await db.execute(
+                select(Brand).where(
+                    func.lower(Brand.brand_name) == row.brand_name.lower(),
+                    Brand.manufacturer_id == manufacturer.manufacturer_id,
+                )
+            )
+            if existing_result.scalar_one_or_none():
+                results.append(BulkImportResult(
+                    row=idx,
+                    brand_name=row.brand_name,
+                    status="skipped",
+                    message="Brand already exists for this manufacturer",
+                ))
+                skipped += 1
+                continue
+
+            # Parse salt compositions (simplified - production would need robust parsing)
+            # Format: "Paracetamol(500mg) + Caffeine(65mg)"
+            composition_parts = [p.strip() for p in row.salt_compositions.split("+")]
+            composition_data: list[BrandCompositionInput] = []
+
+            for seq, comp_str in enumerate(composition_parts, start=1):
+                # Extract salt name and strength
+                if "(" not in comp_str or ")" not in comp_str:
+                    raise ValueError(f"Invalid composition format: {comp_str}")
+
+                salt_name = comp_str[:comp_str.index("(")].strip()
+                strength_str = comp_str[comp_str.index("(") + 1:comp_str.index(")")].strip()
+
+                # Find or create salt
+                salt_result = await db.execute(
+                    select(Salt).where(func.lower(Salt.salt_name) == salt_name.lower())
+                )
+                salt = salt_result.scalar_one_or_none()
+
+                if not salt:
+                    salt = Salt(salt_name=salt_name, prescription_required=True)
+                    db.add(salt)
+                    await db.flush()
+
+                # Parse strength value and unit (e.g., "500mg" -> 500, "mg")
+                import re
+                match = re.match(r"(\d+(?:\.\d+)?)\s*([a-zA-Z]+)", strength_str)
+                if not match:
+                    raise ValueError(f"Invalid strength format: {strength_str}")
+
+                strength_value = float(match.group(1))
+                strength_unit = match.group(2)
+
+                # Find or create strength
+                strength_result = await db.execute(
+                    select(SaltStrength).where(
+                        SaltStrength.salt_id == salt.salt_id,
+                        SaltStrength.strength_value == strength_value,
+                        SaltStrength.strength_unit == strength_unit,
+                    )
+                )
+                salt_strength = strength_result.scalar_one_or_none()
+
+                if not salt_strength:
+                    salt_strength = SaltStrength(
+                        salt_id=salt.salt_id,
+                        strength_value=strength_value,
+                        strength_unit=strength_unit,
+                    )
+                    db.add(salt_strength)
+                    await db.flush()
+
+                composition_data.append(BrandCompositionInput(
+                    salt_strength_id=str(salt_strength.salt_strength_id),
+                    sequence=seq,
+                ))
+
+            # Create brand
+            new_brand = Brand(
+                brand_name=row.brand_name,
+                manufacturer_id=manufacturer.manufacturer_id,
+                drug_type=row.drug_type,
+                is_discontinued=row.is_discontinued,
+                launch_date=date.fromisoformat(row.launch_date) if row.launch_date else None,
+            )
+            db.add(new_brand)
+            await db.flush()
+
+            # Create compositions
+            for comp_input in composition_data:
+                composition = BrandComposition(
+                    brand_id=new_brand.brand_id,
+                    salt_strength_id=UUID(comp_input.salt_strength_id),
+                    sequence=comp_input.sequence,
+                )
+                db.add(composition)
+
+            await db.flush()
+
+            results.append(BulkImportResult(
+                row=idx,
+                brand_name=row.brand_name,
+                status="success",
+                message="Brand created successfully",
+                brand_id=str(new_brand.brand_id),
+            ))
+            successful += 1
+
+        except Exception as e:
+            results.append(BulkImportResult(
+                row=idx,
+                brand_name=row.brand_name,
+                status="error",
+                message=str(e),
+            ))
+            failed += 1
+            # Rollback this row's changes but continue with others
+            await db.rollback()
+            # Reconnect session for next iteration
+            continue
+
+    # Commit all successful rows
+    if successful > 0:
+        await db.commit()
+
+    return BulkImportResponse(
+        total=len(rows),
+        successful=successful,
+        failed=failed,
+        skipped=skipped,
+        results=results,
+    )

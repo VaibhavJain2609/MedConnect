@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Search, Plus, Pill, Loader2, AlertCircle, Beaker, Package, Info, List } from "lucide-react";
+import { Search, Plus, Pill, Loader2, AlertCircle, Beaker, Package, Info, List, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -28,6 +29,7 @@ import {
 } from "@/lib/api/medicines-emr";
 
 export default function MedicinesPageEMR() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [includeDiscontinued, setIncludeDiscontinued] = useState(false);
@@ -154,10 +156,16 @@ export default function MedicinesPageEMR() {
             Normalized pharmaceutical database with salts, strengths, and brands
           </p>
         </div>
-        <Button className="sm:w-auto">
-          <Plus className="h-4 w-4 mr-2" />
-          Add Medicine
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => router.push("/admin/medicines/import")}>
+            <Upload className="h-4 w-4 mr-2" />
+            Bulk Import
+          </Button>
+          <Button onClick={() => router.push("/admin/medicines/new")}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Medicine
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}
