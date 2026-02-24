@@ -72,10 +72,12 @@ export default function AddMedicinePage() {
     queryFn: () => listManufacturers(),
   });
 
-  // Fetch salts for composition selection
+  // Fetch salts for composition selection (with search)
+  const [saltSearchQuery, setSaltSearchQuery] = useState("");
   const { data: saltsData } = useQuery({
-    queryKey: ["salts-for-composition"],
-    queryFn: () => listSalts({ limit: 1000 }),
+    queryKey: ["salts-for-composition", saltSearchQuery],
+    queryFn: () => listSalts({ search: saltSearchQuery || undefined, limit: 50 }),
+    enabled: saltSearchQuery.length > 0,
   });
 
   // Fetch strengths for selected salt
@@ -342,49 +344,74 @@ export default function AddMedicinePage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Add composition form */}
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <Select value={selectedSaltId} onValueChange={setSelectedSaltId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select salt" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {saltsData?.salts.map((salt: Salt) => (
-                        <SelectItem key={salt.salt_id} value={salt.salt_id}>
-                          {salt.salt_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <div className="space-y-2">
+                <div>
+                  <Label>Search Salt (type to search)</Label>
+                  <Input
+                    placeholder="Type salt name (e.g., Paracetamol)..."
+                    value={saltSearchQuery}
+                    onChange={(e) => {
+                      setSaltSearchQuery(e.target.value);
+                      setSelectedSaltId("");
+                      setSelectedStrengthId("");
+                    }}
+                  />
                 </div>
 
-                <div className="flex-1">
-                  <Select
-                    value={selectedStrengthId}
-                    onValueChange={setSelectedStrengthId}
-                    disabled={!selectedSaltId}
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <Select
+                      value={selectedSaltId}
+                      onValueChange={setSelectedSaltId}
+                      disabled={!saltsData?.salts || saltsData.salts.length === 0}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={
+                          saltSearchQuery.length === 0
+                            ? "Type above to search salts"
+                            : saltsData?.salts.length === 0
+                            ? "No results found"
+                            : "Select salt"
+                        } />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {saltsData?.salts.map((salt: Salt) => (
+                          <SelectItem key={salt.salt_id} value={salt.salt_id}>
+                            {salt.salt_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex-1">
+                    <Select
+                      value={selectedStrengthId}
+                      onValueChange={setSelectedStrengthId}
+                      disabled={!selectedSaltId}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select strength" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {saltStrengths.map((strength: SaltStrength) => (
+                          <SelectItem key={strength.salt_strength_id} value={strength.salt_strength_id}>
+                            {strength.display_strength}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <Button
+                    type="button"
+                    onClick={handleAddComposition}
+                    disabled={!selectedSaltId || !selectedStrengthId}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select strength" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {saltStrengths.map((strength: SaltStrength) => (
-                        <SelectItem key={strength.salt_strength_id} value={strength.salt_strength_id}>
-                          {strength.display_strength}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add
+                  </Button>
                 </div>
-
-                <Button
-                  type="button"
-                  onClick={handleAddComposition}
-                  disabled={!selectedSaltId || !selectedStrengthId}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add
-                </Button>
               </div>
 
               {/* Composition list */}

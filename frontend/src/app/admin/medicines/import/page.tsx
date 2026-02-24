@@ -256,18 +256,11 @@ export default function BulkImportPage() {
   };
 
   const downloadTemplate = () => {
-    const template = `brand_name,manufacturer_name,salt_compositions,drug_type,is_discontinued,launch_date
-Crocin 500,GSK Pharmaceuticals,Paracetamol(500mg),allopathy,false,2020-01-01
-Saridon,Piramal Healthcare,Paracetamol(250mg) + Caffeine(50mg) + Propyphenazone(150mg),allopathy,false,2018-06-15
-Brufen 400,Abbott Healthcare,Ibuprofen(400mg),allopathy,false,2019-03-10`;
-
-    const blob = new Blob([template], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
+    // Download the sample CSV file from public directory
     const a = document.createElement("a");
-    a.href = url;
-    a.download = "medicine_import_template.csv";
+    a.href = "/medicine_import_sample.csv";
+    a.download = "medicine_import_sample.csv";
     a.click();
-    URL.revokeObjectURL(url);
   };
 
   return (

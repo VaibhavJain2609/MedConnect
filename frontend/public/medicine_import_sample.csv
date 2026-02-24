@@ -1,0 +1,11 @@
+brand_name,manufacturer_name,salt_compositions,drug_type,is_discontinued,launch_date
+Crocin 500,GSK Pharmaceuticals,Paracetamol(500mg),allopathy,false,2020-01-01
+Crocin Advance,GSK Pharmaceuticals,Paracetamol(650mg),allopathy,false,2021-03-15
+Saridon,Piramal Healthcare,Paracetamol(250mg) + Caffeine(50mg) + Propyphenazone(150mg),allopathy,false,2018-06-15
+Brufen 400,Abbott Healthcare,Ibuprofen(400mg),allopathy,false,2019-03-10
+Augmentin 625,GSK Pharmaceuticals,Amoxycillin(500mg) + Clavulanic Acid(125mg),allopathy,false,2017-08-20
+Azithral 500,Alembic Pharmaceuticals,Azithromycin(500mg),allopathy,false,2016-11-05
+Combiflam,Sanofi India,Ibuprofen(400mg) + Paracetamol(325mg),allopathy,false,2015-02-28
+Allegra 120,Sanofi India,Fexofenadine(120mg),allopathy,false,2018-09-12
+Dolo 650,Micro Labs,Paracetamol(650mg),allopathy,false,2019-07-22
+Becosules,Pfizer,Vitamin B Complex(various),allopathy,false,2014-05-10
