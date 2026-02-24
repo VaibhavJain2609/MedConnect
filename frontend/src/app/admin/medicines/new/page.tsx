@@ -146,19 +146,17 @@ export default function AddMedicinePage() {
     });
   };
 
-  // Handle creating new salt (just store the name, will be created on backend)
-  const handleSelectSalt = (saltValue: string) => {
-    // Check if it's an existing salt or a search query
-    const existingSalt = saltsData?.salts.find((s) => s.salt_id === saltValue);
-    if (existingSalt) {
-      setSelectedSaltId(existingSalt.salt_id);
-      setSelectedSaltName(existingSalt.salt_name);
-    } else {
-      // It's a new salt name from search
-      setSelectedSaltId("");
-      setSelectedSaltName(saltValue);
-    }
+  // Handle creating new salt
+  const handleCreateSalt = (saltName: string) => {
+    // Create a temporary ID for the new salt
+    const tempId = `new-salt-${Date.now()}`;
+    setSelectedSaltId(tempId);
+    setSelectedSaltName(saltName);
     setSelectedStrengthId("");
+    toast({
+      title: "Salt Added",
+      description: `"${saltName}" will be created when you save the brand`,
+    });
   };
 
   // Add composition to list
@@ -370,7 +368,7 @@ export default function AddMedicinePage() {
               <div className="space-y-2">
                 <div className="flex gap-2">
                   <div className="flex-1">
-                    <Label>Select Salt (type to search)</Label>
+                    <Label>Select Salt (type to search or create new)</Label>
                     <Autocomplete
                       options={(saltsData?.salts || []).map((salt: Salt) => ({
                         value: salt.salt_id,
@@ -383,8 +381,9 @@ export default function AddMedicinePage() {
                       }}
                       onSearchChange={setSaltSearchQuery}
                       placeholder="Type salt name (e.g., Paracetamol)..."
-                      emptyText="No salts found. Try different keywords."
-                      allowCreate={false}
+                      emptyText="No salts found."
+                      allowCreate={true}
+                      onCreateNew={handleCreateSalt}
                     />
                   </div>
 

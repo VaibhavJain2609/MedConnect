@@ -82,6 +82,7 @@ export default function EditMedicinePage() {
 
   const [compositions, setCompositions] = useState<CompositionEntry[]>([]);
   const [selectedSaltId, setSelectedSaltId] = useState<string>("");
+  const [selectedSaltName, setSelectedSaltName] = useState<string>("");
   const [selectedStrengthId, setSelectedStrengthId] = useState<string>("");
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
@@ -212,6 +213,18 @@ export default function EditMedicinePage() {
       });
     },
   });
+
+  // Handle creating new salt
+  const handleCreateSalt = (saltName: string) => {
+    const tempId = `new-salt-${Date.now()}`;
+    setSelectedSaltId(tempId);
+    setSelectedSaltName(saltName);
+    setSelectedStrengthId("");
+    toast({
+      title: "Salt Added",
+      description: `"${saltName}" will be created when you save the brand`,
+    });
+  };
 
   // Add composition to list
   const handleAddComposition = () => {
@@ -488,7 +501,7 @@ export default function EditMedicinePage() {
               <div className="space-y-2">
                 <div className="flex gap-2">
                   <div className="flex-1">
-                    <Label>Select Salt (type to search)</Label>
+                    <Label>Select Salt (type to search or create new)</Label>
                     <Autocomplete
                       options={(saltsData?.salts || []).map((salt: Salt) => ({
                         value: salt.salt_id,
@@ -501,7 +514,9 @@ export default function EditMedicinePage() {
                       }}
                       onSearchChange={setSaltSearchQuery}
                       placeholder="Type salt name (e.g., Paracetamol)..."
-                      emptyText="No salts found. Try different keywords."
+                      emptyText="No salts found."
+                      allowCreate={true}
+                      onCreateNew={handleCreateSalt}
                     />
                   </div>
 
