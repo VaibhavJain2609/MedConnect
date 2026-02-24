@@ -8,7 +8,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 export interface MedicineComponent {
   component_id: string;
   component_name: string;
-  strength: number;
+  strength: number | string;  // Can be string from API (Decimal type)
   unit: string;
   sequence: number;
 }
@@ -22,7 +22,7 @@ export interface Medicine {
   pack_size: string | null;
   therapeutic_class: string | null;
   schedule: string | null;
-  mrp: number | null;
+  mrp: number | string | null;  // Can be string from API (Decimal type)
   is_discontinued: boolean;
   habit_forming: boolean;
   components: MedicineComponent[];

@@ -49,9 +49,11 @@ export default function MedicinesPage() {
     setCurrentPage(1); // Reset to first page on new search
   };
 
-  const formatCurrency = (amount: number | null) => {
-    if (amount === null) return "N/A";
-    return `₹${amount.toFixed(2)}`;
+  const formatCurrency = (amount: number | null | string) => {
+    if (amount === null || amount === undefined) return "N/A";
+    const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+    if (isNaN(numAmount)) return "N/A";
+    return `₹${numAmount.toFixed(2)}`;
   };
 
   const getSaltComposition = (components: any[]) => {
