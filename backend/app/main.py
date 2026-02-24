@@ -6,6 +6,10 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.routers import auth, doctors, patients
+from app.routers import medicines_emr
+from app.routers.admin import brands as admin_brands
+# from app.routers.admin import components as admin_components
+# from app.routers.admin import medicines as admin_medicines
 
 structlog.configure(
     processors=[
@@ -38,18 +42,34 @@ app.include_router(auth.router)
 app.include_router(patients.router)
 app.include_router(doctors.router)
 
+# Medicine endpoints (EMR schema)
+app.include_router(medicines_emr.router, prefix="/api/v1")
+
+# Admin endpoints (protected) - EMR schema
+app.include_router(admin_brands.router, prefix="/api/v1")
+# app.include_router(admin_components.router, prefix="/api/v1")
+# app.include_router(admin_medicines.router, prefix="/api/v1")
+
 
 @app.get("/health")
 async def health():
     from sqlalchemy import text
 
-    from app.database import async_session
+    from app.database import async_session, medicine_async_session
 
     db_ok = False
     try:
         async with async_session() as session:
             await session.execute(text("SELECT 1"))
             db_ok = True
+    except Exception:
+        pass
+
+    medicine_db_ok = False
+    try:
+        async with medicine_async_session() as session:
+            await session.execute(text("SELECT 1"))
+            medicine_db_ok = True
     except Exception:
         pass
 
@@ -64,12 +84,13 @@ async def health():
     except Exception:
         pass
 
-    all_ok = db_ok and redis_ok
+    all_ok = db_ok and medicine_db_ok and redis_ok
     return JSONResponse(
         status_code=status.HTTP_200_OK if all_ok else status.HTTP_503_SERVICE_UNAVAILABLE,
         content={
             "status": "ok" if all_ok else "degraded",
             "db": "ok" if db_ok else "error",
+            "medicine_db": "ok" if medicine_db_ok else "error",
             "redis": "ok" if redis_ok else "error",
             "version": "0.1.0",
         },
