@@ -11,7 +11,14 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     if (initialized) {
       if (user) {
-        router.replace(user.role === "doctor" ? "/doctor/dashboard" : "/patient/timeline");
+        // Redirect based on user role
+        if (user.role === "admin") {
+          router.replace("/admin/dashboard");
+        } else if (user.role === "doctor") {
+          router.replace("/doctor/dashboard");
+        } else {
+          router.replace("/patient/timeline");
+        }
       } else {
         router.replace("/");
       }
