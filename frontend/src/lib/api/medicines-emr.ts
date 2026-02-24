@@ -75,6 +75,7 @@ export interface Brand {
   drug_type: string;
   launch_date?: string;
   discontinuation_date?: string;
+  ndhm_code?: string;
   created_at: string;
   updated_at: string;
 }

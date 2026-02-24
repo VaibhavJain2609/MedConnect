@@ -130,7 +130,7 @@ export default function BulkImportPage() {
       const row: any = {};
 
       headers.forEach((header, index) => {
-        let value = values[index] || "";
+        let value: any = values[index] || "";
 
         // Type conversion
         if (header === "is_discontinued") {
