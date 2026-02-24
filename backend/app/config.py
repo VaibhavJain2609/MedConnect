@@ -8,6 +8,11 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str = "postgresql+asyncpg://medconnect:medconnect@postgres:5432/medconnect"
     DATABASE_URL_SYNC: str = "postgresql://medconnect:medconnect@postgres:5432/medconnect"
+
+    # Separate database for medicine data
+    MEDICINE_DB_URL: str = "postgresql+asyncpg://medconnect:medconnect@postgres:5432/medconnect_medicines"
+    MEDICINE_DB_URL_SYNC: str = "postgresql://medconnect:medconnect@postgres:5432/medconnect_medicines"
+
     REDIS_URL: str = "redis://redis:6379/0"
 
     KEYCLOAK_URL: str = "http://keycloak:8080"
