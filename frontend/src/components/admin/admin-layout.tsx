@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { AdminSidebar } from "./admin-sidebar";
 import { Button } from "@/components/ui/button";
-import { Menu } from "lucide-react";
+import { Menu, LogOut } from "lucide-react";
+import { logout } from "@/lib/auth";
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -45,9 +46,18 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
             </h1>
           </div>
 
-          {/* Future: User menu, notifications */}
+          {/* User menu with logout */}
           <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">Admin</span>
+            <span className="text-sm text-gray-600 hidden sm:inline">Admin</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={logout}
+              className="gap-2"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Logout</span>
+            </Button>
           </div>
         </header>
 
