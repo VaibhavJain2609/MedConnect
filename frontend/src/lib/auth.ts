@@ -55,23 +55,29 @@ export async function initKeycloak(): Promise<boolean> {
 }
 
 export function loginRedirect() {
-  keycloak.login({ redirectUri: window.location.origin + "/auth/callback" });
+  if (typeof window !== "undefined" && keycloak) {
+    keycloak.login({ redirectUri: window.location.origin + "/auth/callback" });
+  }
 }
 
 export function signupRedirect() {
-  keycloak.register({ redirectUri: window.location.origin + "/auth/callback" });
+  if (typeof window !== "undefined" && keycloak) {
+    keycloak.register({ redirectUri: window.location.origin + "/auth/callback" });
+  }
 }
 
 export function logout() {
-  keycloak.logout({ redirectUri: window.location.origin });
+  if (typeof window !== "undefined" && keycloak) {
+    keycloak.logout({ redirectUri: window.location.origin });
+  }
 }
 
 export function getAccessToken(): string | undefined {
-  return keycloak.token;
+  return keycloak?.token;
 }
 
 export function isAuthenticated(): boolean {
-  return !!keycloak.authenticated;
+  return !!keycloak?.authenticated;
 }
 
 export async function getMe(): Promise<User> {
