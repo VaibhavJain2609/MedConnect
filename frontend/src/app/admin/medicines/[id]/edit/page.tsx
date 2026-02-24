@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Combobox } from "@/components/ui/combobox";
+import { Autocomplete } from "@/components/ui/autocomplete";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -385,28 +385,18 @@ export default function EditMedicinePage() {
               </div>
 
               <div>
-                <Label htmlFor="manufacturer_id">Manufacturer *</Label>
-                <Select
+                <Label htmlFor="manufacturer_id">Manufacturer * (type to search)</Label>
+                <Autocomplete
+                  options={manufacturers.map((m: Manufacturer) => ({
+                    value: m.manufacturer_id,
+                    label: m.manufacturer_name,
+                  }))}
                   value={watchManufacturerId}
                   onValueChange={(value) => setValue("manufacturer_id", value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select manufacturer" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {manufacturersLoading ? (
-                      <SelectItem value="loading" disabled>
-                        Loading...
-                      </SelectItem>
-                    ) : (
-                      manufacturers.map((mfr: Manufacturer) => (
-                        <SelectItem key={mfr.manufacturer_id} value={mfr.manufacturer_id}>
-                          {mfr.manufacturer_name}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
+                  onSearchChange={setManufacturerSearchQuery}
+                  placeholder="Type manufacturer name..."
+                  emptyText="No manufacturers found."
+                />
                 {errors.manufacturer_id && (
                   <p className="text-sm text-destructive mt-1">
                     {errors.manufacturer_id.message}
@@ -496,53 +486,34 @@ export default function EditMedicinePage() {
 
               {/* Add composition form */}
               <div className="space-y-2">
-                <div>
-                  <Label>Search Salt (type to search)</Label>
-                  <Input
-                    placeholder="Type salt name (e.g., Paracetamol)..."
-                    value={saltSearchQuery}
-                    onChange={(e) => {
-                      setSaltSearchQuery(e.target.value);
-                      setSelectedSaltId("");
-                      setSelectedStrengthId("");
-                    }}
-                  />
-                </div>
-
                 <div className="flex gap-2">
                   <div className="flex-1">
-                    <Select
+                    <Label>Select Salt (type to search)</Label>
+                    <Autocomplete
+                      options={(saltsData?.salts || []).map((salt: Salt) => ({
+                        value: salt.salt_id,
+                        label: salt.salt_name,
+                      }))}
                       value={selectedSaltId}
-                      onValueChange={setSelectedSaltId}
-                      disabled={!saltsData?.salts || saltsData.salts.length === 0}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={
-                          saltSearchQuery.length === 0
-                            ? "Type above to search salts"
-                            : saltsData?.salts.length === 0
-                            ? "No results found"
-                            : "Select salt"
-                        } />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {saltsData?.salts.map((salt: Salt) => (
-                          <SelectItem key={salt.salt_id} value={salt.salt_id}>
-                            {salt.salt_name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      onValueChange={(value) => {
+                        setSelectedSaltId(value);
+                        setSelectedStrengthId("");
+                      }}
+                      onSearchChange={setSaltSearchQuery}
+                      placeholder="Type salt name (e.g., Paracetamol)..."
+                      emptyText="No salts found. Try different keywords."
+                    />
                   </div>
 
                   <div className="flex-1">
+                    <Label>Select Strength</Label>
                     <Select
                       value={selectedStrengthId}
                       onValueChange={setSelectedStrengthId}
                       disabled={!selectedSaltId}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select strength" />
+                        <SelectValue placeholder={!selectedSaltId ? "Select salt first" : "Select strength"} />
                       </SelectTrigger>
                       <SelectContent>
                         {saltStrengths.map((strength: SaltStrength) => (
@@ -557,14 +528,16 @@ export default function EditMedicinePage() {
                     </Select>
                   </div>
 
-                  <Button
-                    type="button"
-                    onClick={handleAddComposition}
-                    disabled={!selectedSaltId || !selectedStrengthId}
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add
-                  </Button>
+                  <div className="flex items-end">
+                    <Button
+                      type="button"
+                      onClick={handleAddComposition}
+                      disabled={!selectedSaltId || !selectedStrengthId}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add
+                    </Button>
+                  </div>
                 </div>
               </div>
 

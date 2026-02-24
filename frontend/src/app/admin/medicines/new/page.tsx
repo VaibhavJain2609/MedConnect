@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Combobox } from "@/components/ui/combobox";
+import { Autocomplete } from "@/components/ui/autocomplete";
 import { useToast } from "@/hooks/use-toast";
 import {
   listManufacturers,
@@ -272,7 +272,7 @@ export default function AddMedicinePage() {
 
               <div>
                 <Label htmlFor="manufacturer_id">Manufacturer * (type to search or create new)</Label>
-                <Combobox
+                <Autocomplete
                   options={manufacturers.map((m: Manufacturer) => ({
                     value: m.manufacturer_id,
                     label: m.manufacturer_name,
@@ -280,8 +280,7 @@ export default function AddMedicinePage() {
                   value={watchManufacturerId}
                   onValueChange={(value) => setValue("manufacturer_id", value)}
                   onSearchChange={setManufacturerSearchQuery}
-                  placeholder="Select or create manufacturer..."
-                  searchPlaceholder="Search manufacturers..."
+                  placeholder="Type manufacturer name..."
                   emptyText="No manufacturers found."
                   allowCreate={true}
                   onCreateNew={handleCreateManufacturer}
@@ -372,7 +371,7 @@ export default function AddMedicinePage() {
                 <div className="flex gap-2">
                   <div className="flex-1">
                     <Label>Select Salt (type to search)</Label>
-                    <Combobox
+                    <Autocomplete
                       options={(saltsData?.salts || []).map((salt: Salt) => ({
                         value: salt.salt_id,
                         label: salt.salt_name,
@@ -383,9 +382,9 @@ export default function AddMedicinePage() {
                         setSelectedStrengthId("");
                       }}
                       onSearchChange={setSaltSearchQuery}
-                      placeholder="Select salt..."
-                      searchPlaceholder="Search salts (e.g., Paracetamol)..."
+                      placeholder="Type salt name (e.g., Paracetamol)..."
                       emptyText="No salts found. Try different keywords."
+                      allowCreate={false}
                     />
                   </div>
 
