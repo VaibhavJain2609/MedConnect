@@ -297,3 +297,186 @@ async def delete_salt(
 
     await db.commit()
     return None
+
+
+# ============================================================================
+# SALT STRENGTHS MANAGEMENT
+# ============================================================================
+
+@router.post("/{salt_id}/strengths", response_model=SaltStrengthResponse, status_code=status.HTTP_201_CREATED)
+async def create_salt_strength(
+    salt_id: UUID,
+    strength_data: SaltStrengthInput,
+    db: AsyncSession = Depends(get_medicine_db),
+    admin: User = Depends(require_admin),
+):
+    """
+    Create a new strength for a salt - Admin only.
+
+    - Validates salt exists
+    - Checks for duplicate strength+unit combination
+    - Returns 201 with created strength
+    """
+    # Verify salt exists
+    salt = await SaltService.get_salt_by_id(db, salt_id)
+    if not salt:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Salt {salt_id} not found"
+        )
+
+    # Check for duplicate strength+unit
+    from app.models.medicine.salts import SaltStrength
+    from sqlalchemy import select
+
+    existing = await db.execute(
+        select(SaltStrength).where(
+            SaltStrength.salt_id == salt_id,
+            SaltStrength.strength_value == strength_data.strength_value,
+            SaltStrength.strength_unit == strength_data.strength_unit,
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Strength {strength_data.strength_value}{strength_data.strength_unit} already exists for this salt"
+        )
+
+    # Create strength
+    strength = SaltStrength(
+        salt_id=salt_id,
+        strength_value=strength_data.strength_value,
+        strength_unit=strength_data.strength_unit,
+        is_standard_strength=strength_data.is_standard_strength,
+        pediatric_approved=strength_data.pediatric_approved,
+    )
+    db.add(strength)
+    await db.commit()
+    await db.refresh(strength)
+
+    return SaltStrengthResponse(
+        salt_strength_id=strength.salt_strength_id,
+        strength_value=strength.strength_value,
+        strength_unit=strength.strength_unit,
+        display_strength=strength.display_strength,
+        is_standard_strength=strength.is_standard_strength,
+        pediatric_approved=strength.pediatric_approved,
+    )
+
+
+@router.put("/{salt_id}/strengths/{strength_id}", response_model=SaltStrengthResponse)
+async def update_salt_strength(
+    salt_id: UUID,
+    strength_id: UUID,
+    strength_data: SaltStrengthInput,
+    db: AsyncSession = Depends(get_medicine_db),
+    admin: User = Depends(require_admin),
+):
+    """
+    Update a salt strength - Admin only.
+
+    - Validates strength belongs to the specified salt
+    - Checks for duplicate if value/unit changed
+    - Returns updated strength
+    """
+    from app.models.medicine.salts import SaltStrength
+    from sqlalchemy import select
+
+    # Get existing strength
+    result = await db.execute(
+        select(SaltStrength).where(
+            SaltStrength.salt_strength_id == strength_id,
+            SaltStrength.salt_id == salt_id,
+        )
+    )
+    strength = result.scalar_one_or_none()
+    if not strength:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Strength {strength_id} not found for salt {salt_id}"
+        )
+
+    # Check for duplicate if value or unit changed
+    if (strength_data.strength_value != strength.strength_value or
+        strength_data.strength_unit != strength.strength_unit):
+        existing = await db.execute(
+            select(SaltStrength).where(
+                SaltStrength.salt_id == salt_id,
+                SaltStrength.strength_value == strength_data.strength_value,
+                SaltStrength.strength_unit == strength_data.strength_unit,
+                SaltStrength.salt_strength_id != strength_id,
+            )
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Strength {strength_data.strength_value}{strength_data.strength_unit} already exists for this salt"
+            )
+
+    # Update strength
+    strength.strength_value = strength_data.strength_value
+    strength.strength_unit = strength_data.strength_unit
+    strength.is_standard_strength = strength_data.is_standard_strength
+    strength.pediatric_approved = strength_data.pediatric_approved
+
+    await db.commit()
+    await db.refresh(strength)
+
+    return SaltStrengthResponse(
+        salt_strength_id=strength.salt_strength_id,
+        strength_value=strength.strength_value,
+        strength_unit=strength.strength_unit,
+        display_strength=strength.display_strength,
+        is_standard_strength=strength.is_standard_strength,
+        pediatric_approved=strength.pediatric_approved,
+    )
+
+
+@router.delete("/{salt_id}/strengths/{strength_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_salt_strength(
+    salt_id: UUID,
+    strength_id: UUID,
+    db: AsyncSession = Depends(get_medicine_db),
+    admin: User = Depends(require_admin),
+):
+    """
+    Delete a salt strength - Admin only.
+
+    Safety checks:
+    - Returns 404 if strength not found or doesn't belong to salt
+    - Returns 409 if strength is used in any brand compositions
+    - Returns 204 on successful deletion
+    """
+    from app.models.medicine.salts import SaltStrength
+    from app.models.medicine.commercial import BrandComposition
+    from sqlalchemy import select, func
+
+    # Get existing strength
+    result = await db.execute(
+        select(SaltStrength).where(
+            SaltStrength.salt_strength_id == strength_id,
+            SaltStrength.salt_id == salt_id,
+        )
+    )
+    strength = result.scalar_one_or_none()
+    if not strength:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Strength {strength_id} not found for salt {salt_id}"
+        )
+
+    # Safety check: verify no brand compositions use this strength
+    composition_count = await db.scalar(
+        select(func.count(BrandComposition.composition_id)).where(
+            BrandComposition.salt_strength_id == strength_id
+        )
+    )
+    if composition_count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot delete strength used in {composition_count} brand composition(s)"
+        )
+
+    await db.delete(strength)
+    await db.commit()
+    return None
