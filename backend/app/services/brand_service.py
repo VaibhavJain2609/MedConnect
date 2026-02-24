@@ -183,3 +183,103 @@ class ManufacturerService:
         manufacturers = list(result.scalars().all())
 
         return manufacturers, total or 0
+
+    @staticmethod
+    async def create_manufacturer(
+        db: AsyncSession,
+        manufacturer_name: str,
+        country: str | None = None,
+        license_number: str | None = None,
+        contact_info: dict | None = None,
+        is_active: bool = True,
+    ) -> Manufacturer:
+        """Create a new manufacturer with duplicate check."""
+        # Check for duplicate name (case-insensitive)
+        existing = await db.execute(
+            select(Manufacturer).where(
+                func.lower(Manufacturer.manufacturer_name) == manufacturer_name.lower()
+            )
+        )
+        if existing.scalar_one_or_none():
+            raise ValueError(f"Manufacturer '{manufacturer_name}' already exists")
+
+        manufacturer = Manufacturer(
+            manufacturer_name=manufacturer_name,
+            country=country,
+            license_number=license_number,
+            contact_info=contact_info,
+            is_active=is_active,
+        )
+        db.add(manufacturer)
+        await db.flush()
+        return manufacturer
+
+    @staticmethod
+    async def update_manufacturer(
+        db: AsyncSession,
+        manufacturer_id: UUID,
+        manufacturer_name: str | None = None,
+        country: str | None = None,
+        license_number: str | None = None,
+        contact_info: dict | None = None,
+        is_active: bool | None = None,
+    ) -> Manufacturer | None:
+        """Update manufacturer with duplicate check."""
+        result = await db.execute(
+            select(Manufacturer).where(Manufacturer.manufacturer_id == manufacturer_id)
+        )
+        manufacturer = result.scalar_one_or_none()
+        if not manufacturer:
+            return None
+
+        # Check for duplicate name if changing name
+        if manufacturer_name is not None and manufacturer_name.lower() != manufacturer.manufacturer_name.lower():
+            existing = await db.execute(
+                select(Manufacturer).where(
+                    func.lower(Manufacturer.manufacturer_name) == manufacturer_name.lower(),
+                    Manufacturer.manufacturer_id != manufacturer_id,
+                )
+            )
+            if existing.scalar_one_or_none():
+                raise ValueError(f"Manufacturer '{manufacturer_name}' already exists")
+            manufacturer.manufacturer_name = manufacturer_name
+
+        # Update optional fields
+        if country is not None:
+            manufacturer.country = country
+        if license_number is not None:
+            manufacturer.license_number = license_number
+        if contact_info is not None:
+            manufacturer.contact_info = contact_info
+        if is_active is not None:
+            manufacturer.is_active = is_active
+
+        await db.flush()
+        return manufacturer
+
+    @staticmethod
+    async def delete_manufacturer(
+        db: AsyncSession,
+        manufacturer_id: UUID,
+    ) -> tuple[bool, str | None]:
+        """
+        Delete manufacturer with safety check.
+        Returns (success: bool, error_message: str | None)
+        """
+        result = await db.execute(
+            select(Manufacturer).where(Manufacturer.manufacturer_id == manufacturer_id)
+        )
+        manufacturer = result.scalar_one_or_none()
+        if not manufacturer:
+            return False, "Manufacturer not found"
+
+        # Safety check: verify no brands exist
+        brand_count = await db.scalar(
+            select(func.count(Brand.brand_id)).where(Brand.manufacturer_id == manufacturer_id)
+        )
+        if brand_count > 0:
+            return False, f"Cannot delete manufacturer with {brand_count} existing brand(s)"
+
+        await db.delete(manufacturer)
+        await db.flush()
+        return True, None
