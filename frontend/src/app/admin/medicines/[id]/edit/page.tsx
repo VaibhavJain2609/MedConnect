@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Combobox } from "@/components/ui/combobox";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -94,10 +95,11 @@ export default function EditMedicinePage() {
     queryFn: () => getBrand(brandId),
   });
 
-  // Fetch manufacturers
-  const { data: manufacturers = [], isLoading: manufacturersLoading } = useQuery({
-    queryKey: ["manufacturers"],
-    queryFn: () => listManufacturers(),
+  // Fetch manufacturers (with search)
+  const [manufacturerSearchQuery, setManufacturerSearchQuery] = useState("");
+  const { data: manufacturers = [] } = useQuery({
+    queryKey: ["manufacturers", manufacturerSearchQuery],
+    queryFn: () => listManufacturers(manufacturerSearchQuery || undefined),
   });
 
   // Fetch salts for composition selection (with search)

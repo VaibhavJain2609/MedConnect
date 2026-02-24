@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Combobox } from "@/components/ui/combobox";
 import { useToast } from "@/hooks/use-toast";
 import {
   listManufacturers,
@@ -64,12 +65,15 @@ export default function AddMedicinePage() {
   const { toast } = useToast();
   const [compositions, setCompositions] = useState<CompositionEntry[]>([]);
   const [selectedSaltId, setSelectedSaltId] = useState<string>("");
+  const [selectedSaltName, setSelectedSaltName] = useState<string>("");
   const [selectedStrengthId, setSelectedStrengthId] = useState<string>("");
+  const [newManufacturerName, setNewManufacturerName] = useState<string>("");
 
-  // Fetch manufacturers
-  const { data: manufacturers = [], isLoading: manufacturersLoading } = useQuery({
-    queryKey: ["manufacturers"],
-    queryFn: () => listManufacturers(),
+  // Fetch manufacturers (with search)
+  const [manufacturerSearchQuery, setManufacturerSearchQuery] = useState("");
+  const { data: manufacturers = [] } = useQuery({
+    queryKey: ["manufacturers", manufacturerSearchQuery],
+    queryFn: () => listManufacturers(manufacturerSearchQuery || undefined),
   });
 
   // Fetch salts for composition selection (with search)
@@ -129,6 +133,33 @@ export default function AddMedicinePage() {
       });
     },
   });
+
+  // Handle creating new manufacturer
+  const handleCreateManufacturer = (manufacturerName: string) => {
+    // Create a temporary ID for the new manufacturer
+    const tempId = `new-${Date.now()}`;
+    setNewManufacturerName(manufacturerName);
+    setValue("manufacturer_id", tempId);
+    toast({
+      title: "Manufacturer Added",
+      description: `"${manufacturerName}" will be created when you save the brand`,
+    });
+  };
+
+  // Handle creating new salt (just store the name, will be created on backend)
+  const handleSelectSalt = (saltValue: string) => {
+    // Check if it's an existing salt or a search query
+    const existingSalt = saltsData?.salts.find((s) => s.salt_id === saltValue);
+    if (existingSalt) {
+      setSelectedSaltId(existingSalt.salt_id);
+      setSelectedSaltName(existingSalt.salt_name);
+    } else {
+      // It's a new salt name from search
+      setSelectedSaltId("");
+      setSelectedSaltName(saltValue);
+    }
+    setSelectedStrengthId("");
+  };
 
   // Add composition to list
   const handleAddComposition = () => {
@@ -240,28 +271,21 @@ export default function AddMedicinePage() {
               </div>
 
               <div>
-                <Label htmlFor="manufacturer_id">Manufacturer *</Label>
-                <Select
+                <Label htmlFor="manufacturer_id">Manufacturer * (type to search or create new)</Label>
+                <Combobox
+                  options={manufacturers.map((m: Manufacturer) => ({
+                    value: m.manufacturer_id,
+                    label: m.manufacturer_name,
+                  }))}
                   value={watchManufacturerId}
                   onValueChange={(value) => setValue("manufacturer_id", value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select manufacturer" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {manufacturersLoading ? (
-                      <SelectItem value="loading" disabled>
-                        Loading...
-                      </SelectItem>
-                    ) : (
-                      manufacturers.map((mfr: Manufacturer) => (
-                        <SelectItem key={mfr.manufacturer_id} value={mfr.manufacturer_id}>
-                          {mfr.manufacturer_name}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
+                  onSearchChange={setManufacturerSearchQuery}
+                  placeholder="Select or create manufacturer..."
+                  searchPlaceholder="Search manufacturers..."
+                  emptyText="No manufacturers found."
+                  allowCreate={true}
+                  onCreateNew={handleCreateManufacturer}
+                />
                 {errors.manufacturer_id && (
                   <p className="text-sm text-destructive mt-1">
                     {errors.manufacturer_id.message}
@@ -345,53 +369,35 @@ export default function AddMedicinePage() {
             <CardContent className="space-y-4">
               {/* Add composition form */}
               <div className="space-y-2">
-                <div>
-                  <Label>Search Salt (type to search)</Label>
-                  <Input
-                    placeholder="Type salt name (e.g., Paracetamol)..."
-                    value={saltSearchQuery}
-                    onChange={(e) => {
-                      setSaltSearchQuery(e.target.value);
-                      setSelectedSaltId("");
-                      setSelectedStrengthId("");
-                    }}
-                  />
-                </div>
-
                 <div className="flex gap-2">
                   <div className="flex-1">
-                    <Select
+                    <Label>Select Salt (type to search)</Label>
+                    <Combobox
+                      options={(saltsData?.salts || []).map((salt: Salt) => ({
+                        value: salt.salt_id,
+                        label: salt.salt_name,
+                      }))}
                       value={selectedSaltId}
-                      onValueChange={setSelectedSaltId}
-                      disabled={!saltsData?.salts || saltsData.salts.length === 0}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={
-                          saltSearchQuery.length === 0
-                            ? "Type above to search salts"
-                            : saltsData?.salts.length === 0
-                            ? "No results found"
-                            : "Select salt"
-                        } />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {saltsData?.salts.map((salt: Salt) => (
-                          <SelectItem key={salt.salt_id} value={salt.salt_id}>
-                            {salt.salt_name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      onValueChange={(value) => {
+                        setSelectedSaltId(value);
+                        setSelectedStrengthId("");
+                      }}
+                      onSearchChange={setSaltSearchQuery}
+                      placeholder="Select salt..."
+                      searchPlaceholder="Search salts (e.g., Paracetamol)..."
+                      emptyText="No salts found. Try different keywords."
+                    />
                   </div>
 
                   <div className="flex-1">
+                    <Label>Select Strength</Label>
                     <Select
                       value={selectedStrengthId}
                       onValueChange={setSelectedStrengthId}
                       disabled={!selectedSaltId}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select strength" />
+                        <SelectValue placeholder={!selectedSaltId ? "Select salt first" : "Select strength"} />
                       </SelectTrigger>
                       <SelectContent>
                         {saltStrengths.map((strength: SaltStrength) => (
@@ -403,14 +409,16 @@ export default function AddMedicinePage() {
                     </Select>
                   </div>
 
-                  <Button
-                    type="button"
-                    onClick={handleAddComposition}
-                    disabled={!selectedSaltId || !selectedStrengthId}
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add
-                  </Button>
+                  <div className="flex items-end">
+                    <Button
+                      type="button"
+                      onClick={handleAddComposition}
+                      disabled={!selectedSaltId || !selectedStrengthId}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add
+                    </Button>
+                  </div>
                 </div>
               </div>
 
