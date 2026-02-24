@@ -4,9 +4,13 @@ from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 
-# Import Base and models for autogenerate support
-from app.database import Base
-from app.models import Component, Medicine, MedicineComponent
+# Import settings for database URL
+import sys
+import os
+
+# Add parent directory to Python path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from app.config import settings
 
 # this is the Alembic Config object
@@ -19,8 +23,8 @@ config.set_main_option("sqlalchemy.url", settings.MEDICINE_DB_URL_SYNC)
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Metadata for autogenerate support
-target_metadata = Base.metadata
+# No target_metadata - using raw SQL migrations
+target_metadata = None
 
 
 def run_migrations_offline() -> None:

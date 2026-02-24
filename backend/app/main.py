@@ -5,9 +5,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.routers import auth, doctors, medicines, patients
-from app.routers.admin import components as admin_components
-from app.routers.admin import medicines as admin_medicines
+from app.routers import auth, doctors, patients
+from app.routers import medicines_emr
+# from app.routers.admin import components as admin_components
+# from app.routers.admin import medicines as admin_medicines
 
 structlog.configure(
     processors=[
@@ -40,12 +41,12 @@ app.include_router(auth.router)
 app.include_router(patients.router)
 app.include_router(doctors.router)
 
-# Medicine endpoints (public)
-app.include_router(medicines.router, prefix="/api/v1")
+# Medicine endpoints (EMR schema)
+app.include_router(medicines_emr.router, prefix="/api/v1")
 
-# Admin endpoints (protected)
-app.include_router(admin_components.router, prefix="/api/v1")
-app.include_router(admin_medicines.router, prefix="/api/v1")
+# Admin endpoints (protected) - TODO: Update for EMR schema
+# app.include_router(admin_components.router, prefix="/api/v1")
+# app.include_router(admin_medicines.router, prefix="/api/v1")
 
 
 @app.get("/health")

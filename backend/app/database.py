@@ -13,6 +13,12 @@ medicine_async_session = async_sessionmaker(medicine_engine, class_=AsyncSession
 
 
 class Base(DeclarativeBase):
+    """Base class for main application models."""
+    pass
+
+
+class MedicineBase(DeclarativeBase):
+    """Base class for medicine database models."""
     pass
 
 

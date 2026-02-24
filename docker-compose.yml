@@ -68,6 +68,7 @@ services:
       DEBUG: "true"
     volumes:
       - ./backend:/app
+      - ./Dataset:/app/Dataset
     ports:
       - "8000:8000"
     depends_on:
