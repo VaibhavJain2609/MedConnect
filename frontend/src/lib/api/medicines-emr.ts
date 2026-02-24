@@ -402,3 +402,113 @@ export async function getMedicineStats(): Promise<{
     total_strengths: strengthsCount * saltsResp.total / (saltsResp.salts.length || 1), // Estimate
   };
 }
+
+// ============================================================================
+// ADMIN API FUNCTIONS
+// ============================================================================
+
+export interface BrandCompositionInput {
+  salt_strength_id: string;
+  sequence: number;
+}
+
+export interface CreateBrandRequest {
+  brand_name: string;
+  manufacturer_id: string;
+  is_discontinued?: boolean;
+  drug_type?: "allopathy" | "ayurveda" | "homeopathy";
+  launch_date?: string;
+  discontinuation_date?: string;
+  ndhm_code?: string;
+  compositions: BrandCompositionInput[];
+}
+
+export interface UpdateBrandRequest {
+  brand_name?: string;
+  manufacturer_id?: string;
+  is_discontinued?: boolean;
+  drug_type?: "allopathy" | "ayurveda" | "homeopathy";
+  launch_date?: string;
+  discontinuation_date?: string;
+  ndhm_code?: string;
+  compositions?: BrandCompositionInput[];
+}
+
+export interface BrandResponse {
+  brand_id: string;
+  brand_name: string;
+  manufacturer_id: string;
+  manufacturer_name: string;
+  salt_composition: string;
+  is_discontinued: boolean;
+  drug_type: string;
+  launch_date?: string;
+  discontinuation_date?: string;
+  ndhm_code?: string;
+}
+
+/**
+ * Create a new brand (Admin only)
+ */
+export async function createBrand(
+  data: CreateBrandRequest,
+  token: string
+): Promise<BrandResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/admin/brands`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || `Failed to create brand: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Update a brand (Admin only)
+ */
+export async function updateBrand(
+  brandId: string,
+  data: UpdateBrandRequest,
+  token: string
+): Promise<BrandResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/admin/brands/${brandId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || `Failed to update brand: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Delete a brand (Admin only)
+ */
+export async function deleteBrand(brandId: string, token: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/admin/brands/${brandId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || `Failed to delete brand: ${response.statusText}`);
+  }
+}
