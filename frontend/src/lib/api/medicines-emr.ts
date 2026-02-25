@@ -635,3 +635,50 @@ export async function deleteInteraction(
     throw new Error(error.detail || `Failed to delete interaction: ${response.statusText}`);
   }
 }
+
+// ============================================================================
+// MEDICINE AUTOCOMPLETE API (MD-72)
+// ============================================================================
+
+export interface MedicineAutocompleteResult {
+  brand_id: string;
+  brand_name: string;
+  salt_composition: string;
+  manufacturer_name: string;
+  manufacturer_id: string;
+}
+
+export interface MedicineAutocompleteResponse {
+  results: MedicineAutocompleteResult[];
+  count: number;
+}
+
+/**
+ * Autocomplete medicines for prescription forms
+ * Optimized endpoint returning top 10 brand matches with <100ms response time
+ *
+ * @param query - Search query (minimum 2 characters)
+ * @returns Autocomplete results with brand details
+ */
+export async function autocompleteMedicines(
+  query: string
+): Promise<MedicineAutocompleteResponse> {
+  if (query.length < 2) {
+    return { results: [], count: 0 };
+  }
+
+  const params = new URLSearchParams({ q: query });
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/medicines/autocomplete?${params}`,
+    {
+      headers: { 'Content-Type': 'application/json' },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to autocomplete medicines: ${response.statusText}`);
+  }
+
+  return response.json();
+}
