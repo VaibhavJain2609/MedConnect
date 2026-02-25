@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.routers import auth, doctors, patients
-from app.routers import medicines_emr
+from app.routers import medicines_emr, interactions
 from app.routers.admin import brands as admin_brands
 from app.routers.admin import manufacturers as admin_manufacturers
 from app.routers.admin import salts as admin_salts
@@ -46,6 +46,7 @@ app.include_router(doctors.router)
 
 # Medicine endpoints (EMR schema)
 app.include_router(medicines_emr.router, prefix="/api/v1")
+app.include_router(interactions.router, prefix="/api/v1")
 
 # Admin endpoints (protected) - EMR schema
 app.include_router(admin_brands.router, prefix="/api/v1")
