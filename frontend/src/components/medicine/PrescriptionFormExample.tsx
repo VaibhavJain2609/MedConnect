@@ -26,11 +26,16 @@ interface SelectedMedicine {
   dosage?: string;
   frequency?: string;
   duration?: string;
+  // MD-73: Auto-populated fields from medicine database
+  dosage_form?: string;  // e.g., "tablet", "syrup", "injection"
+  strength?: string;      // e.g., "500mg", "625mg"
+  mrp?: number;          // Maximum Retail Price
 }
 
 export default function PrescriptionFormExample() {
   const [selectedMedicines, setSelectedMedicines] = useState<SelectedMedicine[]>([]);
   const [showAlternativesFor, setShowAlternativesFor] = useState<string | null>(null);
+  const [editingMedicineId, setEditingMedicineId] = useState<string | null>(null);
 
   // Extract salt IDs from selected medicines
   const saltIds = selectedMedicines.map((med) => med.saltId);
@@ -60,8 +65,21 @@ export default function PrescriptionFormExample() {
       dosage: medicine.dosage,
       frequency: medicine.frequency,
       duration: medicine.duration,
+      // MD-73: Auto-populate dosage_form, strength, and MRP
+      dosage_form: medicine.dosage_form,
+      strength: medicine.strength,
+      mrp: medicine.mrp,
     };
     setSelectedMedicines([...selectedMedicines, newMedicine]);
+  };
+
+  // Handler: Update medicine field (for editing)
+  const updateMedicineField = (id: string, field: keyof SelectedMedicine, value: any) => {
+    setSelectedMedicines(
+      selectedMedicines.map((med) =>
+        med.id === id ? { ...med, [field]: value } : med
+      )
+    );
   };
 
   // Handler: Remove medicine from prescription
@@ -174,6 +192,10 @@ export default function PrescriptionFormExample() {
                     dosage: '1 tablet',
                     frequency: 'Three times daily',
                     duration: '5 days',
+                    // MD-73: Example values for new fields
+                    dosage_form: 'Tablet',
+                    strength: '500mg',
+                    mrp: 25.50,
                   })
                 }
                 className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 mx-auto"
@@ -199,8 +221,34 @@ export default function PrescriptionFormExample() {
                       {medicine.brandName}
                     </h4>
                     <p className="text-sm text-gray-600">{medicine.composition}</p>
+                    {/* MD-73: Display auto-populated fields */}
+                    {(medicine.dosage_form || medicine.strength || medicine.mrp) && (
+                      <div className="flex gap-4 mt-2 text-xs text-gray-600">
+                        {medicine.dosage_form && (
+                          <span>
+                            <span className="font-medium">Form:</span> {medicine.dosage_form}
+                          </span>
+                        )}
+                        {medicine.strength && (
+                          <span>
+                            <span className="font-medium">Strength:</span> {medicine.strength}
+                          </span>
+                        )}
+                        {medicine.mrp && (
+                          <span>
+                            <span className="font-medium">MRP:</span> ₹{medicine.mrp.toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="flex gap-2">
+                    <button
+                      onClick={() => setEditingMedicineId(editingMedicineId === medicine.id ? null : medicine.id)}
+                      className="px-3 py-1 text-sm text-gray-700 bg-gray-50 rounded hover:bg-gray-100"
+                    >
+                      {editingMedicineId === medicine.id ? 'Done' : 'Edit'}
+                    </button>
                     <button
                       onClick={() => toggleAlternatives(medicine.id)}
                       className="px-3 py-1 text-sm text-blue-700 bg-blue-50 rounded hover:bg-blue-100"
@@ -233,6 +281,47 @@ export default function PrescriptionFormExample() {
                     <span className="ml-1 font-medium">{medicine.duration}</span>
                   </div>
                 </div>
+
+                {/* MD-73: Edit Form for auto-populated fields */}
+                {editingMedicineId === medicine.id && (
+                  <div className="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <p className="text-xs font-medium text-gray-700 mb-2">Edit Medicine Details</p>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">Dosage Form</label>
+                        <input
+                          type="text"
+                          value={medicine.dosage_form || ''}
+                          onChange={(e) => updateMedicineField(medicine.id, 'dosage_form', e.target.value)}
+                          placeholder="e.g., Tablet, Syrup"
+                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">Strength</label>
+                        <input
+                          type="text"
+                          value={medicine.strength || ''}
+                          onChange={(e) => updateMedicineField(medicine.id, 'strength', e.target.value)}
+                          placeholder="e.g., 500mg"
+                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">MRP (₹)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={medicine.mrp || ''}
+                          onChange={(e) => updateMedicineField(medicine.id, 'mrp', e.target.value ? parseFloat(e.target.value) : undefined)}
+                          placeholder="e.g., 25.50"
+                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Alternatives Section */}
                 {showAlternativesFor === medicine.id && (
