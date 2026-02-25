@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import api from "@/lib/api";
 import { Navbar } from "@/components/layout/navbar";
 import { AuthGuard } from "@/components/layout/auth-guard";
+import { TemplateSaveModal } from "@/components/prescription/TemplateSaveModal";
+import { TemplateLoadModal } from "@/components/prescription/TemplateLoadModal";
 
 interface Medicine {
   name: string;
@@ -33,6 +35,8 @@ export default function NewPrescriptionPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showLoadModal, setShowLoadModal] = useState(false);
 
   const updateMedicine = (index: number, field: keyof Medicine, value: string) => {
     const updated = [...medicines];
@@ -48,6 +52,12 @@ export default function NewPrescriptionPage() {
     if (medicines.length > 1) {
       setMedicines(medicines.filter((_, i) => i !== index));
     }
+  };
+
+  const handleLoadTemplate = (template: any) => {
+    setMedicines(template.medicines);
+    if (template.diagnosis) setDiagnosis(template.diagnosis);
+    if (template.notes) setNotes(template.notes);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -138,13 +148,31 @@ export default function NewPrescriptionPage() {
             <div>
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-lg font-semibold">Medicines</h2>
-                <button
-                  type="button"
-                  onClick={addMedicine}
-                  className="text-sm text-primary-600 hover:underline"
-                >
-                  + Add Medicine
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowLoadModal(true)}
+                    className="text-sm text-primary-600 hover:underline"
+                  >
+                    Load Template
+                  </button>
+                  {medicines.some((m) => m.name) && (
+                    <button
+                      type="button"
+                      onClick={() => setShowSaveModal(true)}
+                      className="text-sm text-primary-600 hover:underline"
+                    >
+                      Save as Template
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={addMedicine}
+                    className="text-sm text-primary-600 hover:underline"
+                  >
+                    + Add Medicine
+                  </button>
+                </div>
               </div>
 
               {medicines.map((med, idx) => (
@@ -235,6 +263,25 @@ export default function NewPrescriptionPage() {
               </button>
             </div>
           </form>
+        )}
+
+        {showSaveModal && (
+          <TemplateSaveModal
+            medicines={medicines}
+            diagnosis={diagnosis}
+            notes={notes}
+            onClose={() => setShowSaveModal(false)}
+            onSaved={() => {
+              // Optional: show success message
+            }}
+          />
+        )}
+
+        {showLoadModal && (
+          <TemplateLoadModal
+            onClose={() => setShowLoadModal(false)}
+            onLoad={handleLoadTemplate}
+          />
         )}
       </main>
     </AuthGuard>
