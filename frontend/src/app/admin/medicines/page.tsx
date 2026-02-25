@@ -2,16 +2,29 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
-import { Search, Plus, Pill, Loader2, AlertCircle, Beaker, Package, Info, List, Upload } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Search, Plus, Pill, Loader2, AlertCircle, Beaker, Package, Info, List, Upload, Building2, Edit, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -28,14 +41,99 @@ import {
   type BrandForSalt,
 } from "@/lib/api/medicines-emr";
 
+// API functions for Manufacturers
+async function listManufacturers(params: { search?: string }) {
+  const queryParams = new URLSearchParams();
+  if (params.search) queryParams.append("search", params.search);
+  queryParams.append("limit", "50");
+
+  const res = await fetch(`/api/v1/manufacturers?${queryParams}`);
+  if (!res.ok) throw new Error("Failed to fetch manufacturers");
+  return res.json();
+}
+
+async function createManufacturer(data: any) {
+  const res = await fetch("/api/v1/admin/manufacturers", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.detail || "Failed to create manufacturer");
+  }
+  return res.json();
+}
+
+async function updateManufacturer(id: string, data: any) {
+  const res = await fetch(`/api/v1/admin/manufacturers/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.detail || "Failed to update manufacturer");
+  }
+  return res.json();
+}
+
+async function deleteManufacturer(id: string) {
+  const res = await fetch(`/api/v1/admin/manufacturers/${id}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.detail || "Failed to delete manufacturer");
+  }
+}
+
+// API functions for Salts CRUD
+async function createSalt(data: any) {
+  const res = await fetch("/api/v1/admin/salts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.detail || "Failed to create salt");
+  }
+  return res.json();
+}
+
+async function updateSalt(id: string, data: any) {
+  const res = await fetch(`/api/v1/admin/salts/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.detail || "Failed to update salt");
+  }
+  return res.json();
+}
+
+async function deleteSalt(id: string) {
+  const res = await fetch(`/api/v1/admin/salts/${id}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.detail || "Failed to delete salt");
+  }
+}
+
 export default function MedicinesPageEMR() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [includeDiscontinued, setIncludeDiscontinued] = useState(false);
-  const [activeTab, setActiveTab] = useState<"salts" | "brands">("salts");
+  const [activeTab, setActiveTab] = useState<"manufacturers" | "salts" | "brands">("manufacturers");
 
-  // Dialog states
+  // Dialog states - View dialogs
   const [selectedSaltId, setSelectedSaltId] = useState<string | null>(null);
   const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null);
   const [showSaltDetails, setShowSaltDetails] = useState(false);
@@ -43,7 +141,43 @@ export default function MedicinesPageEMR() {
   const [showBrandDetails, setShowBrandDetails] = useState(false);
   const [showBrandAlternatives, setShowBrandAlternatives] = useState(false);
 
+  // Dialog states - Manufacturer CRUD
+  const [showCreateManufacturer, setShowCreateManufacturer] = useState(false);
+  const [showEditManufacturer, setShowEditManufacturer] = useState(false);
+  const [editingManufacturer, setEditingManufacturer] = useState<any>(null);
+  const [manufacturerFormData, setManufacturerFormData] = useState({
+    manufacturer_name: "",
+    country: "",
+    license_number: "",
+    is_active: true,
+  });
+
+  // Dialog states - Salt CRUD
+  const [showCreateSalt, setShowCreateSalt] = useState(false);
+  const [showEditSalt, setShowEditSalt] = useState(false);
+  const [editingSalt, setEditingSalt] = useState<any>(null);
+  const [saltFormData, setSaltFormData] = useState({
+    salt_name: "",
+    description: "",
+    chemical_formula: "",
+    habit_forming: false,
+    prescription_required: true,
+    pregnancy_category: "",
+  });
+
   const limit = 50;
+
+  // Fetch manufacturers
+  const {
+    data: manufacturersData,
+    isLoading: manufacturersLoading,
+    error: manufacturersError,
+  } = useQuery({
+    queryKey: ["admin-manufacturers-list", searchQuery],
+    queryFn: () => listManufacturers({ search: searchQuery || undefined }),
+    staleTime: 30000,
+    enabled: activeTab === "manufacturers",
+  });
 
   // Fetch salts
   const {
@@ -87,6 +221,64 @@ export default function MedicinesPageEMR() {
     staleTime: 60000,
   });
 
+  // Manufacturer mutations
+  const createManufacturerMutation = useMutation({
+    mutationFn: createManufacturer,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-manufacturers-list"] });
+      queryClient.invalidateQueries({ queryKey: ["medicine-stats-emr"] });
+      setShowCreateManufacturer(false);
+      resetManufacturerForm();
+    },
+  });
+
+  const updateManufacturerMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => updateManufacturer(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-manufacturers-list"] });
+      setShowEditManufacturer(false);
+      setEditingManufacturer(null);
+      resetManufacturerForm();
+    },
+  });
+
+  const deleteManufacturerMutation = useMutation({
+    mutationFn: deleteManufacturer,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-manufacturers-list"] });
+      queryClient.invalidateQueries({ queryKey: ["medicine-stats-emr"] });
+    },
+  });
+
+  // Salt mutations
+  const createSaltMutation = useMutation({
+    mutationFn: createSalt,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-salts"] });
+      queryClient.invalidateQueries({ queryKey: ["medicine-stats-emr"] });
+      setShowCreateSalt(false);
+      resetSaltForm();
+    },
+  });
+
+  const updateSaltMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => updateSalt(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-salts"] });
+      setShowEditSalt(false);
+      setEditingSalt(null);
+      resetSaltForm();
+    },
+  });
+
+  const deleteSaltMutation = useMutation({
+    mutationFn: deleteSalt,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-salts"] });
+      queryClient.invalidateQueries({ queryKey: ["medicine-stats-emr"] });
+    },
+  });
+
   // Fetch selected salt details
   const { data: selectedSalt } = useQuery({
     queryKey: ["salt-details", selectedSaltId],
@@ -121,9 +313,85 @@ export default function MedicinesPageEMR() {
   };
 
   const handleTabChange = (value: string) => {
-    setActiveTab(value as "salts" | "brands");
+    setActiveTab(value as "manufacturers" | "salts" | "brands");
     setCurrentPage(1);
     setSearchQuery("");
+  };
+
+  // Manufacturer handlers
+  const resetManufacturerForm = () => {
+    setManufacturerFormData({
+      manufacturer_name: "",
+      country: "",
+      license_number: "",
+      is_active: true,
+    });
+  };
+
+  const handleCreateManufacturer = () => {
+    createManufacturerMutation.mutate(manufacturerFormData);
+  };
+
+  const handleEditManufacturer = (manufacturer: any) => {
+    setEditingManufacturer(manufacturer);
+    setManufacturerFormData({
+      manufacturer_name: manufacturer.manufacturer_name,
+      country: manufacturer.country || "",
+      license_number: manufacturer.license_number || "",
+      is_active: manufacturer.is_active,
+    });
+    setShowEditManufacturer(true);
+  };
+
+  const handleUpdateManufacturer = () => {
+    if (!editingManufacturer) return;
+    updateManufacturerMutation.mutate({ id: editingManufacturer.manufacturer_id, data: manufacturerFormData });
+  };
+
+  const handleDeleteManufacturer = (id: string, name: string) => {
+    if (confirm(`Delete manufacturer "${name}"? This will fail if the manufacturer has any brands.`)) {
+      deleteManufacturerMutation.mutate(id);
+    }
+  };
+
+  // Salt handlers
+  const resetSaltForm = () => {
+    setSaltFormData({
+      salt_name: "",
+      description: "",
+      chemical_formula: "",
+      habit_forming: false,
+      prescription_required: true,
+      pregnancy_category: "",
+    });
+  };
+
+  const handleCreateSalt = () => {
+    createSaltMutation.mutate(saltFormData);
+  };
+
+  const handleEditSalt = (salt: any) => {
+    setEditingSalt(salt);
+    setSaltFormData({
+      salt_name: salt.salt_name,
+      description: salt.description || "",
+      chemical_formula: salt.chemical_formula || "",
+      habit_forming: salt.habit_forming,
+      prescription_required: salt.prescription_required,
+      pregnancy_category: salt.pregnancy_category || "",
+    });
+    setShowEditSalt(true);
+  };
+
+  const handleUpdateSalt = () => {
+    if (!editingSalt) return;
+    updateSaltMutation.mutate({ id: editingSalt.salt_id, data: saltFormData });
+  };
+
+  const handleDeleteSalt = (id: string, name: string) => {
+    if (confirm(`Delete salt "${name}"? This will fail if the salt has any strengths.`)) {
+      deleteSaltMutation.mutate(id);
+    }
   };
 
   const handleViewSalt = (saltId: string) => {
@@ -260,7 +528,11 @@ export default function MedicinesPageEMR() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={handleTabChange}>
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="manufacturers" className="flex items-center gap-2">
+            <Building2 className="h-4 w-4" />
+            Manufacturers
+          </TabsTrigger>
           <TabsTrigger value="salts" className="flex items-center gap-2">
             <Beaker className="h-4 w-4" />
             Salts (APIs)
@@ -271,8 +543,88 @@ export default function MedicinesPageEMR() {
           </TabsTrigger>
         </TabsList>
 
+        {/* Manufacturers Tab */}
+        <TabsContent value="manufacturers">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Pharmaceutical Companies</CardTitle>
+                <CardDescription>
+                  {manufacturersData?.length || 0} total manufacturers
+                </CardDescription>
+              </div>
+              <Button onClick={() => setShowCreateManufacturer(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Manufacturer
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {manufacturersLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                </div>
+              ) : manufacturersError ? (
+                <div className="text-center py-8 text-destructive">
+                  Error loading manufacturers: {(manufacturersError as Error).message}
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Country</TableHead>
+                      <TableHead>License Number</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {manufacturersData?.map((manufacturer: any) => (
+                      <TableRow key={manufacturer.manufacturer_id}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            <Building2 className="h-4 w-4 text-muted-foreground" />
+                            {manufacturer.manufacturer_name}
+                          </div>
+                        </TableCell>
+                        <TableCell>{manufacturer.country || "—"}</TableCell>
+                        <TableCell className="font-mono text-sm">{manufacturer.license_number || "—"}</TableCell>
+                        <TableCell>
+                          <Badge variant={manufacturer.is_active ? "default" : "secondary"}>
+                            {manufacturer.is_active ? "Active" : "Inactive"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button variant="ghost" size="sm" onClick={() => handleEditManufacturer(manufacturer)}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteManufacturer(manufacturer.manufacturer_id, manufacturer.manufacturer_name)}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {/* Salts Tab */}
         <TabsContent value="salts">
+          <div className="mb-4 flex justify-end">
+            <Button onClick={() => setShowCreateSalt(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Salt
+            </Button>
+          </div>
           <SaltsTable
             salts={saltsData?.salts || []}
             total={saltsData?.total || 0}
@@ -283,6 +635,8 @@ export default function MedicinesPageEMR() {
             onPageChange={setCurrentPage}
             onViewSalt={handleViewSalt}
             onViewBrands={handleViewSaltBrands}
+            onEditSalt={handleEditSalt}
+            onDeleteSalt={handleDeleteSalt}
           />
         </TabsContent>
 
@@ -359,6 +713,252 @@ export default function MedicinesPageEMR() {
             </DialogDescription>
           </DialogHeader>
           {brandAlternatives && <BrandAlternativesView alternatives={brandAlternatives} />}
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Manufacturer Dialog */}
+      <Dialog open={showCreateManufacturer} onOpenChange={setShowCreateManufacturer}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Manufacturer</DialogTitle>
+            <DialogDescription>Add a new pharmaceutical company</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="manufacturer_name">Manufacturer Name *</Label>
+              <Input
+                id="manufacturer_name"
+                value={manufacturerFormData.manufacturer_name}
+                onChange={(e) => setManufacturerFormData({ ...manufacturerFormData, manufacturer_name: e.target.value })}
+                placeholder="e.g., GSK Pharmaceuticals"
+              />
+            </div>
+            <div>
+              <Label htmlFor="country">Country</Label>
+              <Input
+                id="country"
+                value={manufacturerFormData.country}
+                onChange={(e) => setManufacturerFormData({ ...manufacturerFormData, country: e.target.value })}
+                placeholder="e.g., India"
+              />
+            </div>
+            <div>
+              <Label htmlFor="license_number">License Number</Label>
+              <Input
+                id="license_number"
+                value={manufacturerFormData.license_number}
+                onChange={(e) => setManufacturerFormData({ ...manufacturerFormData, license_number: e.target.value })}
+                placeholder="Optional"
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="is_active"
+                checked={manufacturerFormData.is_active}
+                onCheckedChange={(checked) =>
+                  setManufacturerFormData({ ...manufacturerFormData, is_active: !!checked })
+                }
+              />
+              <Label htmlFor="is_active">Active</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateManufacturer(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateManufacturer} disabled={createManufacturerMutation.isPending}>
+              {createManufacturerMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Manufacturer Dialog */}
+      <Dialog open={showEditManufacturer} onOpenChange={setShowEditManufacturer}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Manufacturer</DialogTitle>
+            <DialogDescription>Update manufacturer information</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="edit_manufacturer_name">Manufacturer Name *</Label>
+              <Input
+                id="edit_manufacturer_name"
+                value={manufacturerFormData.manufacturer_name}
+                onChange={(e) => setManufacturerFormData({ ...manufacturerFormData, manufacturer_name: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit_country">Country</Label>
+              <Input
+                id="edit_country"
+                value={manufacturerFormData.country}
+                onChange={(e) => setManufacturerFormData({ ...manufacturerFormData, country: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit_license_number">License Number</Label>
+              <Input
+                id="edit_license_number"
+                value={manufacturerFormData.license_number}
+                onChange={(e) => setManufacturerFormData({ ...manufacturerFormData, license_number: e.target.value })}
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="edit_is_active"
+                checked={manufacturerFormData.is_active}
+                onCheckedChange={(checked) =>
+                  setManufacturerFormData({ ...manufacturerFormData, is_active: !!checked })
+                }
+              />
+              <Label htmlFor="edit_is_active">Active</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditManufacturer(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleUpdateManufacturer} disabled={updateManufacturerMutation.isPending}>
+              {updateManufacturerMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Update
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Salt Dialog */}
+      <Dialog open={showCreateSalt} onOpenChange={setShowCreateSalt}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Salt</DialogTitle>
+            <DialogDescription>Add a new active pharmaceutical ingredient</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="salt_name">Salt Name *</Label>
+              <Input
+                id="salt_name"
+                value={saltFormData.salt_name}
+                onChange={(e) => setSaltFormData({ ...saltFormData, salt_name: e.target.value })}
+                placeholder="e.g., Paracetamol"
+              />
+            </div>
+            <div>
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                value={saltFormData.description}
+                onChange={(e) => setSaltFormData({ ...saltFormData, description: e.target.value })}
+                placeholder="Optional description"
+              />
+            </div>
+            <div>
+              <Label htmlFor="chemical_formula">Chemical Formula</Label>
+              <Input
+                id="chemical_formula"
+                value={saltFormData.chemical_formula}
+                onChange={(e) => setSaltFormData({ ...saltFormData, chemical_formula: e.target.value })}
+                placeholder="e.g., C8H9NO2"
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="prescription_required"
+                checked={saltFormData.prescription_required}
+                onCheckedChange={(checked) =>
+                  setSaltFormData({ ...saltFormData, prescription_required: !!checked })
+                }
+              />
+              <Label htmlFor="prescription_required">Prescription Required</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="habit_forming"
+                checked={saltFormData.habit_forming}
+                onCheckedChange={(checked) =>
+                  setSaltFormData({ ...saltFormData, habit_forming: !!checked })
+                }
+              />
+              <Label htmlFor="habit_forming">Habit Forming</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateSalt(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateSalt} disabled={createSaltMutation.isPending}>
+              {createSaltMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Salt Dialog */}
+      <Dialog open={showEditSalt} onOpenChange={setShowEditSalt}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Salt</DialogTitle>
+            <DialogDescription>Update salt information</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="edit_salt_name">Salt Name *</Label>
+              <Input
+                id="edit_salt_name"
+                value={saltFormData.salt_name}
+                onChange={(e) => setSaltFormData({ ...saltFormData, salt_name: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit_description">Description</Label>
+              <Textarea
+                id="edit_description"
+                value={saltFormData.description}
+                onChange={(e) => setSaltFormData({ ...saltFormData, description: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit_chemical_formula">Chemical Formula</Label>
+              <Input
+                id="edit_chemical_formula"
+                value={saltFormData.chemical_formula}
+                onChange={(e) => setSaltFormData({ ...saltFormData, chemical_formula: e.target.value })}
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="edit_prescription_required"
+                checked={saltFormData.prescription_required}
+                onCheckedChange={(checked) =>
+                  setSaltFormData({ ...saltFormData, prescription_required: !!checked })
+                }
+              />
+              <Label htmlFor="edit_prescription_required">Prescription Required</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="edit_habit_forming"
+                checked={saltFormData.habit_forming}
+                onCheckedChange={(checked) =>
+                  setSaltFormData({ ...saltFormData, habit_forming: !!checked })
+                }
+              />
+              <Label htmlFor="edit_habit_forming">Habit Forming</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditSalt(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleUpdateSalt} disabled={updateSaltMutation.isPending}>
+              {updateSaltMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Update
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
@@ -584,6 +1184,8 @@ function SaltsTable({
   onPageChange,
   onViewSalt,
   onViewBrands,
+  onEditSalt,
+  onDeleteSalt,
 }: {
   salts: Salt[];
   total: number;
@@ -594,6 +1196,8 @@ function SaltsTable({
   onPageChange: (page: number) => void;
   onViewSalt: (saltId: string) => void;
   onViewBrands: (saltId: string) => void;
+  onEditSalt: (salt: Salt) => void;
+  onDeleteSalt: (id: string, name: string) => void;
 }) {
   if (error) {
     return (
@@ -711,6 +1315,20 @@ function SaltsTable({
                           >
                             <List className="h-4 w-4 mr-1" />
                             Brands
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onEditSalt(salt)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onDeleteSalt(salt.salt_id, salt.salt_name)}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
                         </div>
                       </td>
