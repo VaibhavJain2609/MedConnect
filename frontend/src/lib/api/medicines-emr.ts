@@ -513,3 +513,125 @@ export async function deleteBrand(brandId: string, token: string): Promise<void>
     throw new Error(error.detail || `Failed to delete brand: ${response.statusText}`);
   }
 }
+
+// ============================================================================
+// DRUG INTERACTIONS API (MD-18)
+// ============================================================================
+
+export interface DrugInteraction {
+  interaction_id: string;
+  salt_1: {
+    id: string;
+    name: string;
+  };
+  salt_2: {
+    id: string;
+    name: string;
+  };
+  severity: 'minor' | 'moderate' | 'major' | 'contraindicated';
+  effect: string;
+  mechanism?: string;
+  management?: string;
+  evidence_level?: 'theoretical' | 'case-report' | 'study-based';
+}
+
+export interface CheckInteractionsRequest {
+  salt_ids: string[];
+}
+
+/**
+ * Check for drug interactions between multiple salts
+ * Use this when creating prescriptions with multiple medicines
+ */
+export async function checkDrugInteractions(
+  saltIds: string[]
+): Promise<DrugInteraction[]> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/interactions/check`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ salt_ids: saltIds }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to check interactions: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Get all known interactions for a specific salt
+ * Useful for displaying warnings on medicine detail pages
+ */
+export async function getSaltInteractions(
+  saltId: string,
+  severity?: 'minor' | 'moderate' | 'major' | 'contraindicated'
+): Promise<DrugInteraction[]> {
+  const params = new URLSearchParams();
+  if (severity) params.append('severity', severity);
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/interactions/salts/${saltId}${params.toString() ? '?' + params.toString() : ''}`,
+    {
+      headers: { 'Content-Type': 'application/json' },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to get salt interactions: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Create a new drug interaction (Admin only)
+ */
+export async function createInteraction(
+  data: {
+    salt_id_1: string;
+    salt_id_2: string;
+    severity: 'minor' | 'moderate' | 'major' | 'contraindicated';
+    effect: string;
+    mechanism?: string;
+    management?: string;
+    evidence_level?: 'theoretical' | 'case-report' | 'study-based';
+  },
+  token: string
+): Promise<DrugInteraction> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/interactions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || `Failed to create interaction: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Delete a drug interaction (Admin only)
+ */
+export async function deleteInteraction(
+  interactionId: string,
+  token: string
+): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/interactions/${interactionId}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || `Failed to delete interaction: ${response.statusText}`);
+  }
+}
