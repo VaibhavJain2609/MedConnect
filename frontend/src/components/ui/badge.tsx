@@ -15,6 +15,17 @@ const badgeVariants = cva(
         destructive:
           "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
         outline: "text-foreground",
+        // Dreams EMR Status Variants
+        inProgress:
+          "border-transparent bg-status-inProgress/10 text-status-inProgress hover:bg-status-inProgress/20",
+        completed:
+          "border-transparent bg-status-completed/10 text-status-completed hover:bg-status-completed/20",
+        pending:
+          "border-transparent bg-status-pending/10 text-status-pending hover:bg-status-pending/20",
+        overdue:
+          "border-transparent bg-status-overdue/10 text-status-overdue hover:bg-status-overdue/20",
+        upcoming:
+          "border-transparent bg-status-upcoming/10 text-status-upcoming hover:bg-status-upcoming/20",
       },
     },
     defaultVariants: {
