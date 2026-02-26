@@ -26,6 +26,54 @@ api.interceptors.request.use(async (config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    // Enhanced error handling
+    if (error.response) {
+      // Server responded with error status
+      const { status, data } = error.response;
+
+      // Handle 401 Unauthorized
+      if (status === 401) {
+        console.warn("Unauthorized access - redirecting to login");
+        if (typeof window !== "undefined") {
+          // Keycloak will handle re-authentication
+          keycloak.login();
+        }
+      }
+
+      // Handle 403 Forbidden
+      if (status === 403) {
+        console.error("Access forbidden - insufficient permissions");
+        error.userMessage = "You don't have permission to perform this action";
+      }
+
+      // Handle 404 Not Found
+      if (status === 404) {
+        error.userMessage = "The requested resource was not found";
+      }
+
+      // Handle 500 Server Error
+      if (status >= 500) {
+        error.userMessage = "Server error. Please try again later";
+      }
+
+      // Extract error message from backend
+      if (data?.detail) {
+        if (typeof data.detail === "string") {
+          error.userMessage = data.detail;
+        } else if (data.detail.message) {
+          error.userMessage = data.detail.message;
+        }
+      } else if (data?.error?.message) {
+        error.userMessage = data.error.message;
+      }
+    } else if (error.request) {
+      // Request made but no response received
+      error.userMessage = "Network error. Please check your connection";
+    } else {
+      // Something else happened
+      error.userMessage = error.message || "An unexpected error occurred";
+    }
+
     return Promise.reject(error);
   }
 );

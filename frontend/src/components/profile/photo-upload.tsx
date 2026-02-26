@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Upload, X, Camera, Loader2 } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
-import api from "@/lib/api";
+import { uploadPhoto } from "@/lib/api/users";
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/ui/avatar";
 
@@ -54,19 +54,8 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
   // Upload mutation
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
-      const formData = new FormData();
-      formData.append("photo", file);
-      formData.append("userId", userId);
-
-      // TODO: Replace with actual API call to /api/v1/users/photo
-      // For now, simulate upload
-      return new Promise<{ photoUrl: string }>((resolve, reject) => {
-        setTimeout(() => {
-          // Simulate success
-          const mockUrl = URL.createObjectURL(file);
-          resolve({ photoUrl: mockUrl });
-        }, 2000);
-      });
+      const result = await uploadPhoto(file);
+      return { photoUrl: result.photo_url || "" };
     },
     onSuccess: (data) => {
       setPreviewUrl(null);

@@ -1,5 +1,5 @@
 import keycloak from "./keycloak";
-import api from "./api";
+import { getMe as fetchMe, type UserProfile } from "./api/users";
 
 export interface User {
   id: string;
@@ -8,6 +8,7 @@ export interface User {
   full_name: string;
   role: "patient" | "doctor" | "admin";
   language_pref: string;
+  photo_url?: string | null;
 }
 
 let initialized = false;
@@ -81,6 +82,5 @@ export function isAuthenticated(): boolean {
 }
 
 export async function getMe(): Promise<User> {
-  const res = await api.get("/api/v1/auth/me");
-  return res.data;
+  return await fetchMe();
 }
