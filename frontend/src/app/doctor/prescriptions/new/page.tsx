@@ -281,8 +281,13 @@ export default function NewPrescriptionPage() {
                       ))}
                     </div>
                     {med.meals.length === 0 && (
-                      <p className="mt-1 text-xs text-gray-500">
-                        Select at least one meal time
+                      <p className="mt-1 text-xs text-red-500 font-medium">
+                        ⚠️ Required: Select at least one meal time
+                      </p>
+                    )}
+                    {med.meals.length > 0 && (
+                      <p className="mt-1 text-xs text-green-600 font-medium">
+                        ✅ {med.meals.length}x daily - {med.meals.map(m => MEAL_OPTIONS.find(mo => mo.id === m)?.label).join(", ")}
                       </p>
                     )}
                   </div>
@@ -352,21 +357,35 @@ export default function NewPrescriptionPage() {
               ))}
             </div>
 
-            <div className="flex gap-3">
-              <button
-                type="submit"
-                disabled={loading || medicines.some(m => !m.name || m.meals.length === 0)}
-                className="rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
-              >
-                {loading ? "Creating..." : "Create Prescription"}
-              </button>
-              <button
-                type="button"
-                onClick={() => router.back()}
-                className="rounded-lg border px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
+            <div>
+              {/* Validation hints */}
+              {medicines.some(m => !m.name) && (
+                <div className="mb-3 rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800">
+                  ⚠️ Please select a medicine from the autocomplete
+                </div>
+              )}
+              {medicines.some(m => m.name && m.meals.length === 0) && (
+                <div className="mb-3 rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800">
+                  ⚠️ Please select at least one meal time (e.g., breakfast, lunch, dinner)
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  type="submit"
+                  disabled={loading || medicines.some(m => !m.name || m.meals.length === 0)}
+                  className="rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+                >
+                  {loading ? "Creating..." : "Create Prescription"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => router.back()}
+                  className="rounded-lg border px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </form>
         )}
