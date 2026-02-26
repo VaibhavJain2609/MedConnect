@@ -26,6 +26,8 @@ const badgeVariants = cva(
           "border-transparent bg-status-overdue/10 text-status-overdue hover:bg-status-overdue/20",
         upcoming:
           "border-transparent bg-status-upcoming/10 text-status-upcoming hover:bg-status-upcoming/20",
+        cancelled:
+          "border-transparent bg-gray-100 text-gray-600 hover:bg-gray-200",
       },
     },
     defaultVariants: {
