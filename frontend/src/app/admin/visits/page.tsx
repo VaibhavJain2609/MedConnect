@@ -4,156 +4,59 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ColumnDef } from "@tanstack/react-table";
 import { Plus, Search } from "lucide-react";
-import api from "@/lib/api";
+import { getVisits, Visit } from "@/lib/api/visits";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
-interface Visit {
-  id: string;
-  patientName: string;
-  patientPhoto: string | null;
-  department: string;
-  doctorName: string;
-  doctorPhoto: string | null;
-  visitDate: string;
-  status: "inProgress" | "completed" | "pending";
-}
-
 export default function AdminVisitsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
 
-  // Fetch visits
-  const { data: visits, isLoading } = useQuery({
-    queryKey: ["admin-visits"],
-    queryFn: async () => {
-      // TODO: Replace with actual API call to /api/v1/admin/visits
-      // Mock data for now
-      return [
-        {
-          id: "V-001",
-          patientName: "John Doe",
-          patientPhoto: null,
-          department: "Cardiology",
-          doctorName: "Dr. Sarah Smith",
-          doctorPhoto: null,
-          visitDate: "2026-02-26 10:00 AM",
-          status: "completed",
-        },
-        {
-          id: "V-002",
-          patientName: "Jane Smith",
-          patientPhoto: null,
-          department: "Neurology",
-          doctorName: "Dr. Michael Johnson",
-          doctorPhoto: null,
-          visitDate: "2026-02-26 2:30 PM",
-          status: "completed",
-        },
-        {
-          id: "V-003",
-          patientName: "Mike Wilson",
-          patientPhoto: null,
-          department: "Orthopedics",
-          doctorName: "Dr. Emily Davis",
-          doctorPhoto: null,
-          visitDate: "2026-02-27 11:00 AM",
-          status: "inProgress",
-        },
-        {
-          id: "V-004",
-          patientName: "Sarah Johnson",
-          patientPhoto: null,
-          department: "Pediatrics",
-          doctorName: "Dr. James Wilson",
-          doctorPhoto: null,
-          visitDate: "2026-02-28 3:00 PM",
-          status: "pending",
-        },
-        {
-          id: "V-005",
-          patientName: "Robert Brown",
-          patientPhoto: null,
-          department: "Dermatology",
-          doctorName: "Dr. Linda Brown",
-          doctorPhoto: null,
-          visitDate: "2026-02-25 9:30 AM",
-          status: "completed",
-        },
-        {
-          id: "V-006",
-          patientName: "Emily Davis",
-          patientPhoto: null,
-          department: "General Medicine",
-          doctorName: "Dr. Robert Miller",
-          doctorPhoto: null,
-          visitDate: "2026-02-29 1:00 PM",
-          status: "pending",
-        },
-        {
-          id: "V-007",
-          patientName: "David Martinez",
-          patientPhoto: null,
-          department: "Cardiology",
-          doctorName: "Dr. Jennifer Garcia",
-          doctorPhoto: null,
-          visitDate: "2026-02-27 4:30 PM",
-          status: "inProgress",
-        },
-        {
-          id: "V-008",
-          patientName: "Lisa Anderson",
-          patientPhoto: null,
-          department: "Neurology",
-          doctorName: "Dr. David Martinez",
-          doctorPhoto: null,
-          visitDate: "2026-02-24 10:15 AM",
-          status: "completed",
-        },
-      ] as Visit[];
-    },
+  // Fetch visits from backend
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["admin-visits", searchQuery, statusFilter, page, limit],
+    queryFn: () =>
+      getVisits({
+        search: searchQuery || undefined,
+        status: statusFilter !== "all" ? statusFilter : undefined,
+        page,
+        limit,
+      }),
   });
 
-  // Filter visits based on search and status
-  const filteredVisits = visits?.filter((visit) => {
-    const matchesSearch =
-      visit.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      visit.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      visit.doctorName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      visit.department.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus =
-      statusFilter === "all" || visit.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const visits = data?.visits;
+  const totalPages = data?.totalPages || 1;
 
   // Table columns definition
   const columns: ColumnDef<Visit>[] = [
     {
-      accessorKey: "id",
+      accessorKey: "visit_id",
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Visit ID" />
       ),
       cell: ({ row }) => (
         <span className="font-medium text-dreams-blue">
-          {row.getValue("id")}
+          {row.getValue("visit_id")}
         </span>
       ),
     },
     {
-      accessorKey: "patientName",
+      accessorKey: "patient_name",
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Patient Name" />
       ),
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
           <Avatar
-            src={row.original.patientPhoto}
-            fallback={row.getValue("patientName")}
+            src={row.original.patient_photo}
+            fallback={row.getValue("patient_name")}
             size="sm"
           />
-          <span className="font-medium">{row.getValue("patientName")}</span>
+          <span className="font-medium">{row.getValue("patient_name")}</span>
         </div>
       ),
     },
@@ -164,28 +67,28 @@ export default function AdminVisitsPage() {
       ),
     },
     {
-      accessorKey: "doctorName",
+      accessorKey: "doctor_name",
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Doctor Name" />
       ),
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
           <Avatar
-            src={row.original.doctorPhoto}
-            fallback={row.getValue("doctorName")}
+            src={row.original.doctor_photo}
+            fallback={row.getValue("doctor_name")}
             size="sm"
           />
-          <span className="font-medium">{row.getValue("doctorName")}</span>
+          <span className="font-medium">{row.getValue("doctor_name")}</span>
         </div>
       ),
     },
     {
-      accessorKey: "visitDate",
+      accessorKey: "visit_date",
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Visit Date" />
       ),
       cell: ({ row }) => (
-        <span className="text-sm">{row.getValue("visitDate")}</span>
+        <span className="text-sm">{row.getValue("visit_date")}</span>
       ),
     },
     {
@@ -196,9 +99,10 @@ export default function AdminVisitsPage() {
       cell: ({ row }) => {
         const status = row.getValue("status") as string;
         const statusLabels: Record<string, string> = {
-          inProgress: "In Progress",
+          scheduled: "Scheduled",
+          in_progress: "In Progress",
           completed: "Completed",
-          pending: "Pending",
+          cancelled: "Cancelled",
         };
 
         return (
@@ -218,6 +122,17 @@ export default function AdminVisitsPage() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 space-y-4">
+        <p className="text-red-600 font-medium">Failed to load visits</p>
+        <p className="text-dreams-textSecondary text-sm">
+          {error instanceof Error ? error.message : "An error occurred"}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Breadcrumb */}
@@ -231,7 +146,7 @@ export default function AdminVisitsPage() {
               Visits
             </h1>
             <Badge variant="pending" className="text-base px-3 py-1">
-              {visits?.length || 0}
+              {data?.total || 0}
             </Badge>
           </div>
           <p className="text-dreams-textSecondary mt-1">
@@ -266,19 +181,20 @@ export default function AdminVisitsPage() {
           className="h-10 px-4 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
         >
           <option value="all">All Status</option>
-          <option value="pending">Pending</option>
-          <option value="inProgress">In Progress</option>
+          <option value="scheduled">Scheduled</option>
+          <option value="in_progress">In Progress</option>
           <option value="completed">Completed</option>
+          <option value="cancelled">Cancelled</option>
         </select>
       </div>
 
       {/* Data Table */}
-      {filteredVisits && (
+      {visits && (
         <DataTable
           columns={columns}
-          data={filteredVisits}
-          pageSize={10}
-          searchColumn="patientName"
+          data={visits}
+          pageSize={limit}
+          searchColumn="patient_name"
           searchPlaceholder="Search visits..."
         />
       )}

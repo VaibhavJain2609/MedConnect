@@ -4,165 +4,59 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ColumnDef } from "@tanstack/react-table";
 import { Plus, Search } from "lucide-react";
-import api from "@/lib/api";
+import { getLabResults, LabResult } from "@/lib/api/lab-results";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
-interface LabResult {
-  id: string;
-  patientName: string;
-  patientPhoto: string | null;
-  gender: string;
-  appointmentDate: string;
-  referredBy: string;
-  referredByPhoto: string | null;
-  testName: string;
-  status: "completed" | "inProgress" | "pending";
-}
-
 export default function AdminLabResultsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
 
-  // Fetch lab results
-  const { data: labResults, isLoading } = useQuery({
-    queryKey: ["admin-lab-results"],
-    queryFn: async () => {
-      // TODO: Replace with actual API call to /api/v1/admin/lab-results
-      // Mock data for now
-      return [
-        {
-          id: "LR-001",
-          patientName: "John Doe",
-          patientPhoto: null,
-          gender: "Male",
-          appointmentDate: "2026-02-26",
-          referredBy: "Dr. Sarah Smith",
-          referredByPhoto: null,
-          testName: "Complete Blood Count (CBC)",
-          status: "completed",
-        },
-        {
-          id: "LR-002",
-          patientName: "Jane Smith",
-          patientPhoto: null,
-          gender: "Female",
-          appointmentDate: "2026-02-27",
-          referredBy: "Dr. Michael Johnson",
-          referredByPhoto: null,
-          testName: "Lipid Profile",
-          status: "inProgress",
-        },
-        {
-          id: "LR-003",
-          patientName: "Mike Wilson",
-          patientPhoto: null,
-          gender: "Male",
-          appointmentDate: "2026-02-28",
-          referredBy: "Dr. Emily Davis",
-          referredByPhoto: null,
-          testName: "X-Ray (Chest)",
-          status: "pending",
-        },
-        {
-          id: "LR-004",
-          patientName: "Sarah Johnson",
-          patientPhoto: null,
-          gender: "Female",
-          appointmentDate: "2026-02-25",
-          referredBy: "Dr. James Wilson",
-          referredByPhoto: null,
-          testName: "Urinalysis",
-          status: "completed",
-        },
-        {
-          id: "LR-005",
-          patientName: "Robert Brown",
-          patientPhoto: null,
-          gender: "Male",
-          appointmentDate: "2026-02-29",
-          referredBy: "Dr. Linda Brown",
-          referredByPhoto: null,
-          testName: "Thyroid Function Test",
-          status: "inProgress",
-        },
-        {
-          id: "LR-006",
-          patientName: "Emily Davis",
-          patientPhoto: null,
-          gender: "Female",
-          appointmentDate: "2026-02-24",
-          referredBy: "Dr. Robert Miller",
-          referredByPhoto: null,
-          testName: "ECG",
-          status: "completed",
-        },
-        {
-          id: "LR-007",
-          patientName: "David Martinez",
-          patientPhoto: null,
-          gender: "Male",
-          appointmentDate: "2026-03-01",
-          referredBy: "Dr. Jennifer Garcia",
-          referredByPhoto: null,
-          testName: "Blood Sugar (Fasting)",
-          status: "pending",
-        },
-        {
-          id: "LR-008",
-          patientName: "Lisa Anderson",
-          patientPhoto: null,
-          gender: "Female",
-          appointmentDate: "2026-02-23",
-          referredBy: "Dr. David Martinez",
-          referredByPhoto: null,
-          testName: "MRI Scan",
-          status: "completed",
-        },
-      ] as LabResult[];
-    },
+  // Fetch lab results from backend
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["admin-lab-results", searchQuery, statusFilter, page, limit],
+    queryFn: () =>
+      getLabResults({
+        search: searchQuery || undefined,
+        status: statusFilter !== "all" ? statusFilter : undefined,
+        page,
+        limit,
+      }),
   });
 
-  // Filter lab results based on search and status
-  const filteredLabResults = labResults?.filter((result) => {
-    const matchesSearch =
-      result.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      result.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      result.testName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      result.referredBy.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus =
-      statusFilter === "all" || result.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const labResults = data?.results;
+  const totalPages = data?.totalPages || 1;
 
   // Table columns definition
   const columns: ColumnDef<LabResult>[] = [
     {
-      accessorKey: "id",
+      accessorKey: "test_id",
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Test ID" />
       ),
       cell: ({ row }) => (
         <span className="font-medium text-dreams-blue">
-          {row.getValue("id")}
+          {row.getValue("test_id")}
         </span>
       ),
     },
     {
-      accessorKey: "patientName",
+      accessorKey: "patient_name",
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Patient Name" />
       ),
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
           <Avatar
-            src={row.original.patientPhoto}
-            fallback={row.getValue("patientName")}
+            src={row.original.patient_photo}
+            fallback={row.getValue("patient_name")}
             size="sm"
           />
-          <span className="font-medium">{row.getValue("patientName")}</span>
+          <span className="font-medium">{row.getValue("patient_name")}</span>
         </div>
       ),
     },
@@ -173,13 +67,13 @@ export default function AdminLabResultsPage() {
       ),
     },
     {
-      accessorKey: "appointmentDate",
+      accessorKey: "appointment_date",
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Appointment Date" />
       ),
       cell: ({ row }) => (
         <span className="text-sm">
-          {new Date(row.getValue("appointmentDate")).toLocaleDateString(
+          {new Date(row.getValue("appointment_date")).toLocaleDateString(
             "en-US",
             {
               month: "short",
@@ -191,25 +85,25 @@ export default function AdminLabResultsPage() {
       ),
     },
     {
-      accessorKey: "referredBy",
+      accessorKey: "doctor_name",
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Referred By" />
       ),
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
           <Avatar
-            src={row.original.referredByPhoto}
-            fallback={row.getValue("referredBy")}
+            src={row.original.doctor_photo}
+            fallback={row.getValue("doctor_name")}
             size="sm"
           />
           <span className="font-medium text-sm">
-            {row.getValue("referredBy")}
+            {row.getValue("doctor_name")}
           </span>
         </div>
       ),
     },
     {
-      accessorKey: "testName",
+      accessorKey: "test_name",
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Test Name" />
       ),
@@ -222,8 +116,9 @@ export default function AdminLabResultsPage() {
       cell: ({ row }) => {
         const status = row.getValue("status") as string;
         const statusLabels: Record<string, string> = {
-          completed: "Received",
-          inProgress: "In Progress",
+          received: "Received",
+          in_progress: "In Progress",
+          completed: "Completed",
           pending: "Pending",
         };
 
@@ -240,6 +135,17 @@ export default function AdminLabResultsPage() {
     return (
       <div className="flex justify-center py-12">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 space-y-4">
+        <p className="text-red-600 font-medium">Failed to load lab results</p>
+        <p className="text-dreams-textSecondary text-sm">
+          {error instanceof Error ? error.message : "An error occurred"}
+        </p>
       </div>
     );
   }
@@ -288,18 +194,19 @@ export default function AdminLabResultsPage() {
         >
           <option value="all">All Status</option>
           <option value="pending">Pending</option>
-          <option value="inProgress">In Progress</option>
-          <option value="completed">Received</option>
+          <option value="in_progress">In Progress</option>
+          <option value="received">Received</option>
+          <option value="completed">Completed</option>
         </select>
       </div>
 
       {/* Data Table */}
-      {filteredLabResults && (
+      {labResults && (
         <DataTable
           columns={columns}
-          data={filteredLabResults}
-          pageSize={10}
-          searchColumn="patientName"
+          data={labResults}
+          pageSize={limit}
+          searchColumn="patient_name"
           searchPlaceholder="Search lab results..."
         />
       )}
