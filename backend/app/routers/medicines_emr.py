@@ -68,10 +68,10 @@ async def autocomplete_medicines(
     # 3. Contains query (lowest priority)
     q_lower = q.lower()
 
-    # Ranking logic using CASE
+    # Ranking logic using CASE with LIKE for prefix matching
     rank_expr = case(
         (func.lower(Brand.brand_name) == q_lower, 1),  # Exact match
-        (func.lower(Brand.brand_name).startswith(q_lower), 2),  # Prefix match
+        (func.lower(Brand.brand_name).like(f"{q_lower}%"), 2),  # Prefix match
         else_=3  # Contains match
     )
 
@@ -109,7 +109,7 @@ async def autocomplete_medicines(
             "salt_composition": salt_comp,
             "manufacturer_name": brand.manufacturer.manufacturer_name,
             "manufacturer_id": str(brand.manufacturer_id),
-            "dosage_form": brand.dosage_form or "",
+            "dosage_form": brand.drug_type.title() if brand.drug_type else "Medicine",
             "strength": salt_comp,  # Use salt composition as strength display
         })
 
