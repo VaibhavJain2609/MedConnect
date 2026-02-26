@@ -1,8 +1,18 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-import api from "@/lib/api";
+import { useState, useMemo } from "react";
+import {
+  getDashboardStats,
+  getPatientTrend,
+  getAppointmentTrend,
+  getDoctorTrend,
+  getTransactionTrend,
+  getPatientStatistics,
+  getAppointmentRequests,
+  approveAppointmentRequest,
+  rejectAppointmentRequest,
+} from "@/lib/api/stats";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import {
@@ -30,89 +40,114 @@ import { Badge } from "@/components/ui/badge";
 export default function AdminDashboardPage() {
   const [dateRange, setDateRange] = useState("30d");
 
+  // Calculate date range params
+  const dateParams = useMemo(() => {
+    const end_date = new Date().toISOString().split("T")[0];
+    const start_date = new Date();
+
+    switch (dateRange) {
+      case "7d":
+        start_date.setDate(start_date.getDate() - 7);
+        break;
+      case "30d":
+        start_date.setDate(start_date.getDate() - 30);
+        break;
+      case "90d":
+        start_date.setDate(start_date.getDate() - 90);
+        break;
+      default:
+        start_date.setDate(start_date.getDate() - 30);
+    }
+
+    return {
+      start_date: start_date.toISOString().split("T")[0],
+      end_date,
+    };
+  }, [dateRange]);
+
   // Fetch dashboard stats
-  const { data: stats, isLoading } = useQuery({
-    queryKey: ["admin-stats", dateRange],
-    queryFn: async () => {
-      // TODO: Replace with actual API call to /api/v1/admin/stats
-      // For now, return mock data
-      return {
-        total_patients: 108,
-        patient_trend: 20,
-        patient_sparkline: [45, 52, 48, 55, 60, 58, 65],
-        total_appointments: 42,
-        appointment_trend: 12,
-        appointment_sparkline: [20, 25, 22, 28, 30, 35, 42],
-        total_doctors: 24,
-        doctor_trend: 8,
-        doctor_sparkline: [18, 19, 20, 21, 22, 23, 24],
-        total_transactions: 156,
-        transaction_trend: 15,
-        transaction_sparkline: [100, 110, 120, 130, 140, 150, 156],
-      };
-    },
+  const { data: stats, isLoading, error } = useQuery({
+    queryKey: ["admin-stats", dateParams],
+    queryFn: () => getDashboardStats(dateParams),
+  });
+
+  // Fetch trend data for sparklines
+  const { data: patientTrend } = useQuery({
+    queryKey: ["patient-trend", dateParams],
+    queryFn: () => getPatientTrend(dateParams),
+  });
+
+  const { data: appointmentTrend } = useQuery({
+    queryKey: ["appointment-trend", dateParams],
+    queryFn: () => getAppointmentTrend(dateParams),
+  });
+
+  const { data: doctorTrend } = useQuery({
+    queryKey: ["doctor-trend", dateParams],
+    queryFn: () => getDoctorTrend(dateParams),
+  });
+
+  const { data: transactionTrend } = useQuery({
+    queryKey: ["transaction-trend", dateParams],
+    queryFn: () => getTransactionTrend(dateParams),
   });
 
   // Fetch appointment requests
   const { data: appointmentRequests } = useQuery({
     queryKey: ["appointment-requests"],
-    queryFn: async () => {
-      // TODO: Replace with actual API call to /api/v1/admin/appointment-requests
-      return [
-        {
-          id: "1",
-          patient_name: "John Doe",
-          patient_photo: null,
-          doctor_name: "Dr. Smith",
-          department: "Cardiology",
-          date: "2026-02-27",
-          time: "10:00 AM",
-          status: "pending",
-        },
-        {
-          id: "2",
-          patient_name: "Jane Smith",
-          patient_photo: null,
-          doctor_name: "Dr. Johnson",
-          department: "Neurology",
-          date: "2026-02-27",
-          time: "2:30 PM",
-          status: "pending",
-        },
-        {
-          id: "3",
-          patient_name: "Mike Wilson",
-          patient_photo: null,
-          doctor_name: "Dr. Brown",
-          department: "Orthopedics",
-          date: "2026-02-28",
-          time: "11:00 AM",
-          status: "pending",
-        },
-      ];
-    },
+    queryFn: () => getAppointmentRequests(5),
   });
 
   // Fetch patient statistics for chart
-  const { data: patientStats } = useQuery({
-    queryKey: ["patient-stats", dateRange],
-    queryFn: async () => {
-      // TODO: Replace with actual API call to /api/v1/admin/stats/patient-trends
-      return [
-        { month: "Jan", new: 12, existing: 45 },
-        { month: "Feb", new: 18, existing: 52 },
-        { month: "Mar", new: 15, existing: 58 },
-        { month: "Apr", new: 22, existing: 65 },
-        { month: "May", new: 20, existing: 72 },
-        { month: "Jun", new: 25, existing: 80 },
-      ];
-    },
+  const { data: patientStatsData } = useQuery({
+    queryKey: ["patient-stats", dateParams],
+    queryFn: () => getPatientStatistics(dateParams),
   });
+
+  // Transform patient stats for chart
+  const patientStats = useMemo(() => {
+    if (!patientStatsData) return [];
+
+    return patientStatsData.map((stat) => ({
+      month: new Date(stat.date).toLocaleDateString("en-US", { month: "short" }),
+      new: stat.new_patients,
+      existing: stat.returning_patients,
+    }));
+  }, [patientStatsData]);
+
+  // Transform trend data for sparklines
+  const patientSparkline = useMemo(
+    () => patientTrend?.map((d) => d.value) || [],
+    [patientTrend]
+  );
+  const appointmentSparkline = useMemo(
+    () => appointmentTrend?.map((d) => d.value) || [],
+    [appointmentTrend]
+  );
+  const doctorSparkline = useMemo(
+    () => doctorTrend?.map((d) => d.value) || [],
+    [doctorTrend]
+  );
+  const transactionSparkline = useMemo(
+    () => transactionTrend?.map((d) => d.value) || [],
+    [transactionTrend]
+  );
 
   if (isLoading) {
     return (
       <div className="flex justify-center py-12">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 space-y-4">
+        <p className="text-red-600 font-medium">Failed to load dashboard data</p>
+        <p className="text-dreams-textSecondary text-sm">
+          {error instanceof Error ? error.message : "An error occurred"}
+        </p>
       </div>
     );
   }
@@ -156,7 +191,7 @@ export default function AdminDashboardPage() {
           trend={stats?.patient_trend}
           icon={Users}
           color="blue"
-          sparklineData={stats?.patient_sparkline}
+          sparklineData={patientSparkline}
         />
         <StatCard
           title="Appointments"
@@ -164,7 +199,7 @@ export default function AdminDashboardPage() {
           trend={stats?.appointment_trend}
           icon={Calendar}
           color="green"
-          sparklineData={stats?.appointment_sparkline}
+          sparklineData={appointmentSparkline}
         />
         <StatCard
           title="Total Doctors"
@@ -172,7 +207,7 @@ export default function AdminDashboardPage() {
           trend={stats?.doctor_trend}
           icon={Stethoscope}
           color="purple"
-          sparklineData={stats?.doctor_sparkline}
+          sparklineData={doctorSparkline}
         />
         <StatCard
           title="Transactions"
@@ -180,7 +215,7 @@ export default function AdminDashboardPage() {
           trend={stats?.transaction_trend}
           icon={DollarSign}
           color="orange"
-          sparklineData={stats?.transaction_sparkline}
+          sparklineData={transactionSparkline}
         />
       </div>
 
@@ -218,7 +253,7 @@ export default function AdminDashboardPage() {
                     </p>
                     <p className="text-xs text-dreams-textSecondary mt-1">
                       <Clock className="inline h-3 w-3 mr-1" />
-                      {request.date} at {request.time}
+                      {request.requested_date} at {request.requested_time}
                     </p>
                   </div>
                   <div className="flex gap-2">
