@@ -4,18 +4,9 @@ import * as React from "react";
 import { Search, X, User, Stethoscope, Calendar, Pill, Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import api from "@/lib/api";
+import { globalSearch, type SearchResult } from "@/lib/api/search";
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/ui/avatar";
-
-interface SearchResult {
-  id: string;
-  type: "patient" | "doctor" | "appointment" | "medicine";
-  title: string;
-  subtitle?: string;
-  photo?: string | null;
-  url: string;
-}
 
 /**
  * GlobalSearch Component
@@ -40,55 +31,23 @@ export const GlobalSearch: React.FC = () => {
   const [selectedIndex, setSelectedIndex] = React.useState(0);
 
   // Search API
-  const { data: results, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ["global-search", searchQuery],
     queryFn: async () => {
-      if (!searchQuery || searchQuery.length < 2) return [];
+      if (!searchQuery || searchQuery.length < 2) return null;
 
-      // TODO: Replace with actual API call to /api/v1/search?q=${searchQuery}
-      // Mock data for now
-      const mockResults: SearchResult[] = [
-        {
-          id: "P-001",
-          type: "patient",
-          title: "John Doe",
-          subtitle: "Age 45 • Male • Cardiology",
-          photo: null,
-          url: "/patient/P-001",
-        },
-        {
-          id: "D-001",
-          type: "doctor",
-          title: "Dr. Sarah Smith",
-          subtitle: "Cardiology • 15 years exp",
-          photo: null,
-          url: "/admin/doctors/D-001",
-        },
-        {
-          id: "A-001",
-          type: "appointment",
-          title: "Appointment with Dr. Sarah Smith",
-          subtitle: "Feb 28, 2026 at 10:00 AM",
-          url: "/admin/appointments/A-001",
-        },
-        {
-          id: "M-001",
-          type: "medicine",
-          title: "Aspirin 100mg",
-          subtitle: "Pain Relief • Bayer",
-          url: "/admin/medicines/M-001",
-        },
-      ];
+      const response = await globalSearch({
+        q: searchQuery,
+        type: "all",
+        limit: 10,
+      });
 
-      // Simple filter for demo
-      return mockResults.filter(
-        (r) =>
-          r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          r.subtitle?.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+      return response;
     },
     enabled: searchQuery.length >= 2,
   });
+
+  const results = data?.results || [];
 
   // Keyboard shortcut handler
   React.useEffect(() => {
@@ -137,7 +96,9 @@ export const GlobalSearch: React.FC = () => {
   }, [isOpen]);
 
   const handleSelectResult = (result: SearchResult) => {
-    router.push(result.url);
+    if (result.url) {
+      router.push(result.url);
+    }
     setIsOpen(false);
     setSearchQuery("");
     setSelectedIndex(0);

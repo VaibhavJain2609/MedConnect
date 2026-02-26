@@ -1,21 +1,16 @@
 "use client";
 
 import * as React from "react";
-import { Bell, Check, X, Calendar, TestTube, AlertCircle } from "lucide-react";
+import { Bell, Check, X, Calendar, TestTube, AlertCircle, Pill } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import api from "@/lib/api";
+import {
+  getNotifications,
+  markAsRead,
+  markAllAsRead,
+  type Notification,
+} from "@/lib/api/notifications";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-
-interface Notification {
-  id: string;
-  type: "appointment" | "lab_result" | "system";
-  title: string;
-  message: string;
-  timestamp: string;
-  read: boolean;
-  actionUrl?: string;
-}
 
 /**
  * NotificationCenter Component
@@ -38,55 +33,18 @@ export const NotificationCenter: React.FC = () => {
   const dropdownRef = React.useRef<HTMLDivElement>(null);
 
   // Fetch notifications
-  const { data: notifications } = useQuery({
+  const { data } = useQuery({
     queryKey: ["notifications"],
-    queryFn: async () => {
-      // TODO: Replace with actual API call to /api/v1/notifications
-      // Mock data for now
-      return [
-        {
-          id: "1",
-          type: "appointment",
-          title: "Upcoming Appointment",
-          message: "Appointment with Dr. Sarah Smith tomorrow at 10:00 AM",
-          timestamp: "2 hours ago",
-          read: false,
-        },
-        {
-          id: "2",
-          type: "lab_result",
-          title: "Lab Results Available",
-          message: "Complete Blood Count (CBC) results are ready to view",
-          timestamp: "5 hours ago",
-          read: false,
-        },
-        {
-          id: "3",
-          type: "system",
-          title: "System Maintenance",
-          message: "Scheduled maintenance tonight from 12:00 AM to 2:00 AM",
-          timestamp: "1 day ago",
-          read: true,
-        },
-        {
-          id: "4",
-          type: "appointment",
-          title: "Appointment Confirmed",
-          message: "Your appointment request has been approved",
-          timestamp: "2 days ago",
-          read: true,
-        },
-      ] as Notification[];
-    },
+    queryFn: () => getNotifications({ limit: 20 }),
     refetchInterval: 30000, // Poll every 30 seconds
   });
 
+  const notifications = data?.notifications || [];
+  const unreadCountFromAPI = data?.unread_count || 0;
+
   // Mark notification as read
   const markAsReadMutation = useMutation({
-    mutationFn: async (notificationId: string) => {
-      // TODO: Replace with actual API call
-      return Promise.resolve();
-    },
+    mutationFn: (notificationId: string) => markAsRead(notificationId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
     },
@@ -94,10 +52,7 @@ export const NotificationCenter: React.FC = () => {
 
   // Mark all as read
   const markAllAsReadMutation = useMutation({
-    mutationFn: async () => {
-      // TODO: Replace with actual API call
-      return Promise.resolve();
-    },
+    mutationFn: () => markAllAsRead(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
     },
@@ -118,7 +73,7 @@ export const NotificationCenter: React.FC = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const unreadCount = notifications?.filter((n) => !n.read).length || 0;
+  const unreadCount = unreadCountFromAPI;
 
   const getNotificationIcon = (type: Notification["type"]) => {
     switch (type) {
@@ -126,11 +81,27 @@ export const NotificationCenter: React.FC = () => {
         return <Calendar className="h-5 w-5 text-dreams-blue" />;
       case "lab_result":
         return <TestTube className="h-5 w-5 text-status-completed" />;
+      case "prescription":
+        return <Pill className="h-5 w-5 text-status-inProgress" />;
+      case "message":
+        return <Bell className="h-5 w-5 text-dreams-blue" />;
       case "system":
         return <AlertCircle className="h-5 w-5 text-status-pending" />;
       default:
         return <Bell className="h-5 w-5 text-dreams-textSecondary" />;
     }
+  };
+
+  const formatTimestamp = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    if (diff < 60) return "Just now";
+    if (diff < 3600) return `${Math.floor(diff / 60)} minutes ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
+    if (diff < 604800) return `${Math.floor(diff / 86400)} days ago`;
+    return date.toLocaleDateString();
   };
 
   return (
@@ -188,8 +159,8 @@ export const NotificationCenter: React.FC = () => {
                     if (!notification.read) {
                       markAsReadMutation.mutate(notification.id);
                     }
-                    if (notification.actionUrl) {
-                      window.location.href = notification.actionUrl;
+                    if (notification.action_url) {
+                      window.location.href = notification.action_url;
                     }
                   }}
                 >
@@ -213,7 +184,7 @@ export const NotificationCenter: React.FC = () => {
                         {notification.message}
                       </p>
                       <p className="text-xs text-dreams-textSecondary">
-                        {notification.timestamp}
+                        {formatTimestamp(notification.created_at)}
                       </p>
                     </div>
 
