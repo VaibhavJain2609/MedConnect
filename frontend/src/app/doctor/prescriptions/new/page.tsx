@@ -120,6 +120,14 @@ export default function NewPrescriptionPage() {
     setError("");
     setLoading(true);
 
+    // Validate patient ID is a UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(patientId)) {
+      setError("Patient ID must be a valid UUID format (e.g., 123e4567-e89b-12d3-a456-426614174000)");
+      setLoading(false);
+      return;
+    }
+
     // Convert meals array to frequency string
     const medicinesFormatted = medicines
       .filter((m) => m.name)
@@ -144,9 +152,10 @@ export default function NewPrescriptionPage() {
       setSuccess(true);
       setTimeout(() => router.push("/doctor/dashboard"), 1500);
     } catch (err: any) {
-      setError(
-        err.response?.data?.detail?.error?.message || "Failed to create prescription"
-      );
+      const errorMsg = err.response?.data?.detail?.error?.message
+        || err.response?.data?.detail
+        || "Failed to create prescription";
+      setError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
     } finally {
       setLoading(false);
     }
@@ -176,16 +185,19 @@ export default function NewPrescriptionPage() {
 
               <div className="mb-4">
                 <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Patient ID
+                  Patient ID *
                 </label>
                 <input
                   type="text"
                   value={patientId}
                   onChange={(e) => setPatientId(e.target.value)}
-                  placeholder="Patient UUID"
-                  className="w-full rounded-lg border px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  placeholder="e.g., 123e4567-e89b-12d3-a456-426614174000"
+                  className="w-full rounded-lg border px-3 py-2 text-sm font-mono focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                   required
                 />
+                <p className="mt-1 text-xs text-gray-500">
+                  Enter the patient's UUID. You can find this from the patient list or timeline.
+                </p>
               </div>
 
               <div className="mb-4">
