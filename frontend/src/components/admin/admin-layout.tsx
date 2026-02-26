@@ -4,6 +4,8 @@ import { useState } from "react";
 import { AdminSidebar } from "./admin-sidebar";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
+import { GlobalSearch, GlobalSearchTrigger } from "@/components/ui/global-search";
+import { NotificationCenter } from "@/components/layout/notification-center";
 import {
   Menu,
   LogOut,
@@ -20,7 +22,6 @@ import { useAuthStore } from "@/stores/auth-store";
 export function AdminLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const { user } = useAuthStore();
 
   return (
@@ -48,17 +49,8 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
               <Menu className="h-5 w-5" />
             </Button>
 
-            {/* Global search */}
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search patients, doctors, appointments..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-10 pl-10 pr-4 rounded-lg border border-dreams-border bg-dreams-lightBg/50 text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue focus:border-transparent"
-              />
-            </div>
+            {/* Global search trigger - Note: GlobalSearch handles its own state via Cmd+K */}
+            <GlobalSearchTrigger onOpen={() => {}} />
           </div>
 
           {/* Utility icons */}
@@ -84,15 +76,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
             </Button>
 
             {/* Notifications */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="relative text-gray-600 hover:text-dreams-blue"
-              title="Notifications"
-            >
-              <Bell className="h-5 w-5" />
-              <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full" />
-            </Button>
+            <NotificationCenter />
 
             {/* Settings */}
             <Button
@@ -130,6 +114,9 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
+
+      {/* Global Search Modal - Always mounted, opens with Cmd+K */}
+      <GlobalSearch />
     </div>
   );
 }
