@@ -79,6 +79,7 @@ export function Autocomplete({
   }
 
   const handleSelect = (option: AutocompleteOption) => {
+    console.log('[Autocomplete] handleSelect called with:', option.label);
     onValueChange(option.value)
     setSelectedLabel(option.label)
     setSearchValue(option.label)
@@ -111,6 +112,8 @@ export function Autocomplete({
         opt.label.toLowerCase().includes(searchValue.toLowerCase())
       )
     : options
+
+  console.log('[Autocomplete] searchValue:', searchValue, 'options:', options.length, 'filtered:', filteredOptions.length);
 
   const showCreateButton =
     allowCreate &&

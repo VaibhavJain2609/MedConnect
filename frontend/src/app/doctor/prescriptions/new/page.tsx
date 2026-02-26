@@ -99,10 +99,20 @@ export default function NewPrescriptionPage() {
     }
   ) => {
     console.log('Medicine selected:', medicine.brandName, 'for index:', index);
-    // Auto-fill medicine name and dosage
-    updateMedicine(index, "name", medicine.brandName);
-    updateMedicine(index, "dosage", `${medicine.dosageForm} - ${medicine.strength}`.trim());
-    console.log('Updated medicines:', medicines);
+
+    // Update BOTH fields in a single state update to avoid race condition
+    const updated = [...medicines];
+    updated[index] = {
+      ...updated[index],
+      name: medicine.brandName,
+      dosage: `${medicine.dosageForm} - ${medicine.strength}`.trim(),
+    };
+    setMedicines(updated);
+
+    console.log('Updated medicine fields:', {
+      name: medicine.brandName,
+      dosage: `${medicine.dosageForm} - ${medicine.strength}`.trim()
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
