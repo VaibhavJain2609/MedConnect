@@ -24,6 +24,8 @@ interface MedicineAutocompleteProps {
     composition: string;
     manufacturerId: string;
     manufacturerName: string;
+    dosageForm: string;
+    strength: string;
   }) => void;
   placeholder?: string;
   disabled?: boolean;
@@ -121,6 +123,8 @@ export default function MedicineAutocomplete({
             composition: medicine.salt_composition,
             manufacturerId: medicine.manufacturer_id,
             manufacturerName: medicine.manufacturer_name,
+            dosageForm: medicine.dosage_form,
+            strength: medicine.strength,
           });
 
           // Clear selection after emitting

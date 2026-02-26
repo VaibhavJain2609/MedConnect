@@ -53,15 +53,28 @@ async def autocomplete_medicines(
     - Salt composition
     - Manufacturer
     - Brand ID
+    - Dosage form and strength (for auto-fill)
 
-    Designed for <100ms response time using trigram indexes.
+    Prioritizes exact matches, then prefix matches, then contains matches.
     """
-    from sqlalchemy import select
+    from sqlalchemy import select, case, func
     from sqlalchemy.orm import selectinload, joinedload
     from app.models.medicine.commercial import Brand, BrandComposition, Manufacturer
     from app.models.medicine.salts import SaltStrength, Salt
 
-    # Query brands with trigram similarity for fast prefix/fuzzy matching
+    # Query brands with smart ranking:
+    # 1. Exact match (highest priority)
+    # 2. Starts with query (prefix match)
+    # 3. Contains query (lowest priority)
+    q_lower = q.lower()
+
+    # Ranking logic using CASE
+    rank_expr = case(
+        (func.lower(Brand.brand_name) == q_lower, 1),  # Exact match
+        (func.lower(Brand.brand_name).startswith(q_lower), 2),  # Prefix match
+        else_=3  # Contains match
+    )
+
     query = (
         select(Brand)
         .options(
@@ -70,17 +83,20 @@ async def autocomplete_medicines(
             .joinedload(BrandComposition.salt_strength)
             .joinedload(SaltStrength.salt),
         )
-        .where(Brand.brand_name.ilike(f"%{q}%"), Brand.is_discontinued == False)
-        .order_by(Brand.brand_name)
-        .limit(10)
+        .where(
+            func.lower(Brand.brand_name).like(f"%{q_lower}%"),
+            Brand.is_discontinued == False
+        )
+        .order_by(rank_expr, Brand.brand_name)
+        .limit(20)  # Fetch 20 to have better results after ranking
     )
 
     result = await db.execute(query)
     brands = result.unique().scalars().all()
 
-    # Build concise response
+    # Build concise response with dosage info for auto-fill
     autocomplete_results = []
-    for brand in brands:
+    for brand in brands[:10]:  # Return top 10 after ranking
         # Build salt composition string
         salt_comp = " + ".join([
             f"{bc.salt_strength.salt.salt_name} ({bc.salt_strength.display_strength})"
@@ -93,6 +109,8 @@ async def autocomplete_medicines(
             "salt_composition": salt_comp,
             "manufacturer_name": brand.manufacturer.manufacturer_name,
             "manufacturer_id": str(brand.manufacturer_id),
+            "dosage_form": brand.dosage_form or "",
+            "strength": salt_comp,  # Use salt composition as strength display
         })
 
     return {"results": autocomplete_results, "count": len(autocomplete_results)}

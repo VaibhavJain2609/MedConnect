@@ -646,6 +646,8 @@ export interface MedicineAutocompleteResult {
   salt_composition: string;
   manufacturer_name: string;
   manufacturer_id: string;
+  dosage_form: string;
+  strength: string;
 }
 
 export interface MedicineAutocompleteResponse {
