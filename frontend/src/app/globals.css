@@ -4,48 +4,79 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
+    /* Dreams EMR Design Tokens */
+    --dreams-blue: 225 74% 57%; /* #4169E1 */
+    --dreams-dark-sidebar: 210 9% 11%; /* #1A1D1F */
+    --dreams-light-bg: 216 33% 97%; /* #F5F7FA */
+
+    /* shadcn/ui base tokens - Dreams EMR Light Mode */
+    --background: 216 33% 97%; /* Dreams light background */
+    --foreground: 210 9% 11%; /* Dreams dark text */
+
+    --card: 0 0% 100%; /* White cards */
+    --card-foreground: 210 9% 11%;
+
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
+    --popover-foreground: 210 9% 11%;
+
+    --primary: 225 74% 57%; /* Dreams blue */
+    --primary-foreground: 0 0% 100%; /* White text on blue */
+
+    --secondary: 220 13% 91%;
+    --secondary-foreground: 210 9% 11%;
+
+    --muted: 220 13% 91%;
+    --muted-foreground: 220 9% 46%;
+
+    --accent: 225 74% 57%; /* Dreams blue */
+    --accent-foreground: 0 0% 100%;
+
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 225 74% 57%; /* Dreams blue */
+
     --radius: 0.5rem;
+
+    /* Status Colors */
+    --status-in-progress: 258 90% 66%; /* #8B5CF6 */
+    --status-completed: 142 71% 45%; /* #10B981 */
+    --status-pending: 38 92% 50%; /* #F59E0B */
+    --status-overdue: 0 72% 51%; /* #EF4444 */
+    --status-upcoming: 217 91% 60%; /* #3B82F6 */
   }
 
   .dark {
-    --background: 0 0% 3.9%;
+    /* Dreams EMR Dark Mode */
+    --background: 210 9% 11%; /* Dreams dark sidebar */
     --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
+
+    --card: 210 7% 15%;
     --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
+
+    --popover: 210 7% 15%;
     --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
+
+    --primary: 225 74% 57%; /* Dreams blue */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 217 33% 17%;
     --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
+
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 217 33% 17%;
     --accent-foreground: 0 0% 98%;
+
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
+
+    --border: 217 33% 17%;
+    --input: 217 33% 17%;
+    --ring: 225 74% 57%;
   }
 }
 
