@@ -19,20 +19,31 @@ export default function DoctorDashboard() {
     <AuthGuard requiredRole="doctor">
       <Navbar />
       <main className="mx-auto max-w-4xl px-4 py-6">
-        <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Doctor Dashboard</h1>
-          <div className="flex gap-3">
+        <div className="mb-6">
+          <h1 className="mb-4 text-2xl font-bold">Doctor Dashboard</h1>
+
+          {/* Quick Actions */}
+          <div className="grid gap-3 sm:grid-cols-3">
             <Link
               href="/doctor/records/new"
-              className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
+              className="rounded-lg border-2 border-primary-200 bg-primary-50 p-4 text-center transition hover:border-primary-300 hover:bg-primary-100"
             >
-              New Record
+              <div className="text-2xl">📝</div>
+              <div className="mt-2 text-sm font-medium text-primary-900">New Record</div>
             </Link>
             <Link
               href="/doctor/prescriptions/new"
-              className="rounded-lg border border-primary-600 px-4 py-2 text-sm font-medium text-primary-600 hover:bg-primary-50"
+              className="rounded-lg border-2 border-green-200 bg-green-50 p-4 text-center transition hover:border-green-300 hover:bg-green-100"
             >
-              New Prescription
+              <div className="text-2xl">💊</div>
+              <div className="mt-2 text-sm font-medium text-green-900">New Prescription</div>
+            </Link>
+            <Link
+              href="/doctor/prescriptions"
+              className="rounded-lg border-2 border-blue-200 bg-blue-50 p-4 text-center transition hover:border-blue-300 hover:bg-blue-100"
+            >
+              <div className="text-2xl">📋</div>
+              <div className="mt-2 text-sm font-medium text-blue-900">View Prescriptions</div>
             </Link>
           </div>
         </div>
@@ -62,12 +73,21 @@ export default function DoctorDashboard() {
                   <p className="mt-0.5 text-sm text-gray-500">
                     {patient.email || patient.phone}
                   </p>
-                  <Link
-                    href={`/doctor/records/new?patient_id=${patient.id}`}
-                    className="mt-3 inline-block text-xs text-primary-600 hover:underline"
-                  >
-                    Add record →
-                  </Link>
+                  <div className="mt-3 flex flex-col gap-2">
+                    <Link
+                      href={`/doctor/records/new?patient_id=${patient.id}`}
+                      className="inline-block text-xs text-primary-600 hover:underline"
+                    >
+                      Add record →
+                    </Link>
+                    <Link
+                      href={`/doctor/patients/${patient.id}/prescriptions`}
+                      className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                    >
+                      <span>💊</span>
+                      View prescriptions →
+                    </Link>
+                  </div>
                 </div>
               ))}
             </div>

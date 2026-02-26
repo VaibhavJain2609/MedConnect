@@ -34,6 +34,93 @@ async def list_patients(
     )
 
 
+@router.get("/patients/{patient_id}/prescriptions")
+async def get_patient_prescriptions(
+    patient_id: UUID,
+    doctor_info: tuple[User, Doctor] = Depends(get_current_doctor),
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(50, ge=1, le=100),
+):
+    """
+    Get prescriptions for a specific patient that were created by:
+    - The current doctor (same doctor_id), OR
+    - Doctors from the same facility (same facility_name and facility_city)
+
+    This ensures doctors can only see prescriptions from their own practice/facility.
+    """
+    from sqlalchemy import select, or_, and_
+    from sqlalchemy.orm import joinedload
+    from app.models.medical_record import MedicalRecord
+    from app.models.prescription import Prescription
+
+    _, doctor = doctor_info
+
+    # Build filter conditions:
+    # 1. Same doctor, OR
+    # 2. Same facility (if facility_name is set)
+    filter_conditions = [MedicalRecord.doctor_id == doctor.id]
+
+    if doctor.facility_name and doctor.facility_city:
+        # Also include prescriptions from other doctors at the same facility
+        facility_doctors_stmt = (
+            select(Doctor.id)
+            .where(
+                Doctor.facility_name == doctor.facility_name,
+                Doctor.facility_city == doctor.facility_city,
+                Doctor.deleted_at.is_(None),
+            )
+        )
+        facility_doctor_ids = await db.execute(facility_doctors_stmt)
+        facility_doctor_ids = [row[0] for row in facility_doctor_ids]
+
+        if facility_doctor_ids:
+            filter_conditions.append(MedicalRecord.doctor_id.in_(facility_doctor_ids))
+
+    # Query prescriptions
+    stmt = (
+        select(MedicalRecord, Prescription, User.full_name.label("doctor_name"))
+        .join(Prescription, Prescription.record_id == MedicalRecord.id)
+        .outerjoin(Doctor, MedicalRecord.doctor_id == Doctor.id)
+        .outerjoin(User, Doctor.user_id == User.id)
+        .where(
+            MedicalRecord.patient_id == patient_id,
+            MedicalRecord.record_type == "prescription",
+            MedicalRecord.deleted_at.is_(None),
+            Prescription.deleted_at.is_(None),
+            or_(*filter_conditions),
+        )
+        .order_by(MedicalRecord.created_at.desc())
+        .limit(limit)
+    )
+
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    # Format response
+    prescriptions = []
+    for row in rows:
+        record = row[0]
+        prescription = row[1]
+        doctor_name = row[2]
+
+        prescriptions.append({
+            "id": str(prescription.id),
+            "record_id": str(record.id),
+            "medicines": prescription.medicines,
+            "diagnosis": prescription.diagnosis,
+            "notes": prescription.notes,
+            "valid_until": prescription.valid_until.isoformat() if prescription.valid_until else None,
+            "created_at": prescription.created_at.isoformat(),
+            "doctor_name": doctor_name,
+        })
+
+    return {
+        "data": prescriptions,
+        "total": len(prescriptions),
+        "patient_id": str(patient_id),
+    }
+
+
 @router.get("/patients/{patient_id}/records")
 async def patient_records(
     patient_id: UUID,
@@ -101,6 +188,76 @@ async def create_rx(
             detail={"error": {"code": "VALIDATION_ERROR", "message": str(e)}},
         )
     return prescription
+
+
+@router.get("/prescriptions")
+async def list_prescriptions(
+    limit: int = Query(50, ge=1, le=100),
+    cursor: UUID | None = Query(None),
+    doctor_info: tuple[User, Doctor] = Depends(get_current_doctor),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get all prescriptions created by the logged-in doctor.
+    Returns medical records of type 'prescription' with patient info.
+    """
+    from sqlalchemy import select
+    from sqlalchemy.orm import joinedload
+    from app.models.medical_record import MedicalRecord
+
+    _, doctor = doctor_info
+
+    # Build query for prescription records created by this doctor
+    stmt = (
+        select(MedicalRecord)
+        .options(joinedload(MedicalRecord.patient))
+        .where(
+            MedicalRecord.doctor_id == doctor.id,
+            MedicalRecord.record_type == "prescription",
+            MedicalRecord.deleted_at.is_(None),
+        )
+        .order_by(MedicalRecord.created_at.desc())
+        .limit(limit + 1)
+    )
+
+    if cursor:
+        cursor_result = await db.execute(
+            select(MedicalRecord.created_at).where(MedicalRecord.id == cursor)
+        )
+        cursor_time = cursor_result.scalar_one_or_none()
+        if cursor_time:
+            stmt = stmt.where(
+                MedicalRecord.created_at <= cursor_time,
+                MedicalRecord.id != cursor
+            )
+
+    result = await db.execute(stmt)
+    records = result.unique().scalars().all()
+
+    has_more = len(records) > limit
+    records_list = list(records[:limit])
+    next_cursor = str(records_list[-1].id) if records_list and has_more else None
+
+    # Format response with patient names
+    data = []
+    for record in records_list:
+        data.append({
+            "id": str(record.id),
+            "patient_id": str(record.patient_id),
+            "patient_name": record.patient.full_name if record.patient else None,
+            "record_type": record.record_type,
+            "title": record.title,
+            "description": record.description,
+            "fhir_bundle": record.fhir_bundle,
+            "source": record.source,
+            "created_at": record.created_at.isoformat(),
+            "updated_at": record.updated_at.isoformat(),
+        })
+
+    return PaginatedResponse(
+        data=data,
+        pagination=PaginationMeta(next_cursor=next_cursor, has_more=has_more, limit=limit),
+    )
 
 
 @router.get("/profile", response_model=DoctorProfileResponse)
