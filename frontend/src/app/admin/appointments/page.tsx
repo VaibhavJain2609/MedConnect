@@ -4,195 +4,78 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ColumnDef } from "@tanstack/react-table";
 import { Plus, Search } from "lucide-react";
-import api from "@/lib/api";
+import { getAppointments, Appointment } from "@/lib/api/appointments";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
-interface Appointment {
-  id: string;
-  patientId: string;
-  patientName: string;
-  patientPhoto: string | null;
-  doctorName: string;
-  doctorPhoto: string | null;
-  department: string;
-  appointmentDate: string;
-  appointmentTime: string;
-  status: "upcoming" | "inProgress" | "completed";
-}
-
 export default function AdminAppointmentsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
 
-  // Fetch appointments
-  const { data: appointments, isLoading } = useQuery({
-    queryKey: ["admin-appointments"],
-    queryFn: async () => {
-      // TODO: Replace with actual API call to /api/v1/admin/appointments
-      // Mock data for now
-      return [
-        {
-          id: "A-001",
-          patientId: "P-001",
-          patientName: "John Doe",
-          patientPhoto: null,
-          doctorName: "Dr. Sarah Smith",
-          doctorPhoto: null,
-          department: "Cardiology",
-          appointmentDate: "2026-02-28",
-          appointmentTime: "10:00 AM",
-          status: "upcoming",
-        },
-        {
-          id: "A-002",
-          patientId: "P-002",
-          patientName: "Jane Smith",
-          patientPhoto: null,
-          doctorName: "Dr. Michael Johnson",
-          doctorPhoto: null,
-          department: "Neurology",
-          appointmentDate: "2026-02-28",
-          appointmentTime: "2:30 PM",
-          status: "upcoming",
-        },
-        {
-          id: "A-003",
-          patientId: "P-003",
-          patientName: "Mike Wilson",
-          patientPhoto: null,
-          doctorName: "Dr. Emily Davis",
-          doctorPhoto: null,
-          department: "Orthopedics",
-          appointmentDate: "2026-02-27",
-          appointmentTime: "11:00 AM",
-          status: "inProgress",
-        },
-        {
-          id: "A-004",
-          patientId: "P-004",
-          patientName: "Sarah Johnson",
-          patientPhoto: null,
-          doctorName: "Dr. James Wilson",
-          doctorPhoto: null,
-          department: "Pediatrics",
-          appointmentDate: "2026-02-26",
-          appointmentTime: "3:00 PM",
-          status: "completed",
-        },
-        {
-          id: "A-005",
-          patientId: "P-005",
-          patientName: "Robert Brown",
-          patientPhoto: null,
-          doctorName: "Dr. Linda Brown",
-          doctorPhoto: null,
-          department: "Dermatology",
-          appointmentDate: "2026-02-25",
-          appointmentTime: "9:30 AM",
-          status: "completed",
-        },
-        {
-          id: "A-006",
-          patientId: "P-006",
-          patientName: "Emily Davis",
-          patientPhoto: null,
-          doctorName: "Dr. Robert Miller",
-          doctorPhoto: null,
-          department: "General Medicine",
-          appointmentDate: "2026-02-29",
-          appointmentTime: "1:00 PM",
-          status: "upcoming",
-        },
-        {
-          id: "A-007",
-          patientId: "P-001",
-          patientName: "John Doe",
-          patientPhoto: null,
-          doctorName: "Dr. Jennifer Garcia",
-          doctorPhoto: null,
-          department: "Cardiology",
-          appointmentDate: "2026-02-27",
-          appointmentTime: "4:30 PM",
-          status: "inProgress",
-        },
-        {
-          id: "A-008",
-          patientId: "P-002",
-          patientName: "Jane Smith",
-          patientPhoto: null,
-          doctorName: "Dr. David Martinez",
-          doctorPhoto: null,
-          department: "Neurology",
-          appointmentDate: "2026-02-24",
-          appointmentTime: "10:15 AM",
-          status: "completed",
-        },
-      ] as Appointment[];
-    },
+  // Fetch appointments from backend
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["admin-appointments", searchQuery, statusFilter, page, limit],
+    queryFn: () =>
+      getAppointments({
+        search: searchQuery || undefined,
+        status: statusFilter !== "all" ? statusFilter : undefined,
+        page,
+        limit,
+      }),
   });
 
-  // Filter appointments based on search and status
-  const filteredAppointments = appointments?.filter((appointment) => {
-    const matchesSearch =
-      appointment.patientName
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase()) ||
-      appointment.patientId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      appointment.doctorName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      appointment.id.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus =
-      statusFilter === "all" || appointment.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const appointments = data?.appointments;
+  const totalPages = data?.totalPages || 1;
 
   // Table columns definition
   const columns: ColumnDef<Appointment>[] = [
     {
-      accessorKey: "patientId",
+      accessorKey: "patient_id",
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Patient ID" />
       ),
       cell: ({ row }) => (
         <a
-          href={`/admin/patients/${row.getValue("patientId")}`}
+          href={`/admin/patients/${row.getValue("patient_id")}`}
           className="font-medium text-dreams-blue hover:underline"
         >
-          {row.getValue("patientId")}
+          {row.getValue("patient_id")}
         </a>
       ),
     },
     {
-      accessorKey: "patientName",
+      accessorKey: "patient_name",
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Patient Name" />
       ),
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
           <Avatar
-            src={row.original.patientPhoto}
-            fallback={row.getValue("patientName")}
+            src={row.original.patient_photo}
+            fallback={row.getValue("patient_name")}
             size="sm"
           />
-          <span className="font-medium">{row.getValue("patientName")}</span>
+          <span className="font-medium">{row.getValue("patient_name")}</span>
         </div>
       ),
     },
     {
-      accessorKey: "doctorName",
+      accessorKey: "doctor_name",
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Doctor Name" />
       ),
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
           <Avatar
-            src={row.original.doctorPhoto}
-            fallback={row.getValue("doctorName")}
+            src={row.original.doctor_photo}
+            fallback={row.getValue("doctor_name")}
             size="sm"
           />
-          <span className="font-medium">{row.getValue("doctorName")}</span>
+          <span className="font-medium">{row.getValue("doctor_name")}</span>
         </div>
       ),
     },
@@ -203,14 +86,14 @@ export default function AdminAppointmentsPage() {
       ),
     },
     {
-      accessorKey: "appointmentDate",
+      accessorKey: "appointment_date",
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Appointment Date" />
       ),
       cell: ({ row }) => (
         <div>
           <p className="font-medium">
-            {new Date(row.getValue("appointmentDate")).toLocaleDateString(
+            {new Date(row.getValue("appointment_date")).toLocaleDateString(
               "en-US",
               {
                 month: "short",
@@ -220,7 +103,7 @@ export default function AdminAppointmentsPage() {
             )}
           </p>
           <p className="text-xs text-dreams-textSecondary">
-            {row.original.appointmentTime}
+            {row.original.appointment_time}
           </p>
         </div>
       ),
@@ -234,8 +117,9 @@ export default function AdminAppointmentsPage() {
         const status = row.getValue("status") as string;
         const statusLabels: Record<string, string> = {
           upcoming: "Upcoming",
-          inProgress: "In Progress",
+          in_progress: "In Progress",
           completed: "Completed",
+          cancelled: "Cancelled",
         };
 
         return (
@@ -251,6 +135,17 @@ export default function AdminAppointmentsPage() {
     return (
       <div className="flex justify-center py-12">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 space-y-4">
+        <p className="text-red-600 font-medium">Failed to load appointments</p>
+        <p className="text-dreams-textSecondary text-sm">
+          {error instanceof Error ? error.message : "An error occurred"}
+        </p>
       </div>
     );
   }
@@ -299,18 +194,19 @@ export default function AdminAppointmentsPage() {
         >
           <option value="all">All Status</option>
           <option value="upcoming">Upcoming</option>
-          <option value="inProgress">In Progress</option>
+          <option value="in_progress">In Progress</option>
           <option value="completed">Completed</option>
+          <option value="cancelled">Cancelled</option>
         </select>
       </div>
 
       {/* Data Table */}
-      {filteredAppointments && (
+      {appointments && (
         <DataTable
           columns={columns}
-          data={filteredAppointments}
-          pageSize={10}
-          searchColumn="patientName"
+          data={appointments}
+          pageSize={limit}
+          searchColumn="patient_name"
           searchPlaceholder="Search appointments..."
         />
       )}
