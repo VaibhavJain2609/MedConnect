@@ -32,12 +32,25 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
+# CORS Configuration - Allow frontend to access API
+allowed_origins = [settings.FRONTEND_URL]
+
+# In development, also allow localhost variations
+if settings.APP_ENV == "development":
+    allowed_origins.extend([
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 app.include_router(auth.router)

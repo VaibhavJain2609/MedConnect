@@ -13,7 +13,8 @@ import { useState } from 'react';
 import { useDrugInteractions } from '@/hooks/useDrugInteractions';
 import DrugInteractionWarning from './DrugInteractionWarning';
 import AlternativeMedicines from './AlternativeMedicines';
-import { Brand } from '@/lib/api/medicines-emr';
+import MedicineAutocomplete from './MedicineAutocomplete';
+import { Brand, getBrand } from '@/lib/api/medicines-emr';
 import { AlertTriangle, Plus, Trash2, RefreshCw } from 'lucide-react';
 
 interface SelectedMedicine {
@@ -94,6 +95,46 @@ export default function PrescriptionFormExample() {
     setShowAlternativesFor(showAlternativesFor === medicineId ? null : medicineId);
   };
 
+  // Handler: Add medicine from autocomplete (MD-72)
+  const handleMedicineSelect = async (medicine: {
+    brandId: string;
+    brandName: string;
+    composition: string;
+    manufacturerId: string;
+    manufacturerName: string;
+  }) => {
+    // Check for duplicate
+    if (selectedMedicines.some((m) => m.brandId === medicine.brandId)) {
+      alert('This medicine is already added to the prescription');
+      return;
+    }
+
+    // Fetch full brand details to get salt IDs for interaction checking
+    // This is a temporary solution until backend includes salt_ids in autocomplete
+    try {
+      const brandDetails = await getBrand(medicine.brandId);
+
+      // Extract first salt ID from compositions (simplified - handles multi-salt)
+      const firstComposition = brandDetails.compositions[0];
+      const saltId = firstComposition?.composition_id || '';
+      const saltName = firstComposition?.salt_name || '';
+
+      addMedicine({
+        brandId: medicine.brandId,
+        brandName: medicine.brandName,
+        saltId: saltId,
+        saltName: saltName,
+        composition: medicine.composition,
+        dosage: '1 tablet',
+        frequency: 'Three times daily',
+        duration: '5 days',
+      });
+    } catch (error) {
+      console.error('Failed to fetch brand details:', error);
+      alert('Failed to add medicine. Please try again.');
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -162,28 +203,28 @@ export default function PrescriptionFormExample() {
 
           {selectedMedicines.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              <p>No medicines added yet</p>
-              <button
-                onClick={() =>
-                  addMedicine({
-                    brandName: 'Paracetamol 500mg (Example)',
-                    saltId: 'salt-paracetamol',
-                    saltName: 'Paracetamol',
-                    composition: 'Paracetamol (500mg)',
-                    brandId: 'brand-123',
-                    dosage: '1 tablet',
-                    frequency: 'Three times daily',
-                    duration: '5 days',
-                  })
-                }
-                className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 mx-auto"
-              >
-                <Plus className="w-4 h-4" />
-                Add Example Medicine
-              </button>
+              <p className="mb-4">No medicines added yet</p>
+              <div className="max-w-md mx-auto">
+                <MedicineAutocomplete
+                  onSelect={handleMedicineSelect}
+                  placeholder="Search and add medicine..."
+                  className="w-full"
+                />
+              </div>
             </div>
           ) : (
-            selectedMedicines.map((medicine) => (
+            <>
+              {/* Autocomplete above the medicines list */}
+              <div className="mb-4">
+                <MedicineAutocomplete
+                  onSelect={handleMedicineSelect}
+                  placeholder="Search and add medicine..."
+                  className="w-full"
+                />
+              </div>
+
+              {/* Medicines list */}
+              {selectedMedicines.map((medicine) => (
               <div
                 key={medicine.id}
                 className={`border rounded-lg p-4 ${
@@ -246,7 +287,8 @@ export default function PrescriptionFormExample() {
                   </div>
                 )}
               </div>
-            ))
+            ))}
+            </>
           )}
         </div>
 

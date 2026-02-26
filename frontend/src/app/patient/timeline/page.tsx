@@ -7,6 +7,8 @@ import api from "@/lib/api";
 import { formatDate, recordTypeLabel, recordTypeColor } from "@/lib/utils";
 import { Navbar } from "@/components/layout/navbar";
 import { AuthGuard } from "@/components/layout/auth-guard";
+import { PrescriptionCard } from "@/components/prescription/PrescriptionCard";
+import { extractPrescriptionFromRecord } from "@/lib/api/prescriptions";
 
 const RECORD_TYPES = [
   { value: "", label: "All Types" },
@@ -74,48 +76,70 @@ export default function TimelinePage() {
             </p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {data?.data?.map((record: any) => (
-              <Link
-                key={record.id}
-                href={`/patient/records/${record.id}`}
-                className="block rounded-xl border bg-white p-4 transition hover:border-primary-200 hover:shadow-sm"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="mb-1 flex items-center gap-2">
-                      <span
-                        className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${recordTypeColor(record.record_type)}`}
-                      >
-                        {recordTypeLabel(record.record_type)}
-                      </span>
-                      <span className="text-xs text-gray-400">
-                        {formatDate(record.created_at)}
-                      </span>
-                    </div>
-                    <h3 className="font-medium text-gray-900">{record.title}</h3>
-                    {record.doctor_name && (
-                      <p className="mt-0.5 text-sm text-gray-500">
-                        by {record.doctor_name}
-                      </p>
-                    )}
-                  </div>
-                  <svg
-                    className="mt-1 h-5 w-5 text-gray-400"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 5l7 7-7 7"
+          <div className="space-y-4">
+            {data?.data?.map((record: any) => {
+              // Render prescription records with interactive card
+              if (record.record_type === 'prescription') {
+                const prescriptionData = extractPrescriptionFromRecord(record);
+                if (prescriptionData) {
+                  return (
+                    <PrescriptionCard
+                      key={record.id}
+                      prescription={{
+                        ...prescriptionData,
+                        doctor_name: record.doctor_name,
+                      }}
+                      variant="patient"
+                      collapsible={true}
+                      defaultExpanded={false}
                     />
-                  </svg>
-                </div>
-              </Link>
-            ))}
+                  );
+                }
+              }
+
+              // Render other records as clickable cards
+              return (
+                <Link
+                  key={record.id}
+                  href={`/patient/records/${record.id}`}
+                  className="block rounded-xl border bg-white p-4 transition hover:border-primary-200 hover:shadow-sm"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="mb-1 flex items-center gap-2">
+                        <span
+                          className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${recordTypeColor(record.record_type)}`}
+                        >
+                          {recordTypeLabel(record.record_type)}
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          {formatDate(record.created_at)}
+                        </span>
+                      </div>
+                      <h3 className="font-medium text-gray-900">{record.title}</h3>
+                      {record.doctor_name && (
+                        <p className="mt-0.5 text-sm text-gray-500">
+                          by {record.doctor_name}
+                        </p>
+                      )}
+                    </div>
+                    <svg
+                      className="mt-1 h-5 w-5 text-gray-400"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5l7 7-7 7"
+                      />
+                    </svg>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         )}
 

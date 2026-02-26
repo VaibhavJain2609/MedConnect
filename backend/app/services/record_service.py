@@ -55,10 +55,16 @@ async def get_patient_timeline(
     cursor: UUID | None = None,
     limit: int = 20,
 ) -> tuple[list[dict], str | None, bool]:
+    from app.models.prescription import Prescription
+
     stmt = (
-        select(MedicalRecord, User.full_name.label("doctor_name"))
+        select(MedicalRecord, User.full_name.label("doctor_name"), Prescription)
         .outerjoin(Doctor, MedicalRecord.doctor_id == Doctor.id)
         .outerjoin(User, Doctor.user_id == User.id)
+        .outerjoin(Prescription, and_(
+            Prescription.record_id == MedicalRecord.id,
+            Prescription.deleted_at.is_(None)
+        ))
         .where(
             MedicalRecord.patient_id == patient_id,
             MedicalRecord.deleted_at.is_(None),
@@ -97,14 +103,27 @@ async def get_patient_timeline(
     for row in items:
         record = row[0]
         doctor_name = row[1]
-        records.append({
+        prescription = row[2]
+
+        record_data = {
             "id": str(record.id),
             "record_type": record.record_type,
             "title": record.title,
             "source": record.source,
             "doctor_name": doctor_name,
             "created_at": record.created_at.isoformat(),
-        })
+        }
+
+        # Include prescription data for prescription records
+        if prescription:
+            record_data["prescription"] = {
+                "medicines": prescription.medicines,
+                "diagnosis": prescription.diagnosis,
+                "notes": prescription.notes,
+                "valid_until": prescription.valid_until.isoformat() if prescription.valid_until else None,
+            }
+
+        records.append(record_data)
 
     next_cursor = str(items[-1][0].id) if items and has_more else None
     return records, next_cursor, has_more

@@ -5,24 +5,52 @@ import { useRouter } from "next/navigation";
 import api from "@/lib/api";
 import { Navbar } from "@/components/layout/navbar";
 import { AuthGuard } from "@/components/layout/auth-guard";
+import MedicineAutocomplete from "@/components/medicine/MedicineAutocomplete";
 
 interface Medicine {
   name: string;
   dosage: string;
-  frequency: string;
+  meals: string[];  // Changed from frequency to meals
   duration: string;
-  timing: string;
+  foodRelation: string;  // New field
   notes: string;
 }
 
 const EMPTY_MEDICINE: Medicine = {
   name: "",
   dosage: "",
-  frequency: "",
-  duration: "",
-  timing: "",
+  meals: [],
+  duration: "5",  // Default 5 days
+  foodRelation: "after_food",  // Default
   notes: "",
 };
+
+const MEAL_OPTIONS = [
+  { id: "breakfast", label: "Breakfast", icon: "🌅" },
+  { id: "lunch", label: "Lunch", icon: "☀️" },
+  { id: "afternoon_tea", label: "Tea", icon: "☕" },
+  { id: "dinner", label: "Dinner", icon: "🌙" },
+  { id: "bedtime", label: "Bedtime", icon: "😴" },
+];
+
+const DURATION_OPTIONS = [
+  { value: "3", label: "3 days" },
+  { value: "5", label: "5 days" },
+  { value: "7", label: "7 days" },
+  { value: "10", label: "10 days" },
+  { value: "14", label: "14 days" },
+  { value: "21", label: "21 days" },
+  { value: "30", label: "1 month" },
+  { value: "60", label: "2 months" },
+  { value: "90", label: "3 months" },
+];
+
+const FOOD_RELATION_OPTIONS = [
+  { value: "empty_stomach", label: "Empty stomach", icon: "🚫" },
+  { value: "with_food", label: "With food", icon: "🍽️" },
+  { value: "after_food", label: "After food", icon: "✅" },
+  { value: "anytime", label: "Anytime", icon: "⏰" },
+];
 
 export default function NewPrescriptionPage() {
   const router = useRouter();
@@ -34,10 +62,18 @@ export default function NewPrescriptionPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  const updateMedicine = (index: number, field: keyof Medicine, value: string) => {
+  const updateMedicine = (index: number, field: keyof Medicine, value: any) => {
     const updated = [...medicines];
     updated[index] = { ...updated[index], [field]: value };
     setMedicines(updated);
+  };
+
+  const toggleMeal = (index: number, mealId: string) => {
+    const currentMeals = medicines[index].meals;
+    const updated = currentMeals.includes(mealId)
+      ? currentMeals.filter((m) => m !== mealId)
+      : [...currentMeals, mealId];
+    updateMedicine(index, "meals", updated);
   };
 
   const addMedicine = () => {
@@ -50,23 +86,76 @@ export default function NewPrescriptionPage() {
     }
   };
 
+  const handleMedicineSelect = (
+    index: number,
+    medicine: {
+      brandId: string;
+      brandName: string;
+      composition: string;
+      manufacturerId: string;
+      manufacturerName: string;
+      dosageForm: string;
+      strength: string;
+    }
+  ) => {
+    console.log('Medicine selected:', medicine.brandName, 'for index:', index);
+
+    // Update BOTH fields in a single state update to avoid race condition
+    const updated = [...medicines];
+    updated[index] = {
+      ...updated[index],
+      name: medicine.brandName,
+      dosage: `${medicine.dosageForm} - ${medicine.strength}`.trim(),
+    };
+    setMedicines(updated);
+
+    console.log('Updated medicine fields:', {
+      name: medicine.brandName,
+      dosage: `${medicine.dosageForm} - ${medicine.strength}`.trim()
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
+
+    // Validate patient ID is a UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(patientId)) {
+      setError("Patient ID must be a valid UUID format (e.g., 123e4567-e89b-12d3-a456-426614174000)");
+      setLoading(false);
+      return;
+    }
+
+    // Convert meals array to frequency string
+    const medicinesFormatted = medicines
+      .filter((m) => m.name)
+      .map((m) => ({
+        name: m.name,
+        dosage: m.dosage,
+        frequency: m.meals.length > 0
+          ? `${m.meals.length}x daily (${m.meals.map(meal => MEAL_OPTIONS.find(mo => mo.id === meal)?.label).join(", ")})`
+          : "As needed",
+        duration: `${m.duration} days`,
+        timing: FOOD_RELATION_OPTIONS.find(fr => fr.value === m.foodRelation)?.label || "After food",
+        notes: m.notes,
+      }));
+
     try {
       await api.post("/api/v1/doctors/prescriptions", {
         patient_id: patientId,
-        medicines: medicines.filter((m) => m.name),
+        medicines: medicinesFormatted,
         diagnosis: diagnosis || undefined,
         notes: notes || undefined,
       });
       setSuccess(true);
       setTimeout(() => router.push("/doctor/dashboard"), 1500);
     } catch (err: any) {
-      setError(
-        err.response?.data?.detail?.error?.message || "Failed to create prescription"
-      );
+      const errorMsg = err.response?.data?.detail?.error?.message
+        || err.response?.data?.detail
+        || "Failed to create prescription";
+      setError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
     } finally {
       setLoading(false);
     }
@@ -75,7 +164,7 @@ export default function NewPrescriptionPage() {
   return (
     <AuthGuard requiredRole="doctor">
       <Navbar />
-      <main className="mx-auto max-w-2xl px-4 py-6">
+      <main className="mx-auto max-w-4xl px-4 py-6">
         <h1 className="mb-6 text-2xl font-bold">Create Prescription</h1>
 
         {success ? (
@@ -96,16 +185,19 @@ export default function NewPrescriptionPage() {
 
               <div className="mb-4">
                 <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Patient ID
+                  Patient ID *
                 </label>
                 <input
                   type="text"
                   value={patientId}
                   onChange={(e) => setPatientId(e.target.value)}
-                  placeholder="Patient UUID"
-                  className="w-full rounded-lg border px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  placeholder="e.g., 123e4567-e89b-12d3-a456-426614174000"
+                  className="w-full rounded-lg border px-3 py-2 text-sm font-mono focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                   required
                 />
+                <p className="mt-1 text-xs text-gray-500">
+                  Enter the patient's UUID. You can find this from the patient list or timeline.
+                </p>
               </div>
 
               <div className="mb-4">
@@ -150,9 +242,9 @@ export default function NewPrescriptionPage() {
               {medicines.map((med, idx) => (
                 <div
                   key={idx}
-                  className="mb-3 rounded-xl border bg-white p-4 shadow-sm"
+                  className="mb-4 rounded-xl border bg-white p-6 shadow-sm"
                 >
-                  <div className="mb-3 flex items-center justify-between">
+                  <div className="mb-4 flex items-center justify-between">
                     <span className="text-sm font-medium text-gray-500">
                       Medicine {idx + 1}
                     </span>
@@ -166,73 +258,181 @@ export default function NewPrescriptionPage() {
                       </button>
                     )}
                   </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <input
-                      type="text"
-                      value={med.name}
-                      onChange={(e) => updateMedicine(idx, "name", e.target.value)}
-                      placeholder="Medicine name *"
-                      className="rounded-lg border px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                      required
+
+                  {/* Medicine Search */}
+                  <div className="mb-4">
+                    <label className="mb-2 block text-sm font-medium text-gray-700">
+                      Medicine Name *
+                    </label>
+                    <MedicineAutocomplete
+                      onSelect={(medicine) => {
+                        console.log('Parent received medicine:', medicine.brandName);
+                        handleMedicineSelect(idx, medicine);
+                      }}
+                      placeholder="Search for medicine (e.g., Dolo, Paracetamol)..."
+                      className="w-full"
                     />
-                    <input
-                      type="text"
-                      value={med.dosage}
-                      onChange={(e) => updateMedicine(idx, "dosage", e.target.value)}
-                      placeholder="Dosage (e.g., 500mg) *"
-                      className="rounded-lg border px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                      required
-                    />
-                    <input
-                      type="text"
-                      value={med.frequency}
-                      onChange={(e) => updateMedicine(idx, "frequency", e.target.value)}
-                      placeholder="Frequency (e.g., twice daily) *"
-                      className="rounded-lg border px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                      required
-                    />
-                    <input
-                      type="text"
-                      value={med.duration}
-                      onChange={(e) => updateMedicine(idx, "duration", e.target.value)}
-                      placeholder="Duration (e.g., 5 days) *"
-                      className="rounded-lg border px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                      required
-                    />
-                    <input
-                      type="text"
-                      value={med.timing}
-                      onChange={(e) => updateMedicine(idx, "timing", e.target.value)}
-                      placeholder="Timing (e.g., after food)"
-                      className="rounded-lg border px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                    />
+                    {/* Show selected medicine info */}
+                    {med.name ? (
+                      <div className="mt-2 rounded-md bg-green-50 border-2 border-green-200 px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-green-600">✅</span>
+                          <div>
+                            <p className="text-sm font-medium text-green-900">{med.name}</p>
+                            {med.dosage && (
+                              <p className="text-xs text-green-700 mt-1">{med.dosage}</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-xs text-gray-500">
+                        Start typing to search medicines...
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Meal Selector (Replaces Frequency + Timing) */}
+                  <div className="mb-4">
+                    <label className="mb-2 block text-sm font-medium text-gray-700">
+                      When to take *
+                    </label>
+                    <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+                      {MEAL_OPTIONS.map((meal) => (
+                        <button
+                          key={meal.id}
+                          type="button"
+                          onClick={() => toggleMeal(idx, meal.id)}
+                          className={`
+                            flex flex-col items-center justify-center rounded-lg border-2 p-3 text-center transition-all
+                            ${
+                              med.meals.includes(meal.id)
+                                ? "border-primary-500 bg-primary-50 text-primary-700"
+                                : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                            }
+                          `}
+                        >
+                          <span className="text-2xl">{meal.icon}</span>
+                          <span className="mt-1 text-xs font-medium">{meal.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                    {med.meals.length === 0 && (
+                      <p className="mt-1 text-xs text-red-500 font-medium">
+                        ⚠️ Required: Select at least one meal time
+                      </p>
+                    )}
+                    {med.meals.length > 0 && (
+                      <p className="mt-1 text-xs text-green-600 font-medium">
+                        ✅ {med.meals.length}x daily - {med.meals.map(m => MEAL_OPTIONS.find(mo => mo.id === m)?.label).join(", ")}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {/* Duration Dropdown */}
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-gray-700">
+                        Duration *
+                      </label>
+                      <select
+                        value={med.duration}
+                        onChange={(e) => updateMedicine(idx, "duration", e.target.value)}
+                        className="w-full rounded-lg border px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                        required
+                      >
+                        {DURATION_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Food Relation */}
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-gray-700">
+                        Food Relation *
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {FOOD_RELATION_OPTIONS.map((fr) => (
+                          <button
+                            key={fr.value}
+                            type="button"
+                            onClick={() => updateMedicine(idx, "foodRelation", fr.value)}
+                            className={`
+                              flex items-center justify-center rounded-lg border-2 px-3 py-2 text-sm transition-all
+                              ${
+                                med.foodRelation === fr.value
+                                  ? "border-primary-500 bg-primary-50 text-primary-700"
+                                  : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                              }
+                            `}
+                          >
+                            <span className="mr-1">{fr.icon}</span>
+                            <span className="text-xs font-medium">{fr.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Additional Notes */}
+                  <div className="mt-4">
+                    <label className="mb-2 block text-sm font-medium text-gray-700">
+                      Additional Instructions
+                    </label>
                     <input
                       type="text"
                       value={med.notes}
                       onChange={(e) => updateMedicine(idx, "notes", e.target.value)}
-                      placeholder="Notes"
-                      className="rounded-lg border px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                      placeholder="e.g., Take with plenty of water"
+                      className="w-full rounded-lg border px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                     />
                   </div>
                 </div>
               ))}
             </div>
 
-            <div className="flex gap-3">
-              <button
-                type="submit"
-                disabled={loading}
-                className="rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
-              >
-                {loading ? "Creating..." : "Create Prescription"}
-              </button>
-              <button
-                type="button"
-                onClick={() => router.back()}
-                className="rounded-lg border px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
+            <div>
+              {/* Validation hints - only check first medicine */}
+              {!medicines[0].name && (
+                <div className="mb-3 rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800">
+                  ⚠️ Please select a medicine from the autocomplete for Medicine 1
+                </div>
+              )}
+              {medicines[0].name && medicines[0].meals.length === 0 && (
+                <div className="mb-3 rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800">
+                  ⚠️ Please select at least one meal time for Medicine 1
+                </div>
+              )}
+              {/* Check additional medicines if any */}
+              {medicines.length > 1 && medicines.slice(1).some(m => m.name && m.meals.length === 0) && (
+                <div className="mb-3 rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800">
+                  ⚠️ Some medicines need meal times selected
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  type="submit"
+                  disabled={
+                    loading ||
+                    !medicines[0].name ||  // First medicine must have name
+                    medicines.filter(m => m.name).some(m => m.meals.length === 0)  // Medicines with names must have meals
+                  }
+                  className="rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+                >
+                  {loading ? "Creating..." : "Create Prescription"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => router.back()}
+                  className="rounded-lg border px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </form>
         )}
