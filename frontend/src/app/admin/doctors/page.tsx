@@ -3,146 +3,53 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Plus, Search, Mail, Phone, Briefcase, Calendar } from "lucide-react";
-import api from "@/lib/api";
+import { getDoctors, getDoctorSpecialties, Doctor } from "@/lib/api/doctors";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
-interface Doctor {
-  id: string;
-  name: string;
-  photo: string | null;
-  specialty: string;
-  experience: number;
-  appointmentsCount: number;
-  email: string;
-  phone: string;
-  department: string;
-}
-
 export default function AdminDoctorsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [specialtyFilter, setSpecialtyFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [limit] = useState(12);
 
-  // Fetch doctors
-  const { data: doctors, isLoading } = useQuery({
-    queryKey: ["admin-doctors"],
-    queryFn: async () => {
-      // TODO: Replace with actual API call to /api/v1/admin/doctors
-      // Mock data for now
-      return [
-        {
-          id: "D-001",
-          name: "Dr. Sarah Smith",
-          photo: null,
-          specialty: "Cardiology",
-          experience: 15,
-          appointmentsCount: 1234,
-          email: "sarah.smith@medconnect.com",
-          phone: "+1 (555) 123-4567",
-          department: "Cardiology",
-        },
-        {
-          id: "D-002",
-          name: "Dr. Michael Johnson",
-          photo: null,
-          specialty: "Neurology",
-          experience: 12,
-          appointmentsCount: 987,
-          email: "michael.johnson@medconnect.com",
-          phone: "+1 (555) 234-5678",
-          department: "Neurology",
-        },
-        {
-          id: "D-003",
-          name: "Dr. Emily Davis",
-          photo: null,
-          specialty: "Orthopedics",
-          experience: 10,
-          appointmentsCount: 856,
-          email: "emily.davis@medconnect.com",
-          phone: "+1 (555) 345-6789",
-          department: "Orthopedics",
-        },
-        {
-          id: "D-004",
-          name: "Dr. James Wilson",
-          photo: null,
-          specialty: "Pediatrics",
-          experience: 18,
-          appointmentsCount: 1456,
-          email: "james.wilson@medconnect.com",
-          phone: "+1 (555) 456-7890",
-          department: "Pediatrics",
-        },
-        {
-          id: "D-005",
-          name: "Dr. Linda Brown",
-          photo: null,
-          specialty: "Dermatology",
-          experience: 8,
-          appointmentsCount: 654,
-          email: "linda.brown@medconnect.com",
-          phone: "+1 (555) 567-8901",
-          department: "Dermatology",
-        },
-        {
-          id: "D-006",
-          name: "Dr. Robert Miller",
-          photo: null,
-          specialty: "General Medicine",
-          experience: 20,
-          appointmentsCount: 2103,
-          email: "robert.miller@medconnect.com",
-          phone: "+1 (555) 678-9012",
-          department: "General Medicine",
-        },
-        {
-          id: "D-007",
-          name: "Dr. Jennifer Garcia",
-          photo: null,
-          specialty: "Cardiology",
-          experience: 14,
-          appointmentsCount: 1089,
-          email: "jennifer.garcia@medconnect.com",
-          phone: "+1 (555) 789-0123",
-          department: "Cardiology",
-        },
-        {
-          id: "D-008",
-          name: "Dr. David Martinez",
-          photo: null,
-          specialty: "Neurology",
-          experience: 11,
-          appointmentsCount: 892,
-          email: "david.martinez@medconnect.com",
-          phone: "+1 (555) 890-1234",
-          department: "Neurology",
-        },
-      ] as Doctor[];
-    },
+  // Fetch doctors from backend
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["admin-doctors", searchQuery, specialtyFilter, page, limit],
+    queryFn: () =>
+      getDoctors({
+        search: searchQuery || undefined,
+        specialty: specialtyFilter !== "all" ? specialtyFilter : undefined,
+        page,
+        limit,
+      }),
   });
 
-  // Filter doctors based on search and specialty
-  const filteredDoctors = doctors?.filter((doctor) => {
-    const matchesSearch =
-      doctor.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      doctor.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      doctor.specialty.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesSpecialty =
-      specialtyFilter === "all" || doctor.specialty === specialtyFilter;
-    return matchesSearch && matchesSpecialty;
+  // Fetch specialties for filter dropdown
+  const { data: specialties } = useQuery({
+    queryKey: ["doctor-specialties"],
+    queryFn: getDoctorSpecialties,
   });
 
-  // Get unique specialties for filter
-  const specialties = Array.from(
-    new Set(doctors?.map((d) => d.specialty) || [])
-  );
+  const doctors = data?.doctors;
+  const totalPages = data?.totalPages || 1;
 
   if (isLoading) {
     return (
       <div className="flex justify-center py-12">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 space-y-4">
+        <p className="text-red-600 font-medium">Failed to load doctors</p>
+        <p className="text-dreams-textSecondary text-sm">
+          {error instanceof Error ? error.message : "An error occurred"}
+        </p>
       </div>
     );
   }
@@ -190,7 +97,7 @@ export default function AdminDoctorsPage() {
           className="h-10 px-4 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
         >
           <option value="all">All Specialties</option>
-          {specialties.map((specialty) => (
+          {specialties?.map((specialty) => (
             <option key={specialty} value={specialty}>
               {specialty}
             </option>
@@ -200,8 +107,8 @@ export default function AdminDoctorsPage() {
 
       {/* Grid View */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        {filteredDoctors && filteredDoctors.length > 0 ? (
-          filteredDoctors.map((doctor) => (
+        {doctors && doctors.length > 0 ? (
+          doctors.map((doctor) => (
             <div
               key={doctor.id}
               className="bg-white rounded-lg shadow-card p-6 hover:shadow-lg transition-shadow"

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ColumnDef } from "@tanstack/react-table";
 import { Plus, Search } from "lucide-react";
-import api from "@/lib/api";
+import { getPatients, Patient } from "@/lib/api/patients";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { ViewToggle, useViewMode, ViewMode } from "@/components/ui/view-toggle";
 import { ProfileCard } from "@/components/cards/profile-card";
@@ -12,123 +12,27 @@ import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
-interface Patient {
-  id: string;
-  name: string;
-  photo: string | null;
-  status: "inProgress" | "completed" | "pending";
-  statusLabel: string;
-  lastVisit: string;
-  gender: string;
-  location: string;
-  doctor: string;
-  department: string;
-  age: number;
-}
-
 export default function AdminPatientsPage() {
   const [viewMode, setViewMode] = useViewMode("admin-patients-view", "grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [limit] = useState(viewMode === "table" ? 10 : 12);
 
-  // Fetch patients
-  const { data: patients, isLoading } = useQuery({
-    queryKey: ["admin-patients"],
-    queryFn: async () => {
-      // TODO: Replace with actual API call to /api/v1/admin/patients
-      // Mock data for now
-      return [
-        {
-          id: "P-001",
-          name: "John Doe",
-          photo: null,
-          status: "inProgress" as const,
-          statusLabel: "In Patient",
-          lastVisit: "2 days ago",
-          gender: "Male",
-          location: "New York",
-          doctor: "Dr. Smith",
-          department: "Cardiology",
-          age: 45,
-        },
-        {
-          id: "P-002",
-          name: "Jane Smith",
-          photo: null,
-          status: "completed" as const,
-          statusLabel: "Out Patient",
-          lastVisit: "1 week ago",
-          gender: "Female",
-          location: "Los Angeles",
-          doctor: "Dr. Johnson",
-          department: "Neurology",
-          age: 32,
-        },
-        {
-          id: "P-003",
-          name: "Mike Wilson",
-          photo: null,
-          status: "pending" as const,
-          statusLabel: "Scheduled",
-          lastVisit: "3 days ago",
-          gender: "Male",
-          location: "Chicago",
-          doctor: "Dr. Brown",
-          department: "Orthopedics",
-          age: 58,
-        },
-        {
-          id: "P-004",
-          name: "Sarah Johnson",
-          photo: null,
-          status: "inProgress" as const,
-          statusLabel: "In Patient",
-          lastVisit: "Today",
-          gender: "Female",
-          location: "Houston",
-          doctor: "Dr. Davis",
-          department: "Pediatrics",
-          age: 8,
-        },
-        {
-          id: "P-005",
-          name: "Robert Brown",
-          photo: null,
-          status: "completed" as const,
-          statusLabel: "Out Patient",
-          lastVisit: "5 days ago",
-          gender: "Male",
-          location: "Phoenix",
-          doctor: "Dr. Miller",
-          department: "Dermatology",
-          age: 52,
-        },
-        {
-          id: "P-006",
-          name: "Emily Davis",
-          photo: null,
-          status: "inProgress" as const,
-          statusLabel: "In Patient",
-          lastVisit: "1 day ago",
-          gender: "Female",
-          location: "Philadelphia",
-          doctor: "Dr. Wilson",
-          department: "Cardiology",
-          age: 67,
-        },
-      ] as Patient[];
-    },
+  // Fetch patients from backend
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["admin-patients", searchQuery, statusFilter, page, limit],
+    queryFn: () =>
+      getPatients({
+        search: searchQuery || undefined,
+        status: statusFilter !== "all" ? statusFilter : undefined,
+        page,
+        limit,
+      }),
   });
 
-  // Filter patients based on search and status
-  const filteredPatients = patients?.filter((patient) => {
-    const matchesSearch =
-      patient.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      patient.id.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus =
-      statusFilter === "all" || patient.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const patients = data?.patients;
+  const totalPages = data?.totalPages || 1;
 
   // Table columns definition
   const columns: ColumnDef<Patient>[] = [
@@ -204,6 +108,17 @@ export default function AdminPatientsPage() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 space-y-4">
+        <p className="text-red-600 font-medium">Failed to load patients</p>
+        <p className="text-dreams-textSecondary text-sm">
+          {error instanceof Error ? error.message : "An error occurred"}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Breadcrumb */}
@@ -259,8 +174,8 @@ export default function AdminPatientsPage() {
       {/* Grid View */}
       {viewMode === "grid" && (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {filteredPatients && filteredPatients.length > 0 ? (
-            filteredPatients.map((patient) => (
+          {patients && patients.length > 0 ? (
+            patients.map((patient) => (
               <ProfileCard
                 key={patient.id}
                 id={patient.id}
@@ -286,11 +201,11 @@ export default function AdminPatientsPage() {
       )}
 
       {/* Table View */}
-      {viewMode === "table" && filteredPatients && (
+      {viewMode === "table" && patients && (
         <DataTable
           columns={columns}
-          data={filteredPatients}
-          pageSize={10}
+          data={patients}
+          pageSize={limit}
           searchColumn="name"
           searchPlaceholder="Search patients..."
         />
