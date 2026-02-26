@@ -117,6 +117,7 @@ export default function MedicineAutocomplete({
       if (value) {
         const medicine = medicineData.get(value);
         if (medicine) {
+          console.log('Calling onSelect with:', medicine.brand_name);
           onSelect({
             brandId: medicine.brand_id,
             brandName: medicine.brand_name,
@@ -127,10 +128,8 @@ export default function MedicineAutocomplete({
             strength: medicine.strength,
           });
 
-          // Clear selection after emitting
-          setSelectedValue('');
-          setSearchQuery('');
-          setOptions([]);
+          // DON'T clear - keep the selected value visible
+          // User can click X to clear if needed
         }
       }
     },

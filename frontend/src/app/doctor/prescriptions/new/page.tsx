@@ -243,17 +243,30 @@ export default function NewPrescriptionPage() {
                       Medicine Name *
                     </label>
                     <MedicineAutocomplete
-                      onSelect={(medicine) => handleMedicineSelect(idx, medicine)}
+                      onSelect={(medicine) => {
+                        console.log('Parent received medicine:', medicine.brandName);
+                        handleMedicineSelect(idx, medicine);
+                      }}
                       placeholder="Search for medicine (e.g., Dolo, Paracetamol)..."
                       className="w-full"
                     />
-                    {med.name && (
-                      <div className="mt-2 rounded-md bg-blue-50 px-3 py-2">
-                        <p className="text-sm font-medium text-blue-900">{med.name}</p>
-                        {med.dosage && (
-                          <p className="text-xs text-blue-700 mt-1">{med.dosage}</p>
-                        )}
+                    {/* Show selected medicine info */}
+                    {med.name ? (
+                      <div className="mt-2 rounded-md bg-green-50 border-2 border-green-200 px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-green-600">✅</span>
+                          <div>
+                            <p className="text-sm font-medium text-green-900">{med.name}</p>
+                            {med.dosage && (
+                              <p className="text-xs text-green-700 mt-1">{med.dosage}</p>
+                            )}
+                          </div>
+                        </div>
                       </div>
+                    ) : (
+                      <p className="mt-2 text-xs text-gray-500">
+                        Start typing to search medicines...
+                      </p>
                     )}
                   </div>
 
