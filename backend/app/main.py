@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.routers import auth, doctors, patients
+from app.routers import auth, doctors, patients, prescriptions
 from app.routers import medicines_emr, interactions
 from app.routers.admin import brands as admin_brands
 from app.routers.admin import manufacturers as admin_manufacturers
@@ -43,6 +43,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(patients.router)
 app.include_router(doctors.router)
+app.include_router(prescriptions.router)
 
 # Medicine endpoints (EMR schema)
 app.include_router(medicines_emr.router, prefix="/api/v1")
