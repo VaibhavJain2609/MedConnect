@@ -98,9 +98,11 @@ export default function NewPrescriptionPage() {
       strength: string;
     }
   ) => {
+    console.log('Medicine selected:', medicine.brandName, 'for index:', index);
     // Auto-fill medicine name and dosage
     updateMedicine(index, "name", medicine.brandName);
     updateMedicine(index, "dosage", `${medicine.dosageForm} - ${medicine.strength}`.trim());
+    console.log('Updated medicines:', medicines);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -358,22 +360,32 @@ export default function NewPrescriptionPage() {
             </div>
 
             <div>
-              {/* Validation hints */}
-              {medicines.some(m => !m.name) && (
+              {/* Validation hints - only check first medicine */}
+              {!medicines[0].name && (
                 <div className="mb-3 rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800">
-                  ⚠️ Please select a medicine from the autocomplete
+                  ⚠️ Please select a medicine from the autocomplete for Medicine 1
                 </div>
               )}
-              {medicines.some(m => m.name && m.meals.length === 0) && (
+              {medicines[0].name && medicines[0].meals.length === 0 && (
                 <div className="mb-3 rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800">
-                  ⚠️ Please select at least one meal time (e.g., breakfast, lunch, dinner)
+                  ⚠️ Please select at least one meal time for Medicine 1
+                </div>
+              )}
+              {/* Check additional medicines if any */}
+              {medicines.length > 1 && medicines.slice(1).some(m => m.name && m.meals.length === 0) && (
+                <div className="mb-3 rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800">
+                  ⚠️ Some medicines need meal times selected
                 </div>
               )}
 
               <div className="flex gap-3">
                 <button
                   type="submit"
-                  disabled={loading || medicines.some(m => !m.name || m.meals.length === 0)}
+                  disabled={
+                    loading ||
+                    !medicines[0].name ||  // First medicine must have name
+                    medicines.filter(m => m.name).some(m => m.meals.length === 0)  // Medicines with names must have meals
+                  }
                   className="rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
                 >
                   {loading ? "Creating..." : "Create Prescription"}
