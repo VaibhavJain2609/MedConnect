@@ -520,3 +520,593 @@ async def get_admin_patients(
         "limit": limit,
         "totalPages": total_pages,
     }
+
+
+# ==================== DOCTORS ENDPOINTS ====================
+
+@router.get("/doctors")
+async def get_admin_doctors(
+    page: int = Query(1, ge=1),
+    limit: int = Query(12, ge=1, le=100),
+    search: Optional[str] = Query(None),
+    specialty: Optional[str] = Query(None),
+    admin: User = Depends(require_admin),
+):
+    """Get paginated list of doctors with static data."""
+    all_doctors = [
+        {
+            "id": "doc-001",
+            "name": "Dr. Priya Sharma",
+            "photo": None,
+            "specialty": "Cardiology",
+            "experience": 15,
+            "appointmentsCount": 487,
+            "email": "priya.sharma@medconnect.com",
+            "phone": "+91 98765 12301",
+            "department": "Cardiology",
+        },
+        {
+            "id": "doc-002",
+            "name": "Dr. Arjun Patel",
+            "photo": None,
+            "specialty": "Orthopedics",
+            "experience": 12,
+            "appointmentsCount": 392,
+            "email": "arjun.patel@medconnect.com",
+            "phone": "+91 98765 12302",
+            "department": "Orthopedics",
+        },
+        {
+            "id": "doc-003",
+            "name": "Dr. Sanjay Gupta",
+            "photo": None,
+            "specialty": "General Medicine",
+            "experience": 20,
+            "appointmentsCount": 654,
+            "email": "sanjay.gupta@medconnect.com",
+            "phone": "+91 98765 12303",
+            "department": "General Medicine",
+        },
+        {
+            "id": "doc-004",
+            "name": "Dr. Meera Nair",
+            "photo": None,
+            "specialty": "Pediatrics",
+            "experience": 10,
+            "appointmentsCount": 521,
+            "email": "meera.nair@medconnect.com",
+            "phone": "+91 98765 12304",
+            "department": "Pediatrics",
+        },
+        {
+            "id": "doc-005",
+            "name": "Dr. Kavita Reddy",
+            "photo": None,
+            "specialty": "Dermatology",
+            "experience": 8,
+            "appointmentsCount": 298,
+            "email": "kavita.reddy@medconnect.com",
+            "phone": "+91 98765 12305",
+            "department": "Dermatology",
+        },
+        {
+            "id": "doc-006",
+            "name": "Dr. Rajesh Kumar",
+            "photo": None,
+            "specialty": "Gynecology",
+            "experience": 18,
+            "appointmentsCount": 435,
+            "email": "rajesh.kumar@medconnect.com",
+            "phone": "+91 98765 12306",
+            "department": "Gynecology",
+        },
+        {
+            "id": "doc-007",
+            "name": "Dr. Neha Kapoor",
+            "photo": None,
+            "specialty": "Neurology",
+            "experience": 14,
+            "appointmentsCount": 367,
+            "email": "neha.kapoor@medconnect.com",
+            "phone": "+91 98765 12307",
+            "department": "Neurology",
+        },
+        {
+            "id": "doc-008",
+            "name": "Dr. Anil Kumar",
+            "photo": None,
+            "specialty": "Endocrinology",
+            "experience": 16,
+            "appointmentsCount": 289,
+            "email": "anil.kumar@medconnect.com",
+            "phone": "+91 98765 12308",
+            "department": "Endocrinology",
+        },
+    ]
+
+    # Apply filters
+    filtered_doctors = all_doctors
+    if search:
+        search_lower = search.lower()
+        filtered_doctors = [
+            d for d in all_doctors
+            if search_lower in d["name"].lower()
+            or search_lower in d["email"].lower()
+            or search_lower in d["specialty"].lower()
+        ]
+    if specialty:
+        filtered_doctors = [d for d in filtered_doctors if d["specialty"] == specialty]
+
+    # Pagination
+    total = len(filtered_doctors)
+    total_pages = math.ceil(total / limit)
+    start_idx = (page - 1) * limit
+    end_idx = start_idx + limit
+    paginated_doctors = filtered_doctors[start_idx:end_idx]
+
+    return {
+        "doctors": paginated_doctors,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "totalPages": total_pages,
+    }
+
+
+@router.get("/doctors/specialties")
+async def get_doctor_specialties(admin: User = Depends(require_admin)):
+    """Get list of doctor specialties."""
+    return [
+        "Cardiology",
+        "Orthopedics",
+        "General Medicine",
+        "Pediatrics",
+        "Dermatology",
+        "Gynecology",
+        "Neurology",
+        "Endocrinology",
+    ]
+
+
+# ==================== APPOINTMENTS ENDPOINTS ====================
+
+@router.get("/appointments")
+async def get_admin_appointments(
+    page: int = Query(1, ge=1),
+    limit: int = Query(12, ge=1, le=100),
+    search: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    department: Optional[str] = Query(None),
+    date: Optional[str] = Query(None),
+    admin: User = Depends(require_admin),
+):
+    """Get paginated list of appointments with static data."""
+    all_appointments = [
+        {
+            "id": "apt-001",
+            "patient_id": "pat-001",
+            "patient_name": "Rajesh Kumar",
+            "patient_photo": None,
+            "doctor_id": "doc-001",
+            "doctor_name": "Dr. Priya Sharma",
+            "doctor_photo": None,
+            "department": "Cardiology",
+            "appointment_date": "2026-03-01",
+            "appointment_time": "10:00 AM",
+            "status": "upcoming",
+            "type": "Consultation",
+            "notes": "Regular checkup",
+            "created_at": (datetime.now() - timedelta(days=2)).isoformat(),
+        },
+        {
+            "id": "apt-002",
+            "patient_id": "pat-002",
+            "patient_name": "Anita Desai",
+            "patient_photo": None,
+            "doctor_id": "doc-002",
+            "doctor_name": "Dr. Arjun Patel",
+            "doctor_photo": None,
+            "department": "Orthopedics",
+            "appointment_date": "2026-03-01",
+            "appointment_time": "02:30 PM",
+            "status": "in_progress",
+            "type": "Follow-up",
+            "notes": "Knee pain evaluation",
+            "created_at": (datetime.now() - timedelta(days=3)).isoformat(),
+        },
+        {
+            "id": "apt-003",
+            "patient_id": "pat-003",
+            "patient_name": "Mohammed Ali",
+            "patient_photo": None,
+            "doctor_id": "doc-003",
+            "doctor_name": "Dr. Sanjay Gupta",
+            "doctor_photo": None,
+            "department": "General Medicine",
+            "appointment_date": "2026-02-28",
+            "appointment_time": "11:00 AM",
+            "status": "completed",
+            "type": "Consultation",
+            "notes": "Fever and cough",
+            "created_at": (datetime.now() - timedelta(days=5)).isoformat(),
+        },
+        {
+            "id": "apt-004",
+            "patient_id": "pat-004",
+            "patient_name": "Lakshmi Iyer",
+            "patient_photo": None,
+            "doctor_id": "doc-004",
+            "doctor_name": "Dr. Meera Nair",
+            "doctor_photo": None,
+            "department": "Pediatrics",
+            "appointment_date": "2026-03-02",
+            "appointment_time": "03:00 PM",
+            "status": "upcoming",
+            "type": "Consultation",
+            "notes": "Child vaccination",
+            "created_at": (datetime.now() - timedelta(days=1)).isoformat(),
+        },
+        {
+            "id": "apt-005",
+            "patient_id": "pat-005",
+            "patient_name": "Vikram Singh",
+            "patient_photo": None,
+            "doctor_id": "doc-005",
+            "doctor_name": "Dr. Kavita Reddy",
+            "doctor_photo": None,
+            "department": "Dermatology",
+            "appointment_date": "2026-02-27",
+            "appointment_time": "09:30 AM",
+            "status": "cancelled",
+            "type": "Consultation",
+            "notes": "Skin allergy",
+            "created_at": (datetime.now() - timedelta(days=6)).isoformat(),
+        },
+    ]
+
+    # Apply filters
+    filtered_appointments = all_appointments
+    if search:
+        search_lower = search.lower()
+        filtered_appointments = [
+            a for a in all_appointments
+            if search_lower in a["patient_name"].lower()
+            or search_lower in a["doctor_name"].lower()
+        ]
+    if status:
+        filtered_appointments = [a for a in filtered_appointments if a["status"] == status]
+    if department:
+        filtered_appointments = [a for a in filtered_appointments if a["department"] == department]
+    if date:
+        filtered_appointments = [a for a in filtered_appointments if a["appointment_date"] == date]
+
+    # Pagination
+    total = len(filtered_appointments)
+    total_pages = math.ceil(total / limit)
+    start_idx = (page - 1) * limit
+    end_idx = start_idx + limit
+    paginated_appointments = filtered_appointments[start_idx:end_idx]
+
+    return {
+        "appointments": paginated_appointments,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "totalPages": total_pages,
+    }
+
+
+@router.get("/appointments/departments")
+async def get_appointment_departments(admin: User = Depends(require_admin)):
+    """Get list of appointment departments."""
+    return [
+        "Cardiology",
+        "Orthopedics",
+        "General Medicine",
+        "Pediatrics",
+        "Dermatology",
+        "Gynecology",
+        "Neurology",
+    ]
+
+
+# ==================== VISITS ENDPOINTS ====================
+
+@router.get("/visits")
+async def get_admin_visits(
+    page: int = Query(1, ge=1),
+    limit: int = Query(12, ge=1, le=100),
+    search: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    department: Optional[str] = Query(None),
+    date: Optional[str] = Query(None),
+    admin: User = Depends(require_admin),
+):
+    """Get paginated list of visits with static data."""
+    all_visits = [
+        {
+            "id": "vis-001",
+            "visit_id": "VIS-2026-001",
+            "patient_id": "pat-001",
+            "patient_name": "Rajesh Kumar",
+            "patient_photo": None,
+            "doctor_id": "doc-001",
+            "doctor_name": "Dr. Priya Sharma",
+            "doctor_photo": None,
+            "department": "Cardiology",
+            "visit_date": "2026-02-25",
+            "visit_time": "10:30 AM",
+            "status": "completed",
+            "reason": "Chest pain",
+            "diagnosis": "Mild angina",
+            "treatment": "Prescribed medication and lifestyle changes",
+            "notes": "Patient advised to reduce stress",
+            "created_at": (datetime.now() - timedelta(days=3)).isoformat(),
+        },
+        {
+            "id": "vis-002",
+            "visit_id": "VIS-2026-002",
+            "patient_id": "pat-002",
+            "patient_name": "Anita Desai",
+            "patient_photo": None,
+            "doctor_id": "doc-002",
+            "doctor_name": "Dr. Arjun Patel",
+            "doctor_photo": None,
+            "department": "Orthopedics",
+            "visit_date": "2026-02-27",
+            "visit_time": "02:00 PM",
+            "status": "in_progress",
+            "reason": "Knee pain",
+            "diagnosis": "Osteoarthritis",
+            "treatment": "Physical therapy recommended",
+            "notes": "Follow-up in 2 weeks",
+            "created_at": (datetime.now() - timedelta(days=1)).isoformat(),
+        },
+        {
+            "id": "vis-003",
+            "visit_id": "VIS-2026-003",
+            "patient_id": "pat-003",
+            "patient_name": "Mohammed Ali",
+            "patient_photo": None,
+            "doctor_id": "doc-003",
+            "doctor_name": "Dr. Sanjay Gupta",
+            "doctor_photo": None,
+            "department": "General Medicine",
+            "visit_date": "2026-03-01",
+            "visit_time": "11:00 AM",
+            "status": "scheduled",
+            "reason": "Annual checkup",
+            "notes": "Routine examination",
+            "created_at": (datetime.now() - timedelta(hours=12)).isoformat(),
+        },
+        {
+            "id": "vis-004",
+            "visit_id": "VIS-2026-004",
+            "patient_id": "pat-004",
+            "patient_name": "Lakshmi Iyer",
+            "patient_photo": None,
+            "doctor_id": "doc-004",
+            "doctor_name": "Dr. Meera Nair",
+            "doctor_photo": None,
+            "department": "Pediatrics",
+            "visit_date": "2026-02-24",
+            "visit_time": "03:30 PM",
+            "status": "completed",
+            "reason": "Vaccination",
+            "diagnosis": "Healthy child",
+            "treatment": "MMR vaccine administered",
+            "notes": "Next vaccination due in 6 months",
+            "created_at": (datetime.now() - timedelta(days=4)).isoformat(),
+        },
+    ]
+
+    # Apply filters
+    filtered_visits = all_visits
+    if search:
+        search_lower = search.lower()
+        filtered_visits = [
+            v for v in all_visits
+            if search_lower in v["patient_name"].lower()
+            or search_lower in v["doctor_name"].lower()
+            or search_lower in v["visit_id"].lower()
+        ]
+    if status:
+        filtered_visits = [v for v in filtered_visits if v["status"] == status]
+    if department:
+        filtered_visits = [v for v in filtered_visits if v["department"] == department]
+    if date:
+        filtered_visits = [v for v in filtered_visits if v["visit_date"] == date]
+
+    # Pagination
+    total = len(filtered_visits)
+    total_pages = math.ceil(total / limit)
+    start_idx = (page - 1) * limit
+    end_idx = start_idx + limit
+    paginated_visits = filtered_visits[start_idx:end_idx]
+
+    return {
+        "visits": paginated_visits,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "totalPages": total_pages,
+    }
+
+
+@router.get("/visits/departments")
+async def get_visit_departments(admin: User = Depends(require_admin)):
+    """Get list of visit departments."""
+    return [
+        "Cardiology",
+        "Orthopedics",
+        "General Medicine",
+        "Pediatrics",
+        "Dermatology",
+    ]
+
+
+# ==================== LAB RESULTS ENDPOINTS ====================
+
+@router.get("/lab-results")
+async def get_admin_lab_results(
+    page: int = Query(1, ge=1),
+    limit: int = Query(12, ge=1, le=100),
+    search: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    test_category: Optional[str] = Query(None),
+    date: Optional[str] = Query(None),
+    admin: User = Depends(require_admin),
+):
+    """Get paginated list of lab results with static data."""
+    all_lab_results = [
+        {
+            "id": "lab-001",
+            "test_id": "LAB-2026-001",
+            "patient_id": "pat-001",
+            "patient_name": "Rajesh Kumar",
+            "patient_photo": None,
+            "gender": "Male",
+            "appointment_date": "2026-02-25",
+            "doctor_id": "doc-001",
+            "doctor_name": "Dr. Priya Sharma",
+            "doctor_photo": None,
+            "test_name": "Complete Blood Count (CBC)",
+            "test_category": "Hematology",
+            "status": "completed",
+            "result_value": "Normal",
+            "result_unit": "",
+            "normal_range": "WBC: 4-11 k/uL, RBC: 4.5-5.5 M/uL",
+            "abnormal_flag": False,
+            "notes": "All parameters within normal range",
+            "created_at": (datetime.now() - timedelta(days=3)).isoformat(),
+        },
+        {
+            "id": "lab-002",
+            "test_id": "LAB-2026-002",
+            "patient_id": "pat-002",
+            "patient_name": "Anita Desai",
+            "patient_photo": None,
+            "gender": "Female",
+            "appointment_date": "2026-02-27",
+            "doctor_id": "doc-002",
+            "doctor_name": "Dr. Arjun Patel",
+            "doctor_photo": None,
+            "test_name": "X-Ray - Knee Joint",
+            "test_category": "Radiology",
+            "status": "completed",
+            "result_value": "Mild degenerative changes",
+            "result_unit": "",
+            "normal_range": "",
+            "abnormal_flag": True,
+            "notes": "Osteoarthritic changes visible",
+            "created_at": (datetime.now() - timedelta(days=1)).isoformat(),
+        },
+        {
+            "id": "lab-003",
+            "test_id": "LAB-2026-003",
+            "patient_id": "pat-003",
+            "patient_name": "Mohammed Ali",
+            "patient_photo": None,
+            "gender": "Male",
+            "appointment_date": "2026-02-28",
+            "doctor_id": "doc-003",
+            "doctor_name": "Dr. Sanjay Gupta",
+            "doctor_photo": None,
+            "test_name": "Lipid Profile",
+            "test_category": "Biochemistry",
+            "status": "in_progress",
+            "result_value": "",
+            "result_unit": "",
+            "normal_range": "Total Cholesterol < 200 mg/dL",
+            "abnormal_flag": False,
+            "notes": "Sample received, processing",
+            "created_at": (datetime.now() - timedelta(hours=6)).isoformat(),
+        },
+        {
+            "id": "lab-004",
+            "test_id": "LAB-2026-004",
+            "patient_id": "pat-005",
+            "patient_name": "Vikram Singh",
+            "patient_photo": None,
+            "gender": "Male",
+            "appointment_date": "2026-02-26",
+            "doctor_id": "doc-005",
+            "doctor_name": "Dr. Kavita Reddy",
+            "doctor_photo": None,
+            "test_name": "Skin Allergy Test",
+            "test_category": "Immunology",
+            "status": "received",
+            "result_value": "",
+            "result_unit": "",
+            "normal_range": "",
+            "abnormal_flag": False,
+            "notes": "Sample received, awaiting processing",
+            "created_at": (datetime.now() - timedelta(days=2)).isoformat(),
+        },
+        {
+            "id": "lab-005",
+            "test_id": "LAB-2026-005",
+            "patient_id": "pat-006",
+            "patient_name": "Priya Menon",
+            "patient_photo": None,
+            "gender": "Female",
+            "appointment_date": "2026-02-23",
+            "doctor_id": "doc-006",
+            "doctor_name": "Dr. Rajesh Kumar",
+            "doctor_photo": None,
+            "test_name": "Pregnancy Test",
+            "test_category": "Biochemistry",
+            "status": "completed",
+            "result_value": "Positive",
+            "result_unit": "",
+            "normal_range": "",
+            "abnormal_flag": False,
+            "notes": "Patient to follow up with doctor",
+            "created_at": (datetime.now() - timedelta(days=5)).isoformat(),
+        },
+    ]
+
+    # Apply filters
+    filtered_results = all_lab_results
+    if search:
+        search_lower = search.lower()
+        filtered_results = [
+            r for r in all_lab_results
+            if search_lower in r["patient_name"].lower()
+            or search_lower in r["test_id"].lower()
+            or search_lower in r["test_name"].lower()
+        ]
+    if status:
+        filtered_results = [r for r in filtered_results if r["status"] == status]
+    if test_category:
+        filtered_results = [r for r in filtered_results if r["test_category"] == test_category]
+    if date:
+        filtered_results = [r for r in filtered_results if r["appointment_date"] == date]
+
+    # Pagination
+    total = len(filtered_results)
+    total_pages = math.ceil(total / limit)
+    start_idx = (page - 1) * limit
+    end_idx = start_idx + limit
+    paginated_results = filtered_results[start_idx:end_idx]
+
+    return {
+        "results": paginated_results,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "totalPages": total_pages,
+    }
+
+
+@router.get("/lab-results/categories")
+async def get_lab_test_categories(admin: User = Depends(require_admin)):
+    """Get list of lab test categories."""
+    return [
+        "Hematology",
+        "Biochemistry",
+        "Microbiology",
+        "Immunology",
+        "Radiology",
+        "Pathology",
+    ]
