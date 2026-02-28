@@ -5,11 +5,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.routers import auth, doctors, patients
+from app.routers import auth, doctors, patients, notifications
 from app.routers import medicines_emr, interactions
 from app.routers.admin import brands as admin_brands
 from app.routers.admin import manufacturers as admin_manufacturers
 from app.routers.admin import salts as admin_salts
+from app.routers.admin import stats as admin_stats
 # from app.routers.admin import components as admin_components
 # from app.routers.admin import medicines as admin_medicines
 
@@ -56,6 +57,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(patients.router)
 app.include_router(doctors.router)
+app.include_router(notifications.router)
 
 # Medicine endpoints (EMR schema)
 app.include_router(medicines_emr.router, prefix="/api/v1")
@@ -65,6 +67,7 @@ app.include_router(interactions.router, prefix="/api/v1")
 app.include_router(admin_brands.router, prefix="/api/v1")
 app.include_router(admin_manufacturers.router, prefix="/api/v1")
 app.include_router(admin_salts.router, prefix="/api/v1")
+app.include_router(admin_stats.router)
 # app.include_router(admin_components.router, prefix="/api/v1")
 # app.include_router(admin_medicines.router, prefix="/api/v1")
 
