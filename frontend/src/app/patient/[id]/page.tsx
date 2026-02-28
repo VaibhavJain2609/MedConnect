@@ -256,7 +256,7 @@ export default function PatientDetailsPage() {
       {/* Breadcrumb */}
       <Breadcrumb
         items={[
-          { label: "Patients", href: "/admin/patients" },
+          { label: "Health Timeline", href: "/patient/timeline" },
           { label: patient.name },
         ]}
       />

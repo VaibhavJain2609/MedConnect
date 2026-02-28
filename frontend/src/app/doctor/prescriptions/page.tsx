@@ -11,34 +11,29 @@ import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
-import { Navbar } from "@/components/layout/navbar";
-import { AuthGuard } from "@/components/layout/auth-guard";
 import { PrescriptionCard } from "@/components/prescription/PrescriptionCard";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
+import { FilePlus, Search } from "lucide-react";
 
 export default function DoctorPrescriptionsPage() {
   const [search, setSearch] = useState("");
-  const [patientFilter, setPatientFilter] = useState("");
 
   const { data, isLoading } = useQuery({
-    queryKey: ["doctor-prescriptions", search, patientFilter],
+    queryKey: ["doctor-prescriptions", search],
     queryFn: async () => {
-      // Note: This endpoint may need to be created in the backend
-      // For now, we'll fetch all medical records and filter prescriptions
       const params = new URLSearchParams();
       params.set("limit", "50");
       if (search) params.set("q", search);
 
       try {
-        // Try to get doctor's prescriptions
         const res = await api.get(`/api/v1/doctors/prescriptions?${params}`);
         return res.data;
       } catch (err) {
-        // Fallback: Get all records and filter for prescriptions
         console.warn("Doctor prescriptions endpoint not available, using fallback");
         const res = await api.get(`/api/v1/doctors/records?${params}`);
         const records = res.data.data || [];
         return {
-          data: records.filter((r: any) => r.record_type === 'prescription'),
+          data: records.filter((r: any) => r.record_type === "prescription"),
           pagination: res.data.pagination,
         };
       }
@@ -46,118 +41,118 @@ export default function DoctorPrescriptionsPage() {
   });
 
   return (
-    <AuthGuard requiredRole="doctor">
-      <Navbar />
-      <main className="mx-auto max-w-4xl px-4 py-6">
-        <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-bold">My Prescriptions</h1>
-          <Link
-            href="/doctor/prescriptions/new"
-            className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
-          >
-            + New Prescription
-          </Link>
+    <div className="space-y-6">
+      <Breadcrumb items={[{ label: "My Prescriptions" }]} />
+
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-dreams-textPrimary">My Prescriptions</h1>
+          <p className="text-dreams-textSecondary mt-1">All prescriptions you have created</p>
         </div>
+        <Link
+          href="/doctor/prescriptions/new"
+          className="flex items-center gap-2 px-4 py-2 bg-dreams-blue text-white rounded-lg hover:opacity-90 transition-opacity text-sm font-medium"
+        >
+          <FilePlus className="h-4 w-4" />
+          New Prescription
+        </Link>
+      </div>
 
-        {/* Search and Filter */}
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row">
-          <input
-            type="text"
-            placeholder="Search by patient name or diagnosis..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="flex-1 rounded-lg border px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-          />
+      {/* Search */}
+      <div className="relative max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <input
+          type="text"
+          placeholder="Search by patient name or diagnosis..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full h-10 pl-10 pr-4 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
+        />
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-12">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
         </div>
+      ) : data?.data?.length === 0 ? (
+        <div className="bg-white rounded-lg shadow-card p-12 text-center">
+          <FilePlus className="h-12 w-12 text-dreams-textSecondary mx-auto mb-4" />
+          <p className="text-dreams-textSecondary">No prescriptions found.</p>
+          <p className="mt-1 text-sm text-dreams-textSecondary/70">
+            Create your first prescription using the button above.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {data?.data?.map((record: any) => {
+            let medicines: any[] = [];
 
-        {isLoading ? (
-          <div className="flex justify-center py-12">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
-          </div>
-        ) : data?.data?.length === 0 ? (
-          <div className="rounded-xl border bg-white p-12 text-center">
-            <p className="text-gray-500">No prescriptions found.</p>
-            <p className="mt-1 text-sm text-gray-400">
-              Create your first prescription using the button above.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {data?.data?.map((record: any) => {
-              // Extract prescription data from FHIR bundle
-              let medicines: any[] = [];
-
-              if (record.fhir_bundle?.entry) {
-                const medicationRequests = record.fhir_bundle.entry.filter(
-                  (e: any) => e.resource?.resourceType === 'MedicationRequest'
-                );
-
-                medicines = medicationRequests.map((entry: any) => {
-                  const resource = entry.resource;
-                  const dosageInstruction = resource.dosageInstruction?.[0] || {};
-
-                  return {
-                    name: resource.medicationCodeableConcept?.text || 'Unknown',
-                    dosage: dosageInstruction.doseAndRate?.[0]?.doseQuantity?.value || '',
-                    frequency: dosageInstruction.timing?.code?.text || '',
-                    duration: '', // Extract from text if needed
-                    timing: dosageInstruction.additionalInstruction?.[0]?.text,
-                    notes: resource.note?.[0]?.text,
-                  };
-                });
-              }
-
-              // Fallback if no medicines found
-              if (medicines.length === 0) {
-                medicines = [{
-                  name: 'Prescription data not available',
-                  dosage: '',
-                  frequency: 'N/A',
-                  duration: 'N/A',
-                }];
-              }
-
-              const prescriptionData = {
-                id: record.id,
-                medicines,
-                diagnosis: record.title?.replace('Prescription — ', '') || undefined,
-                notes: record.description,
-                created_at: record.created_at,
-                doctor_name: undefined, // Don't show doctor name in doctor's own view
-              };
-
-              return (
-                <div key={record.id} className="relative">
-                  {/* Patient name badge */}
-                  {record.patient_name && (
-                    <div className="mb-2 flex items-center gap-2">
-                      <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
-                        <span>👤</span>
-                        Patient: {record.patient_name}
-                      </span>
-                    </div>
-                  )}
-
-                  <PrescriptionCard
-                    prescription={prescriptionData}
-                    variant="doctor"
-                    collapsible={true}
-                    defaultExpanded={false}
-                  />
-                </div>
+            if (record.fhir_bundle?.entry) {
+              const medicationRequests = record.fhir_bundle.entry.filter(
+                (e: any) => e.resource?.resourceType === "MedicationRequest"
               );
-            })}
-          </div>
-        )}
 
-        {data?.pagination?.has_more && (
-          <div className="mt-4 text-center">
-            <button className="text-sm text-primary-600 hover:underline">
-              Load more
-            </button>
-          </div>
-        )}
-      </main>
-    </AuthGuard>
+              medicines = medicationRequests.map((entry: any) => {
+                const resource = entry.resource;
+                const dosageInstruction = resource.dosageInstruction?.[0] || {};
+
+                return {
+                  name: resource.medicationCodeableConcept?.text || "Unknown",
+                  dosage: dosageInstruction.doseAndRate?.[0]?.doseQuantity?.value || "",
+                  frequency: dosageInstruction.timing?.code?.text || "",
+                  duration: "",
+                  timing: dosageInstruction.additionalInstruction?.[0]?.text,
+                  notes: resource.note?.[0]?.text,
+                };
+              });
+            }
+
+            if (medicines.length === 0) {
+              medicines = [
+                {
+                  name: "Prescription data not available",
+                  dosage: "",
+                  frequency: "N/A",
+                  duration: "N/A",
+                },
+              ];
+            }
+
+            const prescriptionData = {
+              id: record.id,
+              medicines,
+              diagnosis: record.title?.replace("Prescription — ", "") || undefined,
+              notes: record.description,
+              created_at: record.created_at,
+              doctor_name: undefined,
+            };
+
+            return (
+              <div key={record.id} className="relative">
+                {record.patient_name && (
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
+                      Patient: {record.patient_name}
+                    </span>
+                  </div>
+                )}
+                <PrescriptionCard
+                  prescription={prescriptionData}
+                  variant="doctor"
+                  collapsible={true}
+                  defaultExpanded={false}
+                />
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {data?.pagination?.has_more && (
+        <div className="text-center">
+          <button className="text-sm text-dreams-blue hover:underline">Load more</button>
+        </div>
+      )}
+    </div>
   );
 }

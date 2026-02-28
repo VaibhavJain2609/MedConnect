@@ -3,8 +3,7 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import api from "@/lib/api";
-import { Navbar } from "@/components/layout/navbar";
-import { AuthGuard } from "@/components/layout/auth-guard";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 
 const RECORD_TYPES = [
   { value: "opd_note", label: "OPD Note" },
@@ -52,7 +51,7 @@ function NewRecordForm() {
 
   if (success) {
     return (
-      <div className="rounded-xl border bg-green-50 p-6 text-center">
+      <div className="bg-green-50 rounded-lg border border-green-200 p-6 text-center">
         <p className="text-lg font-medium text-green-800">Record created successfully!</p>
         <p className="mt-1 text-sm text-green-600">Redirecting to dashboard...</p>
       </div>
@@ -60,15 +59,15 @@ function NewRecordForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-xl border bg-white p-6 shadow-sm">
+    <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-card p-6 max-w-2xl">
       {error && (
-        <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+        <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
           {error}
         </div>
       )}
 
       <div className="mb-4">
-        <label className="mb-1 block text-sm font-medium text-gray-700">
+        <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
           Patient ID
         </label>
         <input
@@ -76,22 +75,22 @@ function NewRecordForm() {
           value={patientId}
           onChange={(e) => setPatientId(e.target.value)}
           placeholder="Patient UUID"
-          className="w-full rounded-lg border px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
           required
         />
-        <p className="mt-1 text-xs text-gray-400">
+        <p className="mt-1 text-xs text-dreams-textSecondary">
           Enter the patient&apos;s user ID (UUID)
         </p>
       </div>
 
       <div className="mb-4">
-        <label className="mb-1 block text-sm font-medium text-gray-700">
+        <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
           Record Type
         </label>
         <select
           value={recordType}
           onChange={(e) => setRecordType(e.target.value)}
-          className="w-full rounded-lg border px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
         >
           {RECORD_TYPES.map((t) => (
             <option key={t.value} value={t.value}>
@@ -102,7 +101,7 @@ function NewRecordForm() {
       </div>
 
       <div className="mb-4">
-        <label className="mb-1 block text-sm font-medium text-gray-700">
+        <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
           Title
         </label>
         <input
@@ -110,13 +109,13 @@ function NewRecordForm() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="e.g., General Checkup — Fever"
-          className="w-full rounded-lg border px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
           required
         />
       </div>
 
       <div className="mb-6">
-        <label className="mb-1 block text-sm font-medium text-gray-700">
+        <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
           Description / Notes
         </label>
         <textarea
@@ -124,7 +123,7 @@ function NewRecordForm() {
           onChange={(e) => setDescription(e.target.value)}
           rows={4}
           placeholder="Clinical notes, observations, findings..."
-          className="w-full rounded-lg border px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          className="w-full rounded-lg border border-dreams-border px-3 py-2 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
         />
       </div>
 
@@ -132,14 +131,14 @@ function NewRecordForm() {
         <button
           type="submit"
           disabled={loading}
-          className="rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+          className="px-6 py-2.5 bg-dreams-blue text-white text-sm font-medium rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
         >
           {loading ? "Creating..." : "Create Record"}
         </button>
         <button
           type="button"
           onClick={() => router.back()}
-          className="rounded-lg border px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          className="px-6 py-2.5 border border-dreams-border text-sm font-medium text-dreams-textPrimary rounded-lg hover:bg-dreams-lightBg transition-colors"
         >
           Cancel
         </button>
@@ -150,14 +149,22 @@ function NewRecordForm() {
 
 export default function NewRecordPage() {
   return (
-    <AuthGuard requiredRole="doctor">
-      <Navbar />
-      <main className="mx-auto max-w-2xl px-4 py-6">
-        <h1 className="mb-6 text-2xl font-bold">Create Medical Record</h1>
-        <Suspense fallback={<div className="h-96 animate-pulse rounded-xl bg-gray-100" />}>
-          <NewRecordForm />
-        </Suspense>
-      </main>
-    </AuthGuard>
+    <div className="space-y-6">
+      <Breadcrumb
+        items={[
+          { label: "Dashboard", href: "/doctor/dashboard" },
+          { label: "Create Record" },
+        ]}
+      />
+
+      <div>
+        <h1 className="text-3xl font-bold text-dreams-textPrimary">Create Medical Record</h1>
+        <p className="text-dreams-textSecondary mt-1">Add a new health record for a patient</p>
+      </div>
+
+      <Suspense fallback={<div className="h-96 animate-pulse rounded-lg bg-gray-100" />}>
+        <NewRecordForm />
+      </Suspense>
+    </div>
   );
 }
