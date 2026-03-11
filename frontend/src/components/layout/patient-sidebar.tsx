@@ -10,6 +10,7 @@ import {
   LogOut,
   Heart,
   User,
+  ClipboardList,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/auth";
@@ -43,6 +44,7 @@ const navSections: NavSection[] = [
     label: "HEALTH",
     items: [
       { href: "/patient/records", label: "My Records", icon: FileText },
+      { href: "/patient/medical-history", label: "Medical History", icon: ClipboardList },
     ],
   },
   {

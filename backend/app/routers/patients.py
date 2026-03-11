@@ -8,7 +8,7 @@ from app.dependencies import require_patient
 from app.models.user import User
 from app.schemas.common import PaginatedResponse, PaginationMeta
 from app.schemas.record import RecordResponse
-from app.schemas.user import PatientProfileUpdate
+from app.schemas.user import MedicalHistoryUpdate, PatientProfileUpdate
 from app.services.prescription_service import get_patient_prescriptions
 from app.services.record_service import get_patient_timeline, get_record_detail
 
@@ -107,4 +107,35 @@ async def update_profile(
         "language_pref": user.language_pref,
         "emergency_contact_name": user.emergency_contact_name,
         "emergency_contact_phone": user.emergency_contact_phone,
+    }
+
+
+@router.get("/medical-history")
+async def get_medical_history(user: User = Depends(require_patient)):
+    return {
+        "blood_group": user.blood_group,
+        "allergies": user.allergies or [],
+        "chronic_conditions": user.chronic_conditions or [],
+        "height_cm": user.height_cm,
+        "weight_kg": user.weight_kg,
+    }
+
+
+@router.put("/medical-history")
+async def update_medical_history(
+    body: MedicalHistoryUpdate,
+    user: User = Depends(require_patient),
+    db: AsyncSession = Depends(get_db),
+):
+    for field, value in body.model_dump(exclude_unset=True).items():
+        setattr(user, field, value)
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return {
+        "blood_group": user.blood_group,
+        "allergies": user.allergies or [],
+        "chronic_conditions": user.chronic_conditions or [],
+        "height_cm": user.height_cm,
+        "weight_kg": user.weight_kg,
     }

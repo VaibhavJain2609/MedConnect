@@ -39,3 +39,11 @@ class PatientProfileResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class MedicalHistoryUpdate(BaseModel):
+    blood_group: str | None = None
+    allergies: list[str] | None = None
+    chronic_conditions: list[str] | None = None
+    height_cm: float | None = None
+    weight_kg: float | None = None
