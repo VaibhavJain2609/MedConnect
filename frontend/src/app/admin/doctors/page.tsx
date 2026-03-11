@@ -163,7 +163,7 @@ export default function AdminDoctorsPage() {
                     </p>
                   </div>
                   <p className="text-sm font-bold text-dreams-textPrimary">
-                    {doctor.appointmentsCount.toLocaleString()}
+                    {(doctor.appointmentsCount ?? 0).toLocaleString()}
                   </p>
                 </div>
               </div>
