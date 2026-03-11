@@ -8,6 +8,7 @@ from app.config import settings
 from app.routers import auth, doctors, patients, notifications
 from app.routers import medicines_emr, interactions
 from app.routers.admin import brands as admin_brands
+from app.routers.admin import doctors as admin_doctors
 from app.routers.admin import manufacturers as admin_manufacturers
 from app.routers.admin import salts as admin_salts
 from app.routers.admin import stats as admin_stats
@@ -65,6 +66,7 @@ app.include_router(interactions.router, prefix="/api/v1")
 
 # Admin endpoints (protected) - EMR schema
 app.include_router(admin_brands.router, prefix="/api/v1")
+app.include_router(admin_doctors.router)
 app.include_router(admin_manufacturers.router, prefix="/api/v1")
 app.include_router(admin_salts.router, prefix="/api/v1")
 app.include_router(admin_stats.router)

@@ -7,19 +7,28 @@ import api from "../api";
 
 export interface Doctor {
   id: string;
+  user_id: string;
   name: string;
-  photo: string | null;
-  specialty: string;
-  experience: number;
-  appointmentsCount: number;
-  email: string;
-  phone: string;
-  department: string;
+  email: string | null;
+  specialization: string | null;
+  license_number: string | null;
+  facility_name: string | null;
+  facility_city: string | null;
+  verified: boolean;
+  created_at: string;
+  // Legacy display fields kept for existing card components
+  photo?: string | null;
+  specialty?: string;
+  experience?: number;
+  appointmentsCount?: number;
+  phone?: string;
+  department?: string;
 }
 
 export interface DoctorsListParams {
   search?: string;
   specialty?: string;
+  verified?: "true" | "false";
   page?: number;
   limit?: number;
 }
@@ -32,6 +41,11 @@ export interface DoctorsListResponse {
   totalPages: number;
 }
 
+export interface DoctorVerifyRequest {
+  action: "approve" | "reject";
+  reason?: string;
+}
+
 /**
  * Get paginated list of doctors
  */
@@ -42,6 +56,7 @@ export async function getDoctors(
 
   if (params.search) queryParams.append("search", params.search);
   if (params.specialty) queryParams.append("specialty", params.specialty);
+  if (params.verified) queryParams.append("verified", params.verified);
   if (params.page) queryParams.append("page", params.page.toString());
   if (params.limit) queryParams.append("limit", params.limit.toString());
 
@@ -54,6 +69,17 @@ export async function getDoctors(
  */
 export async function getDoctor(id: string): Promise<Doctor> {
   const response = await api.get(`/api/v1/doctors/${id}`);
+  return response.data;
+}
+
+/**
+ * Approve or reject a doctor verification (MD-66)
+ */
+export async function verifyDoctor(
+  id: string,
+  body: DoctorVerifyRequest
+): Promise<{ id: string; verified: boolean; message: string }> {
+  const response = await api.put(`/api/v1/admin/doctors/${id}/verify`, body);
   return response.data;
 }
 
@@ -84,7 +110,7 @@ export async function deleteDoctor(id: string): Promise<void> {
 }
 
 /**
- * Get doctor's specialties (for filters)
+ * Get distinct specializations for filter dropdown
  */
 export async function getDoctorSpecialties(): Promise<string[]> {
   const response = await api.get("/api/v1/admin/doctors/specialties");
