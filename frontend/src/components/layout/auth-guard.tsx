@@ -26,7 +26,13 @@ export function AuthGuard({
 
   useEffect(() => {
     if (!loading && user && requiredRole && user.role !== requiredRole) {
-      router.push(user.role === "doctor" ? "/doctor/dashboard" : "/patient/timeline");
+      if (user.role === "admin") {
+        router.push("/admin/dashboard");
+      } else if (user.role === "doctor") {
+        router.push("/doctor/dashboard");
+      } else {
+        router.push("/patient/timeline");
+      }
     }
   }, [user, loading, requiredRole, router]);
 
