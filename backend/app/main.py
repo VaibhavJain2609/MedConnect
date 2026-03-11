@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
+from app.middleware.rate_limit import RateLimitMiddleware
 from app.routers import auth, doctors, patients, notifications
 from app.routers import medicines_emr, interactions
 from app.routers.admin import brands as admin_brands
@@ -54,6 +55,7 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
+app.add_middleware(RateLimitMiddleware)
 
 app.include_router(auth.router)
 app.include_router(patients.router)
