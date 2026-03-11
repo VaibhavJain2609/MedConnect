@@ -47,6 +47,7 @@ if settings.APP_ENV == "development":
         "http://127.0.0.1:8000",
     ])
 
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
@@ -55,7 +56,6 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
-app.add_middleware(RateLimitMiddleware)
 
 app.include_router(auth.router)
 app.include_router(patients.router)

@@ -99,6 +99,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         method = request.method.upper()
+
+        if method == "OPTIONS":
+            return await call_next(request)
         category = _get_category(method, path)
         limit = _LIMITS[category]
         user_key = _get_user_key(request)
