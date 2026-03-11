@@ -7,13 +7,16 @@ import api from "../api";
 
 export interface DashboardStats {
   total_patients: number;
-  total_appointments: number;
   total_doctors: number;
-  total_transactions: number;
-  patient_trend?: number; // Percentage change
-  appointment_trend?: number;
+  verified_doctors: number;
+  unverified_doctors: number;
+  total_records: number;
+  total_prescriptions: number;
+  total_medicines: number;
+  patient_trend?: number;
+  record_trend?: number;
+  prescription_trend?: number;
   doctor_trend?: number;
-  transaction_trend?: number;
 }
 
 export interface TrendDataPoint {
@@ -87,9 +90,9 @@ export async function getPatientTrend(
 }
 
 /**
- * Get appointment trend data for sparklines
+ * Get medical record trend data for sparklines
  */
-export async function getAppointmentTrend(
+export async function getRecordTrend(
   params: StatsParams = {}
 ): Promise<TrendDataPoint[]> {
   const queryParams = new URLSearchParams();
@@ -102,7 +105,7 @@ export async function getAppointmentTrend(
   }
 
   const response = await api.get(
-    `/api/v1/admin/stats/appointment-trend?${queryParams}`
+    `/api/v1/admin/stats/record-trend?${queryParams}`
   );
   return response.data.trend || [];
 }
@@ -129,9 +132,9 @@ export async function getDoctorTrend(
 }
 
 /**
- * Get transaction trend data for sparklines
+ * Get prescription trend data for sparklines
  */
-export async function getTransactionTrend(
+export async function getPrescriptionTrend(
   params: StatsParams = {}
 ): Promise<TrendDataPoint[]> {
   const queryParams = new URLSearchParams();
@@ -144,7 +147,7 @@ export async function getTransactionTrend(
   }
 
   const response = await api.get(
-    `/api/v1/admin/stats/transaction-trend?${queryParams}`
+    `/api/v1/admin/stats/prescription-trend?${queryParams}`
   );
   return response.data.trend || [];
 }

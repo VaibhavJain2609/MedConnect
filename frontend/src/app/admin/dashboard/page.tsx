@@ -5,24 +5,22 @@ import { useState, useMemo } from "react";
 import {
   getDashboardStats,
   getPatientTrend,
-  getAppointmentTrend,
+  getRecordTrend,
   getDoctorTrend,
-  getTransactionTrend,
+  getPrescriptionTrend,
   getPatientStatistics,
   getAppointmentRequests,
-  approveAppointmentRequest,
-  rejectAppointmentRequest,
 } from "@/lib/api/stats";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import {
   Users,
-  Calendar,
+  FileText,
   Stethoscope,
-  DollarSign,
+  ClipboardList,
   Clock,
-  Check,
-  X,
+  CheckCircle,
+  AlertCircle,
 } from "lucide-react";
 import {
   BarChart,
@@ -40,7 +38,6 @@ import { Badge } from "@/components/ui/badge";
 export default function AdminDashboardPage() {
   const [dateRange, setDateRange] = useState("30d");
 
-  // Calculate date range params
   const dateParams = useMemo(() => {
     const end_date = new Date().toISOString().split("T")[0];
     const start_date = new Date();
@@ -65,21 +62,19 @@ export default function AdminDashboardPage() {
     };
   }, [dateRange]);
 
-  // Fetch dashboard stats
   const { data: stats, isLoading, error } = useQuery({
     queryKey: ["admin-stats", dateParams],
     queryFn: () => getDashboardStats(dateParams),
   });
 
-  // Fetch trend data for sparklines
   const { data: patientTrend } = useQuery({
     queryKey: ["patient-trend", dateParams],
     queryFn: () => getPatientTrend(dateParams),
   });
 
-  const { data: appointmentTrend } = useQuery({
-    queryKey: ["appointment-trend", dateParams],
-    queryFn: () => getAppointmentTrend(dateParams),
+  const { data: recordTrend } = useQuery({
+    queryKey: ["record-trend", dateParams],
+    queryFn: () => getRecordTrend(dateParams),
   });
 
   const { data: doctorTrend } = useQuery({
@@ -87,50 +82,45 @@ export default function AdminDashboardPage() {
     queryFn: () => getDoctorTrend(dateParams),
   });
 
-  const { data: transactionTrend } = useQuery({
-    queryKey: ["transaction-trend", dateParams],
-    queryFn: () => getTransactionTrend(dateParams),
+  const { data: prescriptionTrend } = useQuery({
+    queryKey: ["prescription-trend", dateParams],
+    queryFn: () => getPrescriptionTrend(dateParams),
   });
 
-  // Fetch appointment requests
-  const { data: appointmentRequests } = useQuery({
+  const { data: recentActivity } = useQuery({
     queryKey: ["appointment-requests"],
     queryFn: () => getAppointmentRequests(5),
   });
 
-  // Fetch patient statistics for chart
   const { data: patientStatsData } = useQuery({
     queryKey: ["patient-stats", dateParams],
     queryFn: () => getPatientStatistics(dateParams),
   });
 
-  // Transform patient stats for chart
   const patientStats = useMemo(() => {
     if (!patientStatsData) return [];
-
     return patientStatsData.map((stat) => ({
-      month: new Date(stat.date).toLocaleDateString("en-US", { month: "short" }),
+      date: new Date(stat.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
       new: stat.new_patients,
-      existing: stat.returning_patients,
+      active: stat.returning_patients,
     }));
   }, [patientStatsData]);
 
-  // Transform trend data for sparklines
   const patientSparkline = useMemo(
     () => patientTrend?.map((d) => d.value) || [],
     [patientTrend]
   );
-  const appointmentSparkline = useMemo(
-    () => appointmentTrend?.map((d) => d.value) || [],
-    [appointmentTrend]
+  const recordSparkline = useMemo(
+    () => recordTrend?.map((d) => d.value) || [],
+    [recordTrend]
   );
   const doctorSparkline = useMemo(
     () => doctorTrend?.map((d) => d.value) || [],
     [doctorTrend]
   );
-  const transactionSparkline = useMemo(
-    () => transactionTrend?.map((d) => d.value) || [],
-    [transactionTrend]
+  const prescriptionSparkline = useMemo(
+    () => prescriptionTrend?.map((d) => d.value) || [],
+    [prescriptionTrend]
   );
 
   if (isLoading) {
@@ -154,10 +144,8 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Breadcrumb */}
       <Breadcrumb items={[{ label: "Dashboard" }]} />
 
-      {/* Header with date range selector */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-dreams-textPrimary">
@@ -168,25 +156,21 @@ export default function AdminDashboardPage() {
           </p>
         </div>
 
-        {/* Date range selector */}
-        <div className="flex items-center gap-2">
-          <select
-            value={dateRange}
-            onChange={(e) => setDateRange(e.target.value)}
-            className="h-10 px-4 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
-          >
-            <option value="7d">Last 7 days</option>
-            <option value="30d">Last 30 days</option>
-            <option value="90d">Last 90 days</option>
-            <option value="custom">Custom range</option>
-          </select>
-        </div>
+        <select
+          value={dateRange}
+          onChange={(e) => setDateRange(e.target.value)}
+          className="h-10 px-4 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
+        >
+          <option value="7d">Last 7 days</option>
+          <option value="30d">Last 30 days</option>
+          <option value="90d">Last 90 days</option>
+        </select>
       </div>
 
-      {/* Stat Cards Grid - 4 columns */}
+      {/* Stat Cards */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          title="All Patients"
+          title="Total Patients"
           value={stats?.total_patients || 0}
           trend={stats?.patient_trend}
           icon={Users}
@@ -194,12 +178,12 @@ export default function AdminDashboardPage() {
           sparklineData={patientSparkline}
         />
         <StatCard
-          title="Appointments"
-          value={stats?.total_appointments || 0}
-          trend={stats?.appointment_trend}
-          icon={Calendar}
+          title="Medical Records"
+          value={stats?.total_records || 0}
+          trend={stats?.record_trend}
+          icon={FileText}
           color="green"
-          sparklineData={appointmentSparkline}
+          sparklineData={recordSparkline}
         />
         <StatCard
           title="Total Doctors"
@@ -210,81 +194,94 @@ export default function AdminDashboardPage() {
           sparklineData={doctorSparkline}
         />
         <StatCard
-          title="Transactions"
-          value={stats?.total_transactions || 0}
-          trend={stats?.transaction_trend}
-          icon={DollarSign}
+          title="Prescriptions"
+          value={stats?.total_prescriptions || 0}
+          trend={stats?.prescription_trend}
+          icon={ClipboardList}
           color="orange"
-          sparklineData={transactionSparkline}
+          sparklineData={prescriptionSparkline}
         />
       </div>
 
-      {/* Widgets Grid - 2 columns */}
+      {/* Doctor Verification Summary */}
+      {(stats?.unverified_doctors ?? 0) > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-center gap-3">
+          <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-amber-800">
+              {stats?.unverified_doctors} doctor{(stats?.unverified_doctors ?? 0) > 1 ? "s" : ""} pending verification
+            </p>
+            <p className="text-xs text-amber-600 mt-0.5">
+              {stats?.verified_doctors} of {stats?.total_doctors} doctors verified
+            </p>
+          </div>
+          <a
+            href="/admin/doctors/pending"
+            className="text-xs font-medium text-amber-700 hover:text-amber-900 underline"
+          >
+            Review
+          </a>
+        </div>
+      )}
+
       <div className="grid gap-6 md:grid-cols-2">
-        {/* Appointment Requests Widget */}
+        {/* Recent Activity */}
         <div className="bg-white rounded-lg shadow-card p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-dreams-textPrimary">
-              Appointment Requests
+              Recent Activity
             </h2>
             <Badge variant="pending">
-              {appointmentRequests?.length || 0} Pending
+              {recentActivity?.length || 0} Recent
             </Badge>
           </div>
 
           <div className="space-y-4">
-            {appointmentRequests && appointmentRequests.length > 0 ? (
-              appointmentRequests.map((request) => (
+            {recentActivity && recentActivity.length > 0 ? (
+              recentActivity.map((item) => (
                 <div
-                  key={request.id}
+                  key={item.id}
                   className="flex items-center gap-4 p-4 rounded-lg border border-dreams-border hover:bg-dreams-lightBg/50 transition-colors"
                 >
                   <Avatar
-                    src={request.patient_photo}
-                    fallback={request.patient_name}
+                    src={item.patient_photo}
+                    fallback={item.patient_name}
                     size="md"
                   />
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-dreams-textPrimary truncate">
-                      {request.patient_name}
+                      {item.patient_name}
                     </p>
                     <p className="text-sm text-dreams-textSecondary">
-                      {request.doctor_name} • {request.department}
+                      {item.department}
                     </p>
                     <p className="text-xs text-dreams-textSecondary mt-1">
                       <Clock className="inline h-3 w-3 mr-1" />
-                      {request.requested_date} at {request.requested_time}
+                      {item.requested_date} at {item.requested_time}
                     </p>
                   </div>
-                  <div className="flex gap-2">
-                    <button className="p-2 rounded-md bg-status-completed/10 text-status-completed hover:bg-status-completed/20 transition-colors">
-                      <Check className="h-4 w-4" />
-                    </button>
-                    <button className="p-2 rounded-md bg-status-overdue/10 text-status-overdue hover:bg-status-overdue/20 transition-colors">
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
+                  <CheckCircle className="h-5 w-5 text-status-completed flex-shrink-0" />
                 </div>
               ))
             ) : (
               <p className="text-sm text-dreams-textSecondary py-8 text-center">
-                No pending appointment requests
+                No recent activity
               </p>
             )}
           </div>
         </div>
 
-        {/* Patient Statistics Chart */}
+        {/* Patient Activity Chart */}
         <div className="bg-white rounded-lg shadow-card p-6">
           <h2 className="text-xl font-bold text-dreams-textPrimary mb-4">
-            Patient Statistics
+            Patient Activity
           </h2>
 
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={patientStats}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
               <XAxis
-                dataKey="month"
+                dataKey="date"
                 tick={{ fill: "#6B7280", fontSize: 12 }}
               />
               <YAxis tick={{ fill: "#6B7280", fontSize: 12 }} />
@@ -303,13 +300,56 @@ export default function AdminDashboardPage() {
                 radius={[4, 4, 0, 0]}
               />
               <Bar
-                dataKey="existing"
+                dataKey="active"
                 fill="#10B981"
-                name="Existing Patients"
+                name="Active Patients"
                 radius={[4, 4, 0, 0]}
               />
             </BarChart>
           </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Quick Stats Row */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="bg-white rounded-lg shadow-card p-5">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-dreams-blue/10 flex items-center justify-center">
+              <CheckCircle className="h-5 w-5 text-dreams-blue" />
+            </div>
+            <div>
+              <p className="text-sm text-dreams-textSecondary">Verified Doctors</p>
+              <p className="text-2xl font-bold text-dreams-textPrimary">
+                {stats?.verified_doctors || 0}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-lg shadow-card p-5">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-amber-100 flex items-center justify-center">
+              <AlertCircle className="h-5 w-5 text-amber-600" />
+            </div>
+            <div>
+              <p className="text-sm text-dreams-textSecondary">Pending Verification</p>
+              <p className="text-2xl font-bold text-dreams-textPrimary">
+                {stats?.unverified_doctors || 0}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-lg shadow-card p-5">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center">
+              <FileText className="h-5 w-5 text-green-600" />
+            </div>
+            <div>
+              <p className="text-sm text-dreams-textSecondary">Total Medicines</p>
+              <p className="text-2xl font-bold text-dreams-textPrimary">
+                {(stats?.total_medicines || 0).toLocaleString()}
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
