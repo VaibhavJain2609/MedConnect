@@ -22,6 +22,20 @@ class DoctorProfileResponse(BaseModel):
 
 
 class PatientProfileUpdate(BaseModel):
-    full_name: str | None = None
-    language_pref: str | None = None
     phone: str | None = None
+    language_pref: str | None = None
+    emergency_contact_name: str | None = None
+    emergency_contact_phone: str | None = None
+
+
+class PatientProfileResponse(BaseModel):
+    id: str
+    full_name: str
+    email: str | None
+    phone: str | None
+    language_pref: str
+    emergency_contact_name: str | None
+    emergency_contact_phone: str | None
+
+    class Config:
+        from_attributes = True

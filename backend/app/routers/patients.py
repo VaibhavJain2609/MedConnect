@@ -8,6 +8,7 @@ from app.dependencies import require_patient
 from app.models.user import User
 from app.schemas.common import PaginatedResponse, PaginationMeta
 from app.schemas.record import RecordResponse
+from app.schemas.user import PatientProfileUpdate
 from app.services.prescription_service import get_patient_prescriptions
 from app.services.record_service import get_patient_timeline, get_record_detail
 
@@ -82,4 +83,28 @@ async def get_profile(user: User = Depends(require_patient)):
         "email": user.email,
         "phone": user.phone,
         "language_pref": user.language_pref,
+        "emergency_contact_name": user.emergency_contact_name,
+        "emergency_contact_phone": user.emergency_contact_phone,
+    }
+
+
+@router.put("/profile")
+async def update_profile(
+    body: PatientProfileUpdate,
+    user: User = Depends(require_patient),
+    db: AsyncSession = Depends(get_db),
+):
+    for field, value in body.model_dump(exclude_unset=True).items():
+        setattr(user, field, value)
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return {
+        "id": str(user.id),
+        "full_name": user.full_name,
+        "email": user.email,
+        "phone": user.phone,
+        "language_pref": user.language_pref,
+        "emergency_contact_name": user.emergency_contact_name,
+        "emergency_contact_phone": user.emergency_contact_phone,
     }

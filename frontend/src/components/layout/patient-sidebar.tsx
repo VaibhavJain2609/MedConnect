@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   LogOut,
   Heart,
+  User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/auth";
@@ -42,6 +43,12 @@ const navSections: NavSection[] = [
     label: "HEALTH",
     items: [
       { href: "/patient/records", label: "My Records", icon: FileText },
+    ],
+  },
+  {
+    label: "ACCOUNT",
+    items: [
+      { href: "/patient/profile", label: "My Profile", icon: User },
     ],
   },
 ];
