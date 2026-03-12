@@ -13,6 +13,7 @@ from app.routers.admin import doctors as admin_doctors
 from app.routers.admin import manufacturers as admin_manufacturers
 from app.routers.admin import salts as admin_salts
 from app.routers.admin import stats as admin_stats
+from app.routers.admin import users as admin_users
 # from app.routers.admin import components as admin_components
 # from app.routers.admin import medicines as admin_medicines
 
@@ -72,6 +73,7 @@ app.include_router(admin_doctors.router)
 app.include_router(admin_manufacturers.router, prefix="/api/v1")
 app.include_router(admin_salts.router, prefix="/api/v1")
 app.include_router(admin_stats.router)
+app.include_router(admin_users.router)
 # app.include_router(admin_components.router, prefix="/api/v1")
 # app.include_router(admin_medicines.router, prefix="/api/v1")
 

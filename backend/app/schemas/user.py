@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
@@ -47,3 +49,58 @@ class MedicalHistoryUpdate(BaseModel):
     chronic_conditions: list[str] | None = None
     height_cm: float | None = None
     weight_kg: float | None = None
+
+
+# Admin user management schemas
+
+class AdminUserListItem(BaseModel):
+    id: str
+    full_name: str
+    email: str | None
+    phone: str | None
+    role: str
+    is_active: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AdminUsersListResponse(BaseModel):
+    data: list[AdminUserListItem]
+    total: int
+    page: int
+    limit: int
+    totalPages: int
+
+
+class AdminUserDetailResponse(BaseModel):
+    id: str
+    full_name: str
+    email: str | None
+    phone: str | None
+    role: str
+    is_active: bool
+    language_pref: str
+    blood_group: str | None
+    emergency_contact_name: str | None
+    emergency_contact_phone: str | None
+    created_at: datetime
+    updated_at: datetime
+    doctor_profile: DoctorProfileResponse | None
+    records_count: int
+    prescriptions_count: int
+
+    class Config:
+        from_attributes = True
+
+
+class AdminUserUpdateRequest(BaseModel):
+    is_active: bool | None = None
+
+
+class AdminUserUpdateResponse(BaseModel):
+    id: str
+    full_name: str
+    is_active: bool
+    message: str

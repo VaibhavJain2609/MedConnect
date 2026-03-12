@@ -81,7 +81,7 @@ const navSections: NavSection[] = [
   {
     label: "MANAGEMENT",
     items: [
-      { href: "/admin/users", label: "Staffs", icon: Users },
+      { href: "/admin/users", label: "Users", icon: Users },
       { href: "/admin/notifications", label: "Notifications", icon: Bell },
       { href: "/admin/settings", label: "Settings", icon: Settings },
     ],
