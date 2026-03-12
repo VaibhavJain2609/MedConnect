@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel
 
@@ -90,6 +90,11 @@ class AdminUserDetailResponse(BaseModel):
     doctor_profile: DoctorProfileResponse | None
     records_count: int
     prescriptions_count: int
+    allergies: list[str] | None = None
+    chronic_conditions: list[str] | None = None
+    height_cm: float | None = None
+    weight_kg: float | None = None
+    last_visit: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -118,3 +123,45 @@ class AdminUserUpdateResponse(BaseModel):
 class AdminUserDeleteResponse(BaseModel):
     id: str
     message: str
+
+
+class AdminUserPrescriptionItem(BaseModel):
+    id: str
+    doctor_name: str
+    diagnosis: str | None
+    notes: str | None
+    medicines: dict
+    valid_until: date | None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AdminUserPrescriptionsResponse(BaseModel):
+    data: list[AdminUserPrescriptionItem]
+    total: int
+    page: int
+    limit: int
+    totalPages: int
+
+
+class AdminUserRecordItem(BaseModel):
+    id: str
+    record_type: str
+    title: str
+    description: str | None
+    source: str
+    doctor_name: str | None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AdminUserRecordsResponse(BaseModel):
+    data: list[AdminUserRecordItem]
+    total: int
+    page: int
+    limit: int
+    totalPages: int
