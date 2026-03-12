@@ -5,11 +5,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.dependencies import require_admin
 from app.models.doctor import Doctor
+from app.models.medical_record import MedicalRecord
 from app.models.notification import Notification, NotificationType
+from app.models.prescription import Prescription
 from app.models.user import User
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin", "doctors"])
@@ -102,6 +105,65 @@ async def list_doctor_specialties(
         .order_by(Doctor.specialization)
     )
     return [row[0] for row in result.all()]
+
+
+@router.get("/doctors/{doctor_id}")
+async def get_doctor_detail(
+    doctor_id: UUID,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get full doctor detail for admin review (MD-65)."""
+    result = await db.execute(
+        select(Doctor)
+        .options(selectinload(Doctor.user))
+        .where(Doctor.id == doctor_id, Doctor.deleted_at.is_(None))
+    )
+    doctor = result.scalar_one_or_none()
+    if not doctor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "NOT_FOUND", "message": "Doctor not found"}},
+        )
+
+    user = doctor.user
+
+    prescriptions_count = (
+        await db.scalar(
+            select(func.count()).where(
+                Prescription.doctor_id == doctor.id,
+                Prescription.deleted_at.is_(None),
+            )
+        )
+        or 0
+    )
+    records_count = (
+        await db.scalar(
+            select(func.count()).where(
+                MedicalRecord.doctor_id == doctor.id,
+                MedicalRecord.deleted_at.is_(None),
+            )
+        )
+        or 0
+    )
+
+    return {
+        "id": str(doctor.id),
+        "user_id": str(doctor.user_id),
+        "name": user.full_name,
+        "email": user.email,
+        "phone": user.phone,
+        "specialization": doctor.specialization,
+        "license_number": doctor.license_number,
+        "facility_name": doctor.facility_name,
+        "facility_city": doctor.facility_city,
+        "verified": doctor.verified,
+        "created_at": doctor.created_at.isoformat(),
+        "updated_at": doctor.updated_at.isoformat(),
+        "is_active": user.is_active,
+        "prescriptions_count": prescriptions_count,
+        "records_count": records_count,
+    }
 
 
 @router.put("/doctors/{doctor_id}/verify")
