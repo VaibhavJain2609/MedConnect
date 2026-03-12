@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
@@ -21,6 +22,24 @@ router = APIRouter(prefix="/api/v1/admin", tags=["admin", "doctors"])
 class DoctorVerifyRequest(BaseModel):
     action: Literal["approve", "reject"]
     reason: str = ""
+
+
+class AdminDoctorDetailResponse(BaseModel):
+    id: str
+    user_id: str
+    name: str
+    email: str | None
+    phone: str | None
+    specialization: str | None
+    license_number: str | None
+    facility_name: str | None
+    facility_city: str | None
+    verified: bool
+    created_at: datetime
+    updated_at: datetime
+    is_active: bool
+    prescriptions_count: int
+    records_count: int
 
 
 @router.get("/doctors")
@@ -107,7 +126,7 @@ async def list_doctor_specialties(
     return [row[0] for row in result.all()]
 
 
-@router.get("/doctors/{doctor_id}")
+@router.get("/doctors/{doctor_id}", response_model=AdminDoctorDetailResponse)
 async def get_doctor_detail(
     doctor_id: UUID,
     admin: User = Depends(require_admin),
@@ -147,23 +166,23 @@ async def get_doctor_detail(
         or 0
     )
 
-    return {
-        "id": str(doctor.id),
-        "user_id": str(doctor.user_id),
-        "name": user.full_name,
-        "email": user.email,
-        "phone": user.phone,
-        "specialization": doctor.specialization,
-        "license_number": doctor.license_number,
-        "facility_name": doctor.facility_name,
-        "facility_city": doctor.facility_city,
-        "verified": doctor.verified,
-        "created_at": doctor.created_at.isoformat(),
-        "updated_at": doctor.updated_at.isoformat(),
-        "is_active": user.is_active,
-        "prescriptions_count": prescriptions_count,
-        "records_count": records_count,
-    }
+    return AdminDoctorDetailResponse(
+        id=str(doctor.id),
+        user_id=str(doctor.user_id),
+        name=user.full_name,
+        email=user.email,
+        phone=user.phone,
+        specialization=doctor.specialization,
+        license_number=doctor.license_number,
+        facility_name=doctor.facility_name,
+        facility_city=doctor.facility_city,
+        verified=doctor.verified,
+        created_at=doctor.created_at,
+        updated_at=doctor.updated_at,
+        is_active=user.is_active,
+        prescriptions_count=prescriptions_count,
+        records_count=records_count,
+    )
 
 
 @router.put("/doctors/{doctor_id}/verify")
