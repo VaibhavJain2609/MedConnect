@@ -37,10 +37,28 @@ export interface AdminUserDetail extends AdminUserListItem {
   prescriptions_count: number;
 }
 
+export interface AdminUserUpdateRequest {
+  full_name?: string;
+  email?: string;
+  phone?: string;
+  role?: string;
+  is_active?: boolean;
+  language_pref?: string;
+}
+
 export interface AdminUserUpdateResponse {
   id: string;
   full_name: string;
+  email: string | null;
+  phone: string | null;
+  role: string;
   is_active: boolean;
+  language_pref: string;
+  message: string;
+}
+
+export interface AdminUserDeleteResponse {
+  id: string;
   message: string;
 }
 
@@ -60,12 +78,24 @@ export async function getAdminUser(id: string): Promise<AdminUserDetail> {
   return response.data;
 }
 
+export async function updateAdminUser(
+  id: string,
+  data: AdminUserUpdateRequest
+): Promise<AdminUserUpdateResponse> {
+  const response = await api.put(`/api/v1/admin/users/${id}`, data);
+  return response.data;
+}
+
 export async function toggleUserActive(
   id: string,
   isActive: boolean
 ): Promise<AdminUserUpdateResponse> {
-  const response = await api.put(`/api/v1/admin/users/${id}`, {
-    is_active: isActive,
-  });
+  return updateAdminUser(id, { is_active: isActive });
+}
+
+export async function deleteAdminUser(
+  id: string
+): Promise<AdminUserDeleteResponse> {
+  const response = await api.delete(`/api/v1/admin/users/${id}`);
   return response.data;
 }

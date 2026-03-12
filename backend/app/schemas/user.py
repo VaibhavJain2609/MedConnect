@@ -96,11 +96,25 @@ class AdminUserDetailResponse(BaseModel):
 
 
 class AdminUserUpdateRequest(BaseModel):
+    full_name: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    role: str | None = None
     is_active: bool | None = None
+    language_pref: str | None = None
 
 
 class AdminUserUpdateResponse(BaseModel):
     id: str
     full_name: str
+    email: str | None
+    phone: str | None
+    role: str
     is_active: bool
+    language_pref: str | None
+    message: str
+
+
+class AdminUserDeleteResponse(BaseModel):
+    id: str
     message: str

@@ -13,6 +13,7 @@ from app.models.medical_record import MedicalRecord
 from app.models.prescription import Prescription
 from app.models.user import User
 from app.schemas.user import (
+    AdminUserDeleteResponse,
     AdminUserDetailResponse,
     AdminUserUpdateRequest,
     AdminUserUpdateResponse,
@@ -129,6 +130,9 @@ async def get_user(
     )
 
 
+VALID_ROLES = {"patient", "doctor", "admin"}
+
+
 @router.put("/{user_id}", response_model=AdminUserUpdateResponse)
 async def update_user(
     user_id: str,
@@ -152,17 +156,78 @@ async def update_user(
             detail={"error": {"code": "NOT_FOUND", "message": "User not found"}},
         )
 
+    if body.role is not None and body.role not in VALID_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": {"code": "INVALID_ROLE", "message": f"Role must be one of: {', '.join(VALID_ROLES)}"}},
+        )
+
+    updated = False
+    if body.full_name is not None:
+        user.full_name = body.full_name
+        updated = True
+    if body.email is not None:
+        user.email = body.email
+        updated = True
+    if body.phone is not None:
+        user.phone = body.phone
+        updated = True
+    if body.role is not None:
+        user.role = body.role
+        updated = True
     if body.is_active is not None:
         user.is_active = body.is_active
+        updated = True
+    if body.language_pref is not None:
+        user.language_pref = body.language_pref
+        updated = True
+
+    if updated:
         user.updated_at = datetime.now(timezone.utc)
 
     await db.commit()
     await db.refresh(user)
 
-    action = "activated" if user.is_active else "deactivated"
     return AdminUserUpdateResponse(
         id=str(user.id),
         full_name=user.full_name,
+        email=user.email,
+        phone=user.phone,
+        role=user.role,
         is_active=user.is_active,
-        message=f"User {action} successfully",
+        language_pref=user.language_pref,
+        message="User updated successfully",
+    )
+
+
+@router.delete("/{user_id}", response_model=AdminUserDeleteResponse)
+async def delete_user(
+    user_id: str,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    if str(admin.id) == user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": {"code": "SELF_DELETE", "message": "Cannot delete your own account"}},
+        )
+
+    result = await db.execute(
+        select(User).where(User.id == user_id, User.deleted_at.is_(None))
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "NOT_FOUND", "message": "User not found"}},
+        )
+
+    user.deleted_at = datetime.now(timezone.utc)
+    user.updated_at = datetime.now(timezone.utc)
+
+    await db.commit()
+
+    return AdminUserDeleteResponse(
+        id=str(user.id),
+        message="User deleted successfully",
     )
