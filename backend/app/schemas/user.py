@@ -111,7 +111,7 @@ class AdminUserUpdateResponse(BaseModel):
     phone: str | None
     role: str
     is_active: bool
-    language_pref: str
+    language_pref: str | None
     message: str
 
 
