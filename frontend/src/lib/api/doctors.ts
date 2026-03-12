@@ -25,6 +25,24 @@ export interface Doctor {
   department?: string;
 }
 
+export interface AdminDoctorDetail {
+  id: string;
+  user_id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  specialization: string | null;
+  license_number: string | null;
+  facility_name: string | null;
+  facility_city: string | null;
+  verified: boolean;
+  created_at: string;
+  updated_at: string;
+  is_active: boolean;
+  prescriptions_count: number;
+  records_count: number;
+}
+
 export interface DoctorsListParams {
   search?: string;
   specialty?: string;
@@ -65,10 +83,18 @@ export async function getDoctors(
 }
 
 /**
- * Get doctor details by ID
+ * Get doctor details by ID (public endpoint)
  */
 export async function getDoctor(id: string): Promise<Doctor> {
   const response = await api.get(`/api/v1/doctors/${id}`);
+  return response.data;
+}
+
+/**
+ * Get full doctor detail for admin review (MD-65)
+ */
+export async function getAdminDoctor(id: string): Promise<AdminDoctorDetail> {
+  const response = await api.get(`/api/v1/admin/doctors/${id}`);
   return response.data;
 }
 
