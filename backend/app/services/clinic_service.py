@@ -22,7 +22,11 @@ from app.schemas.clinic import (
 )
 
 
-async def create_clinic(db: AsyncSession, data: ClinicCreate, owner_user_id: uuid.UUID) -> Clinic:
+async def create_clinic(
+    db: AsyncSession,
+    data: ClinicCreate,
+    owner_user_id: uuid.UUID | None = None,
+) -> Clinic:
     clinic = Clinic(
         id=uuid.uuid4(),
         name=data.name,
@@ -38,16 +42,18 @@ async def create_clinic(db: AsyncSession, data: ClinicCreate, owner_user_id: uui
     db.add(clinic)
     await db.flush()
 
-    membership = ClinicMembership(
-        id=uuid.uuid4(),
-        clinic_id=clinic.id,
-        user_id=owner_user_id,
-        role="owner",
-        is_active=True,
-        joined_at=datetime.utcnow(),
-    )
-    db.add(membership)
-    await db.flush()
+    if owner_user_id:
+        membership = ClinicMembership(
+            id=uuid.uuid4(),
+            clinic_id=clinic.id,
+            user_id=owner_user_id,
+            role="owner",
+            is_active=True,
+            joined_at=datetime.utcnow(),
+        )
+        db.add(membership)
+        await db.flush()
+
     return clinic
 
 

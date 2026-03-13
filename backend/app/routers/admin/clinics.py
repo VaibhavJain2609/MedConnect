@@ -1,6 +1,7 @@
 """
 Admin clinic endpoints  [MD-198]
 
+POST   /api/v1/admin/clinics        — create a clinic (no owner)
 GET    /api/v1/admin/clinics        — list all clinics (paginated)
 GET    /api/v1/admin/clinics/{id}   — clinic detail with stats
 PUT    /api/v1/admin/clinics/{id}   — update any clinic
@@ -13,8 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import require_admin
-from app.models.user import User
-from app.schemas.clinic import AdminClinicDetailResponse, ClinicUpdate
+from app.schemas.clinic import AdminClinicDetailResponse, ClinicCreate, ClinicUpdate
 from app.services import clinic_service
 
 router = APIRouter(
@@ -22,6 +22,16 @@ router = APIRouter(
     tags=["admin-clinics"],
     dependencies=[Depends(require_admin)],
 )
+
+
+@router.post("", response_model=AdminClinicDetailResponse, status_code=status.HTTP_201_CREATED)
+async def create_clinic(
+    data: ClinicCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    clinic = await clinic_service.create_clinic(db, data, owner_user_id=None)
+    detail = await clinic_service.admin_get_clinic_detail(db, clinic.id)
+    return detail
 
 
 @router.get("")

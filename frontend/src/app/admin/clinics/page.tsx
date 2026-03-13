@@ -2,17 +2,111 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
-import { Search, Building2, Users, MapPin } from "lucide-react";
-import { getAdminClinics, type AdminClinicListItem } from "@/lib/api/clinics";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Search, Building2, Users, MapPin, Plus, X } from "lucide-react";
+import {
+  getAdminClinics,
+  createAdminClinic,
+  type AdminClinicListItem,
+  type ClinicCreatePayload,
+} from "@/lib/api/clinics";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
+
+function CreateClinicModal({ onClose }: { onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState<ClinicCreatePayload>({ name: "" });
+  const [error, setError] = useState<string | null>(null);
+
+  const mutation = useMutation({
+    mutationFn: createAdminClinic,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-clinics"] });
+      onClose();
+    },
+    onError: (err: any) => {
+      setError(err?.response?.data?.detail?.error?.message ?? "Failed to create clinic.");
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim()) return;
+    setError(null);
+    mutation.mutate(form);
+  };
+
+  const field = (key: keyof ClinicCreatePayload, label: string, required = false) => (
+    <div>
+      <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+        {label}{required && <span className="text-red-500"> *</span>}
+      </label>
+      <input
+        type="text"
+        value={(form[key] as string) ?? ""}
+        onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+        className="w-full rounded-lg border border-dreams-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
+        required={required}
+      />
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-dreams-border px-6 py-4">
+          <h2 className="text-lg font-semibold text-dreams-textPrimary">Create Clinic</h2>
+          <button onClick={onClose} className="rounded-lg p-1.5 hover:bg-gray-100">
+            <X className="h-4 w-4 text-dreams-textSecondary" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4 px-6 py-5">
+          {field("name", "Clinic Name", true)}
+          {field("address", "Address")}
+
+          <div className="grid grid-cols-2 gap-3">
+            {field("city", "City")}
+            {field("state", "State")}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            {field("phone", "Phone")}
+            {field("email", "Email")}
+          </div>
+
+          {error && (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+          )}
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-dreams-border px-4 py-2 text-sm hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={mutation.isPending || !form.name.trim()}
+              className="rounded-lg bg-dreams-blue px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {mutation.isPending ? "Creating..." : "Create Clinic"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 export default function AdminClinicsPage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
   const [page, setPage] = useState(1);
+  const [showCreate, setShowCreate] = useState(false);
   const limit = 20;
 
   const { data, isLoading } = useQuery({
@@ -40,6 +134,8 @@ export default function AdminClinicsPage() {
 
   return (
     <div className="space-y-6">
+      {showCreate && <CreateClinicModal onClose={() => setShowCreate(false)} />}
+
       <Breadcrumb
         items={[
           { label: "Dashboard", href: "/admin/dashboard" },
@@ -54,9 +150,13 @@ export default function AdminClinicsPage() {
             Manage all registered clinics
           </p>
         </div>
-        <span className="text-sm text-dreams-textSecondary">
-          {data?.total ?? 0} total
-        </span>
+        <button
+          onClick={() => setShowCreate(true)}
+          className="flex items-center gap-2 rounded-lg bg-dreams-blue px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          <Plus className="h-4 w-4" />
+          Create Clinic
+        </button>
       </div>
 
       {/* Filters */}

@@ -129,6 +129,20 @@ export async function createBranch(
 
 // ── Admin API ─────────────────────────────────────────────────────────────
 
+export interface ClinicCreatePayload {
+  name: string
+  address?: string
+  city?: string
+  state?: string
+  phone?: string
+  email?: string
+}
+
+export async function createAdminClinic(data: ClinicCreatePayload): Promise<AdminClinicDetail> {
+  const res = await api.post('/api/v1/admin/clinics', data)
+  return res.data
+}
+
 export async function getAdminClinics(params?: {
   search?: string
   is_active?: boolean
