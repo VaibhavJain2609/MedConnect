@@ -20,6 +20,20 @@ api.interceptors.request.use(async (config) => {
     config.headers.Authorization = `Bearer ${keycloak.token}`;
   }
 
+  // Attach active clinic ID for clinic-scoped endpoints
+  try {
+    const raw = localStorage.getItem("clinic-store");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const clinicId = parsed?.state?.activeClinicId;
+      if (clinicId) {
+        config.headers["X-Clinic-Id"] = clinicId;
+      }
+    }
+  } catch {
+    // ignore localStorage errors (SSR, private mode, etc.)
+  }
+
   return config;
 });
 

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { logout } from "@/lib/auth";
 import { useAuthStore } from "@/stores/auth-store";
+import { ClinicSelector } from "@/components/layout/clinic-selector";
 
 export function DoctorLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -46,6 +47,9 @@ export function DoctorLayout({ children }: { children: React.ReactNode }) {
 
             {/* Global search trigger */}
             <GlobalSearchTrigger onOpen={() => {}} />
+
+            {/* Clinic selector */}
+            <ClinicSelector />
           </div>
 
           {/* Utility icons */}
