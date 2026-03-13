@@ -3,6 +3,7 @@ from app.models.doctor import Doctor
 from app.models.medical_record import MedicalRecord
 from app.models.prescription import Prescription
 from app.models.notification import Notification, NotificationPreferences, NotificationType
+from app.models.clinic import Clinic, ClinicBranch, ClinicMembership
 
 # EMR Medicine Models
 from app.models.medicine import (
@@ -47,6 +48,9 @@ __all__ = [
     "Notification",
     "NotificationPreferences",
     "NotificationType",
+    "Clinic",
+    "ClinicBranch",
+    "ClinicMembership",
     # Medicine models
     "ChemicalClass",
     "TherapeuticClass",

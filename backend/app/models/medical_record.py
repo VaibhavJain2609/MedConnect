@@ -20,6 +20,7 @@ class MedicalRecord(Base):
     fhir_bundle: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     raw_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     ai_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    clinic_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("clinics.id"), nullable=True)
     source: Mapped[str] = mapped_column(String(20), default="manual")
     document_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -35,4 +36,5 @@ class MedicalRecord(Base):
         Index("idx_records_doctor_id", "doctor_id", postgresql_where=(deleted_at.is_(None))),
         Index("idx_records_type", "record_type", postgresql_where=(deleted_at.is_(None))),
         Index("idx_records_created", "created_at", postgresql_where=(deleted_at.is_(None))),
+        Index("idx_records_clinic", "clinic_id", postgresql_where=(deleted_at.is_(None))),
     )

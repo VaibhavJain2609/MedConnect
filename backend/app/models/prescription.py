@@ -15,6 +15,7 @@ class Prescription(Base):
     record_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("medical_records.id"), nullable=False)
     doctor_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("doctors.id"), nullable=False)
     patient_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    clinic_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("clinics.id"), nullable=True)
     medicines: Mapped[dict] = mapped_column(JSONB, nullable=False)
     diagnosis: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -30,4 +31,5 @@ class Prescription(Base):
     __table_args__ = (
         Index("idx_rx_patient", "patient_id", "created_at", postgresql_where=(deleted_at.is_(None))),
         Index("idx_rx_doctor", "doctor_id", postgresql_where=(deleted_at.is_(None))),
+        Index("idx_rx_clinic", "clinic_id", postgresql_where=(deleted_at.is_(None))),
     )
