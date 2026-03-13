@@ -5,7 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_active_clinic, get_current_doctor
+from app.models.clinic import ClinicMembership
 from app.models.doctor import Doctor
+from app.models.patient_link import PatientClinicLink
 from app.models.user import User
 from app.schemas.common import PaginatedResponse, PaginationMeta
 from app.schemas.prescription import PrescriptionCreate, PrescriptionResponse
@@ -34,6 +36,25 @@ async def list_patients(
     )
 
 
+async def _check_patient_consent(db: AsyncSession, patient_id: UUID, clinic_id: UUID) -> None:
+    """Raise 403 if patient has not approved consent for this clinic."""
+    from sqlalchemy import select as _select
+
+    result = await db.execute(
+        _select(PatientClinicLink).where(
+            PatientClinicLink.patient_id == patient_id,
+            PatientClinicLink.clinic_id == clinic_id,
+            PatientClinicLink.consent_status == "approved",
+            PatientClinicLink.deleted_at.is_(None),
+        )
+    )
+    if not result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": {"code": "CONSENT_REQUIRED", "message": "Patient has not approved access for this clinic"}},
+        )
+
+
 @router.get("/patients/{patient_id}/prescriptions")
 async def get_patient_prescriptions(
     patient_id: UUID,
@@ -48,9 +69,10 @@ async def get_patient_prescriptions(
       - per_clinic: see all clinic doctors' prescriptions
       - per_doctor: see only own prescriptions
     Falls back to own-only if no clinic context.
+    Requires approved PatientClinicLink consent when clinic context is active.
     """
     from sqlalchemy import select, or_
-    from app.models.clinic import Clinic, ClinicMembership
+    from app.models.clinic import Clinic
     from app.models.medical_record import MedicalRecord
     from app.models.prescription import Prescription
 
@@ -60,6 +82,7 @@ async def get_patient_prescriptions(
 
     if clinic_context:
         clinic_id, _ = clinic_context
+        await _check_patient_consent(db, patient_id, clinic_id)
         # Get clinic sharing mode
         clinic_result = await db.execute(
             select(Clinic).where(Clinic.id == clinic_id, Clinic.deleted_at.is_(None))
@@ -127,8 +150,12 @@ async def patient_records(
     limit: int = Query(20, ge=1, le=100),
     doctor_info: tuple[User, Doctor] = Depends(get_current_doctor),
     db: AsyncSession = Depends(get_db),
+    clinic_context: tuple | None = Depends(get_active_clinic),
 ):
     _, doctor = doctor_info
+    if clinic_context:
+        clinic_id, _ = clinic_context
+        await _check_patient_consent(db, patient_id, clinic_id)
     records, next_cursor, has_more = await get_patient_timeline(
         db=db, patient_id=patient_id, record_type=type, cursor=cursor, limit=limit
     )
@@ -147,6 +174,8 @@ async def create_medical_record(
 ):
     _, doctor = doctor_info
     clinic_id = clinic_context[0] if clinic_context else None
+    if clinic_id:
+        await _check_patient_consent(db, req.patient_id, clinic_id)
     try:
         record = await create_record(
             db=db,
@@ -175,6 +204,8 @@ async def create_rx(
 ):
     _, doctor = doctor_info
     clinic_id = clinic_context[0] if clinic_context else None
+    if clinic_id:
+        await _check_patient_consent(db, req.patient_id, clinic_id)
     try:
         prescription = await create_prescription(
             db=db,

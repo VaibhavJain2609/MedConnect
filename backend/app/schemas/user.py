@@ -130,7 +130,7 @@ class AdminUserPrescriptionItem(BaseModel):
     doctor_name: str
     diagnosis: str | None
     notes: str | None
-    medicines: dict
+    medicines: list | dict
     valid_until: date | None
     created_at: datetime
 

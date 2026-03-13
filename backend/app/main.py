@@ -18,6 +18,7 @@ from app.routers.admin import clinics as admin_clinics
 from app.routers import clinics
 from app.routers import onboarding
 from app.routers import clinic_invites
+from app.routers import patient_links
 # from app.routers.admin import components as admin_components
 # from app.routers.admin import medicines as admin_medicines
 
@@ -82,6 +83,7 @@ app.include_router(admin_clinics.router)
 app.include_router(clinics.router)
 app.include_router(onboarding.router)
 app.include_router(clinic_invites.router)
+app.include_router(patient_links.router)
 # app.include_router(admin_components.router, prefix="/api/v1")
 # app.include_router(admin_medicines.router, prefix="/api/v1")
 
