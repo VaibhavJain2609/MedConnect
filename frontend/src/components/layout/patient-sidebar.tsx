@@ -12,6 +12,7 @@ import {
   User,
   ClipboardList,
   Building2,
+  Calendar,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/auth";
@@ -39,6 +40,7 @@ const navSections: NavSection[] = [
     label: "MAIN",
     items: [
       { href: "/patient/timeline", label: "Health Timeline", icon: Activity },
+      { href: "/patient/appointments", label: "Appointments", icon: Calendar },
     ],
   },
   {

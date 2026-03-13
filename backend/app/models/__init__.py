@@ -6,6 +6,9 @@ from app.models.notification import Notification, NotificationPreferences, Notif
 from app.models.clinic import Clinic, ClinicBranch, ClinicMembership
 from app.models.clinic_invite import ClinicInvite, ClinicJoinRequest
 from app.models.patient_link import PatientClinicLink, PatientLinkCode
+from app.models.appointment import Appointment
+from app.models.vital import PatientVital, VITAL_TYPES
+from app.models.audit import AuditLog
 
 # EMR Medicine Models
 from app.models.medicine import (
@@ -57,6 +60,10 @@ __all__ = [
     "ClinicJoinRequest",
     "PatientClinicLink",
     "PatientLinkCode",
+    "Appointment",
+    "PatientVital",
+    "VITAL_TYPES",
+    "AuditLog",
     # Medicine models
     "ChemicalClass",
     "TherapeuticClass",

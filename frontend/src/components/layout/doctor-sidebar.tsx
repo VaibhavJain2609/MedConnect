@@ -14,6 +14,7 @@ import {
   Stethoscope,
   Building2,
   UserPlus,
+  Calendar,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/auth";
@@ -41,6 +42,7 @@ const navSections: NavSection[] = [
     label: "MAIN",
     items: [
       { href: "/doctor/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/doctor/appointments", label: "Appointments", icon: Calendar },
     ],
   },
   {

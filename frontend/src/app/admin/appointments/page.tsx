@@ -4,109 +4,130 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ColumnDef } from "@tanstack/react-table";
 import { Plus, Search } from "lucide-react";
-import { getAppointments, Appointment } from "@/lib/api/appointments";
+import { getAppointments, type Appointment } from "@/lib/api/appointments";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
+const STATUS_VARIANT_MAP: Record<string, string> = {
+  scheduled: "upcoming",
+  arrived: "inProgress",
+  "in-progress": "inProgress",
+  completed: "completed",
+  cancelled: "overdue",
+  "no-show": "pending",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  scheduled: "Scheduled",
+  arrived: "Arrived",
+  "in-progress": "In Progress",
+  completed: "Completed",
+  cancelled: "Cancelled",
+  "no-show": "No Show",
+};
+
+const TYPE_LABELS: Record<string, string> = {
+  "in-person": "In Person",
+  "teleconsult": "Teleconsult",
+  "follow-up": "Follow-up",
+};
+
 export default function AdminAppointmentsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [page, setPage] = useState(1);
-  const [limit] = useState(10);
 
-  // Fetch appointments from backend
   const { data, isLoading, error } = useQuery({
-    queryKey: ["admin-appointments", searchQuery, statusFilter, page, limit],
+    queryKey: ["admin-appointments", statusFilter],
     queryFn: () =>
       getAppointments({
-        search: searchQuery || undefined,
         status: statusFilter !== "all" ? statusFilter : undefined,
-        page,
-        limit,
+        all: true,
       }),
   });
 
-  const appointments = data?.appointments;
-  const totalPages = data?.totalPages || 1;
+  const allAppointments: Appointment[] = data?.data ?? [];
 
-  // Table columns definition
+  // Client-side search filter
+  const appointments = searchQuery
+    ? allAppointments.filter(
+        (a) =>
+          (a.patient_name ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (a.doctor_name ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+          a.id.includes(searchQuery)
+      )
+    : allAppointments;
+
   const columns: ColumnDef<Appointment>[] = [
-    {
-      accessorKey: "patient_id",
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Patient ID" />
-      ),
-      cell: ({ row }) => (
-        <a
-          href={`/admin/patients/${row.getValue("patient_id")}`}
-          className="font-medium text-dreams-blue hover:underline"
-        >
-          {row.getValue("patient_id")}
-        </a>
-      ),
-    },
     {
       accessorKey: "patient_name",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Patient Name" />
+        <DataTableColumnHeader column={column} title="Patient" />
       ),
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
           <Avatar
-            src={row.original.patient_photo}
-            fallback={row.getValue("patient_name")}
+            fallback={row.getValue("patient_name") as string}
             size="sm"
           />
-          <span className="font-medium">{row.getValue("patient_name")}</span>
+          <div>
+            <span className="font-medium">{row.getValue("patient_name") ?? "—"}</span>
+          </div>
         </div>
       ),
     },
     {
       accessorKey: "doctor_name",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Doctor Name" />
+        <DataTableColumnHeader column={column} title="Doctor" />
       ),
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
           <Avatar
-            src={row.original.doctor_photo}
-            fallback={row.getValue("doctor_name")}
+            fallback={row.getValue("doctor_name") as string}
             size="sm"
           />
-          <span className="font-medium">{row.getValue("doctor_name")}</span>
+          <span className="font-medium">{row.getValue("doctor_name") ?? "—"}</span>
         </div>
       ),
     },
     {
-      accessorKey: "department",
+      accessorKey: "clinic_name",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Department" />
-      ),
-    },
-    {
-      accessorKey: "appointment_date",
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Appointment Date" />
+        <DataTableColumnHeader column={column} title="Clinic" />
       ),
       cell: ({ row }) => (
-        <div>
-          <p className="font-medium">
-            {new Date(row.getValue("appointment_date")).toLocaleDateString(
-              "en-US",
-              {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-              }
-            )}
-          </p>
-          <p className="text-xs text-dreams-textSecondary">
-            {row.original.appointment_time}
-          </p>
-        </div>
+        <span className="text-dreams-textSecondary">{row.getValue("clinic_name") ?? "—"}</span>
       ),
+    },
+    {
+      accessorKey: "type",
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Type" />
+      ),
+      cell: ({ row }) => (
+        <span>{TYPE_LABELS[row.getValue("type") as string] ?? row.getValue("type")}</span>
+      ),
+    },
+    {
+      accessorKey: "scheduled_at",
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Scheduled At" />
+      ),
+      cell: ({ row }) => {
+        const d = new Date(row.getValue("scheduled_at") as string);
+        return (
+          <div>
+            <p className="font-medium">
+              {d.toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}
+            </p>
+            <p className="text-xs text-dreams-textSecondary">
+              {d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}
+            </p>
+          </div>
+        );
+      },
     },
     {
       accessorKey: "status",
@@ -114,17 +135,10 @@ export default function AdminAppointmentsPage() {
         <DataTableColumnHeader column={column} title="Status" />
       ),
       cell: ({ row }) => {
-        const status = row.getValue("status") as string;
-        const statusLabels: Record<string, string> = {
-          upcoming: "Upcoming",
-          in_progress: "In Progress",
-          completed: "Completed",
-          cancelled: "Cancelled",
-        };
-
+        const s = row.getValue("status") as string;
         return (
-          <Badge variant={status as any}>
-            {statusLabels[status] || status}
+          <Badge variant={STATUS_VARIANT_MAP[s] as any}>
+            {STATUS_LABELS[s] ?? s}
           </Badge>
         );
       },
@@ -152,15 +166,11 @@ export default function AdminAppointmentsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Breadcrumb */}
       <Breadcrumb items={[{ label: "Appointments" }]} />
 
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-dreams-textPrimary">
-            Appointments
-          </h1>
+          <h1 className="text-3xl font-bold text-dreams-textPrimary">Appointments</h1>
           <p className="text-dreams-textSecondary mt-1">
             Manage patient appointments and schedules
           </p>
@@ -174,7 +184,6 @@ export default function AdminAppointmentsPage() {
 
       {/* Search and Filters */}
       <div className="flex items-center gap-4">
-        {/* Search */}
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <input
@@ -186,30 +195,29 @@ export default function AdminAppointmentsPage() {
           />
         </div>
 
-        {/* Status Filter */}
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
           className="h-10 px-4 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
         >
           <option value="all">All Status</option>
-          <option value="upcoming">Upcoming</option>
-          <option value="in_progress">In Progress</option>
+          <option value="scheduled">Scheduled</option>
+          <option value="arrived">Arrived</option>
+          <option value="in-progress">In Progress</option>
           <option value="completed">Completed</option>
           <option value="cancelled">Cancelled</option>
+          <option value="no-show">No Show</option>
         </select>
       </div>
 
       {/* Data Table */}
-      {appointments && (
-        <DataTable
-          columns={columns}
-          data={appointments}
-          pageSize={limit}
-          searchColumn="patient_name"
-          searchPlaceholder="Search appointments..."
-        />
-      )}
+      <DataTable
+        columns={columns}
+        data={appointments}
+        pageSize={10}
+        searchColumn="patient_name"
+        searchPlaceholder="Search appointments..."
+      />
     </div>
   );
 }

@@ -15,10 +15,14 @@ from app.routers.admin import salts as admin_salts
 from app.routers.admin import stats as admin_stats
 from app.routers.admin import users as admin_users
 from app.routers.admin import clinics as admin_clinics
+from app.routers.admin import audit as admin_audit
 from app.routers import clinics
 from app.routers import onboarding
 from app.routers import clinic_invites
 from app.routers import patient_links
+from app.routers import appointments
+from app.routers import uploads
+from app.routers import vitals
 # from app.routers.admin import components as admin_components
 # from app.routers.admin import medicines as admin_medicines
 
@@ -54,6 +58,19 @@ if settings.APP_ENV == "development":
     ])
 
 app.add_middleware(RateLimitMiddleware)
+
+
+@app.middleware("http")
+async def set_audit_context(request: Request, call_next):
+    from app.services.audit_service import set_audit_user
+    try:
+        set_audit_user(None)
+    except Exception:
+        pass
+    response = await call_next(request)
+    return response
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
@@ -80,10 +97,14 @@ app.include_router(admin_salts.router, prefix="/api/v1")
 app.include_router(admin_stats.router)
 app.include_router(admin_users.router)
 app.include_router(admin_clinics.router)
+app.include_router(admin_audit.router)
 app.include_router(clinics.router)
 app.include_router(onboarding.router)
 app.include_router(clinic_invites.router)
 app.include_router(patient_links.router)
+app.include_router(appointments.router)
+app.include_router(uploads.router)
+app.include_router(vitals.router)
 # app.include_router(admin_components.router, prefix="/api/v1")
 # app.include_router(admin_medicines.router, prefix="/api/v1")
 
