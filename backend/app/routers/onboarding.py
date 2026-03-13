@@ -9,6 +9,8 @@ POST /api/v1/onboarding/verify-nhr  — trigger NHR verification (stubbed)
 """
 from typing import Optional
 
+import uuid as _uuid_mod
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -163,20 +165,68 @@ async def onboarding_clinic(
         clinic_id = str(clinic.id)
 
     elif data.action == "join_code":
-        # Invite code redemption will be implemented in Sprint 4
-        raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail={"error": {"code": "NOT_IMPLEMENTED",
-                              "message": "Invite code joining available in next release"}},
+        from app.models.clinic_invite import ClinicInvite
+        from app.models.clinic import ClinicMembership
+        from datetime import datetime as _dt
+
+        if not data.invite_code:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": {"code": "MISSING_DATA", "message": "invite_code required"}},
+            )
+        result = await db.execute(
+            select(ClinicInvite).where(
+                ClinicInvite.code == data.invite_code.upper(),
+                ClinicInvite.deleted_at.is_(None),
+            )
         )
+        invite = result.scalar_one_or_none()
+        if not invite:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"error": {"code": "INVALID_CODE", "message": "Invite code not found"}},
+            )
+        if invite.expires_at and invite.expires_at < _dt.utcnow():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": {"code": "EXPIRED_CODE", "message": "Invite code expired"}},
+            )
+        membership = ClinicMembership(
+            id=uuid.uuid4(),
+            clinic_id=invite.clinic_id,
+            user_id=user.id,
+            role=invite.role,
+            is_active=True,
+            joined_at=_dt.utcnow(),
+        )
+        db.add(membership)
+        invite.use_count += 1
+        await db.flush()
+        clinic_id = str(invite.clinic_id)
 
     elif data.action == "join_request":
-        # Join request will be implemented in Sprint 4
-        raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail={"error": {"code": "NOT_IMPLEMENTED",
-                              "message": "Join request available in next release"}},
+        from app.models.clinic_invite import ClinicJoinRequest
+        from datetime import datetime as _dt
+
+        if not data.clinic_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": {"code": "MISSING_DATA", "message": "clinic_id required"}},
+            )
+        req = ClinicJoinRequest(
+            id=uuid.uuid4(),
+            clinic_id=uuid.UUID(data.clinic_id),
+            user_id=user.id,
+            message="Requesting to join from onboarding",
+            status="pending",
         )
+        db.add(req)
+        await db.flush()
+        # Don't advance to completed — wait for approval
+        return {
+            "onboarding_step": doctor.onboarding_step,
+            "message": "Join request submitted. Awaiting clinic admin approval.",
+        }
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
