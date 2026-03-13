@@ -18,6 +18,7 @@ async def create_prescription(
     diagnosis: str | None = None,
     notes: str | None = None,
     valid_until: date | None = None,
+    clinic_id: UUID | None = None,
 ) -> Prescription:
     patient = await db.execute(
         select(User).where(User.id == patient_id, User.role == "patient", User.deleted_at.is_(None))
@@ -40,6 +41,7 @@ async def create_prescription(
         description=notes,
         fhir_bundle=fhir_bundle,
         source="doctor",
+        clinic_id=clinic_id,
     )
     db.add(record)
     await db.flush()
@@ -52,6 +54,7 @@ async def create_prescription(
         diagnosis=diagnosis,
         notes=notes,
         valid_until=valid_until,
+        clinic_id=clinic_id,
     )
     db.add(prescription)
     await db.flush()

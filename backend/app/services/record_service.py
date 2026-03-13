@@ -18,6 +18,7 @@ async def create_record(
     title: str,
     description: str | None = None,
     fhir_bundle: dict | None = None,
+    clinic_id: UUID | None = None,
 ) -> MedicalRecord:
     patient = await db.execute(
         select(User).where(User.id == patient_id, User.role == "patient", User.deleted_at.is_(None))
@@ -41,6 +42,7 @@ async def create_record(
         description=description,
         fhir_bundle=fhir_bundle,
         source="doctor",
+        clinic_id=clinic_id,
     )
     db.add(record)
     await db.flush()

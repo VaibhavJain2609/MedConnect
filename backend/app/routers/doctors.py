@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_doctor
+from app.dependencies import get_active_clinic, get_current_doctor
 from app.models.doctor import Doctor
 from app.models.user import User
 from app.schemas.common import PaginatedResponse, PaginationMeta
@@ -40,43 +40,49 @@ async def get_patient_prescriptions(
     doctor_info: tuple[User, Doctor] = Depends(get_current_doctor),
     db: AsyncSession = Depends(get_db),
     limit: int = Query(50, ge=1, le=100),
+    clinic_context: tuple | None = Depends(get_active_clinic),
 ):
     """
-    Get prescriptions for a specific patient that were created by:
-    - The current doctor (same doctor_id), OR
-    - Doctors from the same facility (same facility_name and facility_city)
-
-    This ensures doctors can only see prescriptions from their own practice/facility.
+    Get prescriptions for a patient scoped to the active clinic.
+    Respects record_sharing_mode:
+      - per_clinic: see all clinic doctors' prescriptions
+      - per_doctor: see only own prescriptions
+    Falls back to own-only if no clinic context.
     """
-    from sqlalchemy import select, or_, and_
-    from sqlalchemy.orm import joinedload
+    from sqlalchemy import select, or_
+    from app.models.clinic import Clinic, ClinicMembership
     from app.models.medical_record import MedicalRecord
     from app.models.prescription import Prescription
 
     _, doctor = doctor_info
 
-    # Build filter conditions:
-    # 1. Same doctor, OR
-    # 2. Same facility (if facility_name is set)
     filter_conditions = [MedicalRecord.doctor_id == doctor.id]
 
-    if doctor.facility_name and doctor.facility_city:
-        # Also include prescriptions from other doctors at the same facility
-        facility_doctors_stmt = (
-            select(Doctor.id)
-            .where(
-                Doctor.facility_name == doctor.facility_name,
-                Doctor.facility_city == doctor.facility_city,
-                Doctor.deleted_at.is_(None),
-            )
+    if clinic_context:
+        clinic_id, _ = clinic_context
+        # Get clinic sharing mode
+        clinic_result = await db.execute(
+            select(Clinic).where(Clinic.id == clinic_id, Clinic.deleted_at.is_(None))
         )
-        facility_doctor_ids = await db.execute(facility_doctors_stmt)
-        facility_doctor_ids = [row[0] for row in facility_doctor_ids]
+        clinic = clinic_result.scalar_one_or_none()
 
-        if facility_doctor_ids:
-            filter_conditions.append(MedicalRecord.doctor_id.in_(facility_doctor_ids))
+        if clinic and clinic.record_sharing_mode == "per_clinic":
+            # Include all doctors who are members of this clinic
+            clinic_doctor_ids_stmt = (
+                select(Doctor.id)
+                .join(ClinicMembership, ClinicMembership.user_id == Doctor.user_id)
+                .where(
+                    ClinicMembership.clinic_id == clinic_id,
+                    ClinicMembership.is_active.is_(True),
+                    ClinicMembership.deleted_at.is_(None),
+                    Doctor.deleted_at.is_(None),
+                )
+            )
+            clinic_doctor_ids = await db.execute(clinic_doctor_ids_stmt)
+            ids = [row[0] for row in clinic_doctor_ids]
+            if ids:
+                filter_conditions = [MedicalRecord.doctor_id.in_(ids)]
 
-    # Query prescriptions
     stmt = (
         select(MedicalRecord, Prescription, User.full_name.label("doctor_name"))
         .join(Prescription, Prescription.record_id == MedicalRecord.id)
@@ -96,29 +102,21 @@ async def get_patient_prescriptions(
     result = await db.execute(stmt)
     rows = result.all()
 
-    # Format response
-    prescriptions = []
-    for row in rows:
-        record = row[0]
-        prescription = row[1]
-        doctor_name = row[2]
+    prescriptions = [
+        {
+            "id": str(rx.id),
+            "record_id": str(rec.id),
+            "medicines": rx.medicines,
+            "diagnosis": rx.diagnosis,
+            "notes": rx.notes,
+            "valid_until": rx.valid_until.isoformat() if rx.valid_until else None,
+            "created_at": rx.created_at.isoformat(),
+            "doctor_name": doc_name,
+        }
+        for rec, rx, doc_name in rows
+    ]
 
-        prescriptions.append({
-            "id": str(prescription.id),
-            "record_id": str(record.id),
-            "medicines": prescription.medicines,
-            "diagnosis": prescription.diagnosis,
-            "notes": prescription.notes,
-            "valid_until": prescription.valid_until.isoformat() if prescription.valid_until else None,
-            "created_at": prescription.created_at.isoformat(),
-            "doctor_name": doctor_name,
-        })
-
-    return {
-        "data": prescriptions,
-        "total": len(prescriptions),
-        "patient_id": str(patient_id),
-    }
+    return {"data": prescriptions, "total": len(prescriptions), "patient_id": str(patient_id)}
 
 
 @router.get("/patients/{patient_id}/records")
@@ -145,8 +143,10 @@ async def create_medical_record(
     req: RecordCreate,
     doctor_info: tuple[User, Doctor] = Depends(get_current_doctor),
     db: AsyncSession = Depends(get_db),
+    clinic_context: tuple | None = Depends(get_active_clinic),
 ):
     _, doctor = doctor_info
+    clinic_id = clinic_context[0] if clinic_context else None
     try:
         record = await create_record(
             db=db,
@@ -156,6 +156,7 @@ async def create_medical_record(
             title=req.title,
             description=req.description,
             fhir_bundle=req.fhir_bundle,
+            clinic_id=clinic_id,
         )
     except ValueError as e:
         raise HTTPException(
@@ -170,8 +171,10 @@ async def create_rx(
     req: PrescriptionCreate,
     doctor_info: tuple[User, Doctor] = Depends(get_current_doctor),
     db: AsyncSession = Depends(get_db),
+    clinic_context: tuple | None = Depends(get_active_clinic),
 ):
     _, doctor = doctor_info
+    clinic_id = clinic_context[0] if clinic_context else None
     try:
         prescription = await create_prescription(
             db=db,
@@ -181,6 +184,7 @@ async def create_rx(
             diagnosis=req.diagnosis,
             notes=req.notes,
             valid_until=req.valid_until,
+            clinic_id=clinic_id,
         )
     except ValueError as e:
         raise HTTPException(
