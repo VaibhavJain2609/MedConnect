@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from uuid import UUID
 
 from pydantic import BaseModel
 
@@ -11,8 +12,8 @@ class DoctorProfileCreate(BaseModel):
 
 
 class DoctorProfileResponse(BaseModel):
-    id: str
-    user_id: str
+    id: UUID
+    user_id: UUID
     specialization: str | None
     license_number: str | None
     facility_name: str | None
