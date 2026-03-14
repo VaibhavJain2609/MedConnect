@@ -1,7 +1,9 @@
 import uuid as _uuid
+from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -12,11 +14,35 @@ from app.models.medical_record import MedicalRecord
 from app.models.patient_link import PatientClinicLink
 from app.models.user import User
 from app.schemas.common import PaginatedResponse, PaginationMeta
-from app.schemas.prescription import PrescriptionCreate, PrescriptionResponse
+from app.schemas.prescription import PrescriptionCreate, PrescriptionMedicineItem, PrescriptionResponse
 from app.schemas.record import RecordCreate, RecordResponse
 from app.schemas.user import DoctorProfileCreate, DoctorProfileResponse
 from app.services.prescription_service import create_prescription
 from app.services.record_service import create_record, get_doctor_patients, get_patient_timeline
+
+
+# ---------------------------------------------------------------------------
+# Pydantic models for template endpoints
+# ---------------------------------------------------------------------------
+
+class PrescriptionTemplateCreate(BaseModel):
+    name: str
+    medicines: list[PrescriptionMedicineItem]
+    diagnosis: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class PrescriptionTemplateResponse(BaseModel):
+    id: UUID
+    doctor_id: UUID
+    name: str
+    medicines: list[dict]
+    diagnosis: Optional[str]
+    notes: Optional[str]
+    created_at: str
+
+    class Config:
+        from_attributes = True
 
 router = APIRouter(prefix="/api/v1/doctors", tags=["doctors"])
 
@@ -530,3 +556,175 @@ async def update_profile(
         doctor.facility_city = req.facility_city
     await db.flush()
     return doctor
+
+
+# ---------------------------------------------------------------------------
+# MD-246: Single prescription GET endpoint (for print view)
+# ---------------------------------------------------------------------------
+
+@router.get("/prescriptions/{prescription_id}")
+async def get_prescription(
+    prescription_id: UUID,
+    doctor_info: tuple = Depends(get_current_doctor),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get a single prescription with patient and doctor info (for print view).
+    """
+    from sqlalchemy import select, or_
+    from app.models.prescription import Prescription
+
+    user, doctor = doctor_info
+
+    stmt = (
+        select(Prescription, MedicalRecord, User.full_name.label("patient_name"))
+        .join(MedicalRecord, MedicalRecord.id == Prescription.record_id)
+        .outerjoin(User, User.id == Prescription.patient_id)
+        .where(
+            Prescription.id == prescription_id,
+            Prescription.deleted_at.is_(None),
+            MedicalRecord.deleted_at.is_(None),
+            MedicalRecord.doctor_id == doctor.id,
+        )
+    )
+
+    result = await db.execute(stmt)
+    row = result.first()
+
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "NOT_FOUND", "message": "Prescription not found"}},
+        )
+
+    prescription, record, patient_name = row
+
+    doctor_user_stmt = select(User).where(User.id == doctor.user_id)
+    doctor_user_result = await db.execute(doctor_user_stmt)
+    doctor_user = doctor_user_result.scalar_one_or_none()
+
+    return {
+        "id": str(prescription.id),
+        "record_id": str(record.id),
+        "medicines": prescription.medicines,
+        "diagnosis": prescription.diagnosis,
+        "notes": prescription.notes,
+        "valid_until": prescription.valid_until.isoformat() if prescription.valid_until else None,
+        "created_at": prescription.created_at.isoformat(),
+        "patient_id": str(prescription.patient_id),
+        "patient_name": patient_name,
+        "doctor": {
+            "name": doctor_user.full_name if doctor_user else None,
+            "specialization": doctor.specialization,
+            "license_number": doctor.license_number,
+            "facility_name": doctor.facility_name,
+            "facility_city": doctor.facility_city,
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# MD-247: Prescription template endpoints
+# ---------------------------------------------------------------------------
+
+@router.post("/prescription-templates", response_model=PrescriptionTemplateResponse, status_code=status.HTTP_201_CREATED)
+async def create_prescription_template(
+    req: PrescriptionTemplateCreate,
+    doctor_info: tuple = Depends(get_current_doctor),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new prescription template for quick reuse."""
+    from app.models.prescription import PrescriptionTemplate
+
+    _, doctor = doctor_info
+
+    template = PrescriptionTemplate(
+        doctor_id=doctor.id,
+        name=req.name,
+        medicines=[m.model_dump() for m in req.medicines],
+        diagnosis=req.diagnosis,
+        notes=req.notes,
+    )
+    db.add(template)
+    await db.flush()
+
+    return {
+        "id": template.id,
+        "doctor_id": template.doctor_id,
+        "name": template.name,
+        "medicines": template.medicines,
+        "diagnosis": template.diagnosis,
+        "notes": template.notes,
+        "created_at": template.created_at.isoformat(),
+    }
+
+
+@router.get("/prescription-templates")
+async def list_prescription_templates(
+    doctor_info: tuple = Depends(get_current_doctor),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all prescription templates for the logged-in doctor."""
+    from sqlalchemy import select
+    from app.models.prescription import PrescriptionTemplate
+
+    _, doctor = doctor_info
+
+    stmt = (
+        select(PrescriptionTemplate)
+        .where(
+            PrescriptionTemplate.doctor_id == doctor.id,
+            PrescriptionTemplate.deleted_at.is_(None),
+        )
+        .order_by(PrescriptionTemplate.created_at.desc())
+    )
+
+    result = await db.execute(stmt)
+    templates = result.scalars().all()
+
+    return {
+        "data": [
+            {
+                "id": str(t.id),
+                "doctor_id": str(t.doctor_id),
+                "name": t.name,
+                "medicines": t.medicines,
+                "diagnosis": t.diagnosis,
+                "notes": t.notes,
+                "created_at": t.created_at.isoformat(),
+            }
+            for t in templates
+        ]
+    }
+
+
+@router.delete("/prescription-templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_prescription_template(
+    template_id: UUID,
+    doctor_info: tuple = Depends(get_current_doctor),
+    db: AsyncSession = Depends(get_db),
+):
+    """Soft-delete a prescription template."""
+    from sqlalchemy import select
+    from datetime import datetime, timezone
+    from app.models.prescription import PrescriptionTemplate
+
+    _, doctor = doctor_info
+
+    stmt = select(PrescriptionTemplate).where(
+        PrescriptionTemplate.id == template_id,
+        PrescriptionTemplate.doctor_id == doctor.id,
+        PrescriptionTemplate.deleted_at.is_(None),
+    )
+    result = await db.execute(stmt)
+    template = result.scalar_one_or_none()
+
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "NOT_FOUND", "message": "Template not found"}},
+        )
+
+    template.deleted_at = datetime.now(timezone.utc)
+    await db.flush()
+    return None

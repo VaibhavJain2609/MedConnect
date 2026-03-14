@@ -9,13 +9,12 @@
  */
 
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { PrescriptionCard } from "@/components/prescription/PrescriptionCard";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Avatar } from "@/components/ui/avatar";
-import { ArrowLeft, Pencil, Pill } from "lucide-react";
+import { ArrowLeft, Pill, Printer } from "lucide-react";
 
 export default function PatientPrescriptionsPage() {
   const params = useParams();
@@ -108,6 +107,22 @@ export default function PatientPrescriptionsPage() {
           <div className="space-y-4">
             {prescriptionsData?.data?.map((prescription: any) => (
               <div key={prescription.id} className="relative">
+                <div className="absolute top-4 right-4 z-10">
+                  <button
+                    type="button"
+                    title="Print prescription"
+                    onClick={() =>
+                      window.open(
+                        `/doctor/prescriptions/${prescription.id}/print`,
+                        "_blank"
+                      )
+                    }
+                    className="flex items-center gap-1.5 rounded-md border border-dreams-border bg-white px-2.5 py-1.5 text-xs font-medium text-dreams-textSecondary hover:border-dreams-blue hover:text-dreams-blue transition-colors shadow-sm"
+                  >
+                    <Printer className="h-3.5 w-3.5" />
+                    Print
+                  </button>
+                </div>
                 <PrescriptionCard
                   prescription={{
                     id: prescription.id,
@@ -122,16 +137,6 @@ export default function PatientPrescriptionsPage() {
                   collapsible={true}
                   defaultExpanded={false}
                 />
-                {/* MD-260: Amend button — opens new record form pre-filled */}
-                <div className="mt-2 flex justify-end">
-                  <Link
-                    href={`/doctor/records/new?patient_id=${patientId}&amend_from=${prescription.record_id || prescription.id}&record_type=prescription&title=${encodeURIComponent("Amendment: " + (prescription.diagnosis || "Prescription"))}`}
-                    className="flex items-center gap-1.5 rounded-lg border border-dreams-border px-3 py-1.5 text-xs font-medium text-dreams-textSecondary hover:border-dreams-blue hover:text-dreams-blue transition-colors"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                    Amend
-                  </Link>
-                </div>
               </div>
             ))}
           </div>

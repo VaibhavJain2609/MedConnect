@@ -26,6 +26,7 @@ interface MedicineAutocompleteProps {
     manufacturerName: string;
     dosageForm: string;
     strength: string;
+    saltId?: string;
   }) => void;
   placeholder?: string;
   disabled?: boolean;
@@ -126,6 +127,7 @@ export default function MedicineAutocomplete({
             manufacturerName: medicine.manufacturer_name,
             dosageForm: medicine.dosage_form,
             strength: medicine.strength,
+            saltId: medicine.salt_id,
           });
 
           // DON'T clear - keep the selected value visible

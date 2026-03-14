@@ -98,15 +98,22 @@ async def autocomplete_medicines(
     autocomplete_results = []
     for brand in brands[:10]:  # Return top 10 after ranking
         # Build salt composition string
+        sorted_compositions = sorted(brand.compositions, key=lambda x: x.sequence)
         salt_comp = " + ".join([
             f"{bc.salt_strength.salt.salt_name} ({bc.salt_strength.display_strength})"
-            for bc in sorted(brand.compositions, key=lambda x: x.sequence)
+            for bc in sorted_compositions
         ])
+
+        # Get the primary salt_id (first composition by sequence) for interaction checks
+        primary_salt_id = None
+        if sorted_compositions:
+            primary_salt_id = str(sorted_compositions[0].salt_strength.salt.salt_id)
 
         autocomplete_results.append({
             "brand_id": str(brand.brand_id),
             "brand_name": brand.brand_name,
             "salt_composition": salt_comp,
+            "salt_id": primary_salt_id,  # Primary salt for drug interaction checking
             "manufacturer_name": brand.manufacturer.manufacturer_name,
             "manufacturer_id": str(brand.manufacturer_id),
             "dosage_form": brand.drug_type.title() if brand.drug_type else "Medicine",
