@@ -23,6 +23,7 @@ from app.dependencies import get_active_clinic, get_current_user, require_patien
 from app.models.clinic import Clinic, ClinicMembership
 from app.models.patient_link import PatientClinicLink, PatientLinkCode
 from app.models.user import User
+from app.services.notification_service import create_notification
 
 router = APIRouter(prefix="/api/v1", tags=["patient-links"])
 
@@ -236,6 +237,21 @@ async def update_consent(
     if data.action == "approved":
         link.consented_at = datetime.utcnow()
     await db.flush()
+
+    # Notify the doctor who created the link
+    doctor_user = await db.get(User, link.linked_by)
+    if doctor_user:
+        patient_name = user.full_name or "A patient"
+        action_label = "approved" if data.action == "approved" else "revoked"
+        await create_notification(
+            db=db,
+            user_id=doctor_user.id,
+            notif_type="system",
+            title=f"Patient {patient_name} {action_label} clinic access",
+            body=f"{patient_name} has {action_label} their consent for clinic access.",
+            action_url="/doctor/patients/link",
+        )
+
     return {"consent_status": link.consent_status}
 
 

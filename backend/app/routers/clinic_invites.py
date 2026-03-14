@@ -26,6 +26,7 @@ from app.models.clinic import Clinic, ClinicMembership
 from app.models.clinic_invite import ClinicInvite, ClinicJoinRequest
 from app.models.user import User
 from app.services import clinic_service
+from app.services.notification_service import create_notification
 
 router = APIRouter(prefix="/api/v1", tags=["clinic-invites"])
 
@@ -387,4 +388,22 @@ async def review_join_request(
         db.add(membership)
 
     await db.flush()
+
+    # Notify the doctor who submitted the join request
+    clinic_result = await db.execute(
+        select(Clinic).where(Clinic.id == cid, Clinic.deleted_at.is_(None))
+    )
+    clinic = clinic_result.scalar_one_or_none()
+    clinic_name = clinic.name if clinic else "the clinic"
+
+    action_label = "approved" if data.action == "approved" else "rejected"
+    await create_notification(
+        db=db,
+        user_id=req.user_id,
+        notif_type="system",
+        title=f"Your join request to {clinic_name} was {action_label}",
+        body=f"Your request to join {clinic_name} has been {action_label}.",
+        action_url="/doctor/clinic",
+    )
+
     return {"status": data.action, "request_id": str(rid)}
