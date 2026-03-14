@@ -133,6 +133,11 @@ export default function TimelinePage() {
                           Self-uploaded
                         </span>
                       )}
+                      {record.amended_from_id && (
+                        <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+                          Amended
+                        </span>
+                      )}
                     </div>
                     <h3 className="font-medium text-dreams-textPrimary">{record.title}</h3>
                     {record.doctor_name && (

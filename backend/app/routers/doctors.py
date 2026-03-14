@@ -1,3 +1,4 @@
+import uuid as _uuid
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -7,6 +8,7 @@ from app.database import get_db
 from app.dependencies import get_active_clinic, get_current_doctor
 from app.models.clinic import ClinicMembership
 from app.models.doctor import Doctor
+from app.models.medical_record import MedicalRecord
 from app.models.patient_link import PatientClinicLink
 from app.models.user import User
 from app.schemas.common import PaginatedResponse, PaginationMeta
@@ -34,6 +36,139 @@ async def list_patients(
         data=patients,
         pagination=PaginationMeta(next_cursor=next_cursor, has_more=has_more, limit=limit),
     )
+
+
+@router.get("/patients/search")
+async def search_patients(
+    q: str = Query(..., min_length=2),
+    doctor_info: tuple = Depends(get_current_doctor),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Search patients by name or phone among the doctor's known patients.
+    Known patients = patients with records created by this doctor OR
+    patients approved via clinic links for any of the doctor's clinics.
+    Returns: [{id, full_name, phone, last_visit_at}]
+    """
+    from sqlalchemy import select, or_, func, union
+    from app.models.clinic import ClinicMembership
+
+    _, doctor = doctor_info
+
+    search_term = f"%{q}%"
+
+    # Sub-query 1: patients who have records created by this doctor
+    records_subq = (
+        select(
+            User.id,
+            User.full_name,
+            User.phone,
+            MedicalRecord.created_at.label("last_visit_at"),
+        )
+        .join(MedicalRecord, MedicalRecord.patient_id == User.id)
+        .where(
+            MedicalRecord.doctor_id == doctor.id,
+            MedicalRecord.deleted_at.is_(None),
+            User.deleted_at.is_(None),
+            or_(
+                User.full_name.ilike(search_term),
+                User.phone.ilike(search_term),
+            ),
+        )
+    )
+
+    # Sub-query 2: patients with approved clinic links for this doctor's clinics
+    clinic_subq = (
+        select(
+            User.id,
+            User.full_name,
+            User.phone,
+            PatientClinicLink.created_at.label("last_visit_at"),
+        )
+        .join(PatientClinicLink, PatientClinicLink.patient_id == User.id)
+        .join(
+            ClinicMembership,
+            ClinicMembership.clinic_id == PatientClinicLink.clinic_id,
+        )
+        .where(
+            ClinicMembership.user_id == doctor.user_id,
+            ClinicMembership.is_active.is_(True),
+            ClinicMembership.deleted_at.is_(None),
+            PatientClinicLink.consent_status == "approved",
+            PatientClinicLink.deleted_at.is_(None),
+            User.deleted_at.is_(None),
+            or_(
+                User.full_name.ilike(search_term),
+                User.phone.ilike(search_term),
+            ),
+        )
+    )
+
+    # Combine both sub-queries via UNION
+    combined = union(records_subq, clinic_subq).subquery()
+
+    # Select distinct patients with their latest visit
+    stmt = (
+        select(
+            combined.c.id,
+            combined.c.full_name,
+            combined.c.phone,
+            func.max(combined.c.last_visit_at).label("last_visit_at"),
+        )
+        .group_by(combined.c.id, combined.c.full_name, combined.c.phone)
+        .order_by(combined.c.full_name)
+        .limit(20)
+    )
+
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    return {
+        "data": [
+            {
+                "id": str(row.id),
+                "full_name": row.full_name,
+                "phone": row.phone,
+                "last_visit_at": row.last_visit_at.isoformat() if row.last_visit_at else None,
+            }
+            for row in rows
+        ]
+    }
+
+
+@router.get("/patients/{patient_id}/profile")
+async def get_patient_profile(
+    patient_id: UUID,
+    doctor_info: tuple = Depends(get_current_doctor),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Doctor-facing patient profile endpoint.
+    Returns: {id, full_name, phone, email, blood_group, allergies, chronic_conditions}
+    """
+    from sqlalchemy import select
+
+    patient_result = await db.execute(
+        select(User).where(User.id == patient_id, User.deleted_at.is_(None))
+    )
+    patient = patient_result.scalar_one_or_none()
+    if not patient:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "NOT_FOUND", "message": "Patient not found"}},
+        )
+
+    return {
+        "id": str(patient.id),
+        "full_name": patient.full_name,
+        "phone": patient.phone,
+        "email": patient.email,
+        "blood_group": patient.blood_group,
+        "allergies": patient.allergies or [],
+        "chronic_conditions": patient.chronic_conditions or [],
+        "height_cm": patient.height_cm,
+        "weight_kg": patient.weight_kg,
+    }
 
 
 async def _check_patient_consent(db: AsyncSession, patient_id: UUID, clinic_id: UUID) -> None:
@@ -172,6 +307,11 @@ async def create_medical_record(
     db: AsyncSession = Depends(get_db),
     clinic_context: tuple | None = Depends(get_active_clinic),
 ):
+    if not req.patient_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": {"code": "VALIDATION_ERROR", "message": "patient_id is required"}},
+        )
     _, doctor = doctor_info
     clinic_id = clinic_context[0] if clinic_context else None
     if clinic_id:
@@ -194,6 +334,75 @@ async def create_medical_record(
             detail={"error": {"code": "VALIDATION_ERROR", "message": str(e)}},
         )
     return record
+
+
+@router.post("/records/{record_id}/amend", response_model=RecordResponse, status_code=status.HTTP_201_CREATED)
+async def amend_record(
+    record_id: UUID,
+    req: RecordCreate,
+    doctor_info=Depends(get_current_doctor),
+    db: AsyncSession = Depends(get_db),
+    clinic_context=Depends(get_active_clinic),
+):
+    """
+    Create an amendment of an existing medical record.
+    The original record is preserved; the new record links back via amended_from_id.
+    """
+    # Verify original record exists
+    original = await db.get(MedicalRecord, record_id)
+    if not original or original.deleted_at:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "NOT_FOUND", "message": "Original record not found"}},
+        )
+
+    _, doctor = doctor_info
+    clinic_id = clinic_context[0] if clinic_context else None
+
+    if clinic_id:
+        await _check_patient_consent(db, original.patient_id, clinic_id)
+
+    from app.utils.fhir import create_fhir_bundle
+
+    fhir_bundle = req.fhir_bundle or create_fhir_bundle(
+        record_type=req.record_type or original.record_type,
+        data={"description": req.description or ""},
+        patient_id=original.patient_id,
+        doctor_id=doctor.id,
+    )
+
+    amended = MedicalRecord(
+        id=_uuid.uuid4(),
+        patient_id=original.patient_id,
+        doctor_id=doctor.id,
+        record_type=req.record_type or original.record_type,
+        title=req.title,
+        description=req.description,
+        fhir_bundle=fhir_bundle,
+        clinic_id=clinic_id,
+        amended_from_id=record_id,
+        source="amended",
+    )
+    db.add(amended)
+    await db.flush()
+
+    from app.services.audit_service import log_change
+    await log_change(
+        db=db,
+        table_name="medical_records",
+        record_id=amended.id,
+        action="INSERT",
+        old_values=None,
+        new_values={
+            "record_type": amended.record_type,
+            "patient_id": str(amended.patient_id),
+            "doctor_id": str(doctor.id),
+            "title": amended.title,
+            "amended_from_id": str(record_id),
+        },
+    )
+
+    return amended
 
 
 @router.post("/prescriptions", response_model=PrescriptionResponse, status_code=status.HTTP_201_CREATED)

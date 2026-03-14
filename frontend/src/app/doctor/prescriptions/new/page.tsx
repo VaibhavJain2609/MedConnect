@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import MedicineAutocomplete from "@/components/medicine/MedicineAutocomplete";
@@ -54,12 +55,33 @@ const FOOD_RELATION_OPTIONS = [
 export default function NewPrescriptionPage() {
   const router = useRouter();
   const [patientId, setPatientId] = useState("");
+  const [selectedPatientName, setSelectedPatientName] = useState<string | null>(null);
   const [diagnosis, setDiagnosis] = useState("");
   const [notes, setNotes] = useState("");
   const [medicines, setMedicines] = useState<Medicine[]>([{ ...EMPTY_MEDICINE }]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+
+  // Fetch recent patients from prescription history (MD-263)
+  const { data: recentPrescriptionsData } = useQuery({
+    queryKey: ["doctor-prescriptions-recent"],
+    queryFn: async () => {
+      const res = await api.get("/api/v1/doctors/prescriptions", { params: { limit: 10 } });
+      return res.data;
+    },
+  });
+
+  // Deduplicate patients from recent prescriptions, take first 5 unique
+  const recentPatients: Array<{ id: string; name: string }> = [];
+  const seenPatientIds = new Set<string>();
+  for (const rx of recentPrescriptionsData?.data ?? []) {
+    if (rx.patient_id && !seenPatientIds.has(rx.patient_id)) {
+      seenPatientIds.add(rx.patient_id);
+      recentPatients.push({ id: rx.patient_id, name: rx.patient_name || "Patient" });
+    }
+    if (recentPatients.length >= 5) break;
+  }
 
   const updateMedicine = (index: number, field: keyof Medicine, value: any) => {
     const updated = [...medicines];
@@ -195,20 +217,55 @@ export default function NewPrescriptionPage() {
             </div>
           )}
 
+          {/* Recent patients quick-select (MD-263) */}
+          {!patientId && recentPatients.length > 0 && (
+            <div className="mb-4">
+              <p className="mb-2 text-xs font-medium text-dreams-textSecondary">Recent patients</p>
+              <div className="flex flex-wrap gap-2">
+                {recentPatients.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => {
+                      setPatientId(p.id);
+                      setSelectedPatientName(p.name);
+                    }}
+                    className="rounded-full border border-dreams-border bg-white px-3 py-1 text-xs font-medium text-dreams-textPrimary hover:border-dreams-blue hover:text-dreams-blue transition-colors"
+                  >
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="mb-4">
             <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
               Patient ID *
             </label>
-            <input
-              type="text"
-              value={patientId}
-              onChange={(e) => setPatientId(e.target.value)}
-              placeholder="e.g., 123e4567-e89b-12d3-a456-426614174000"
-              className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm font-mono focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
-              required
-            />
+            {selectedPatientName && patientId ? (
+              <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2">
+                <span className="flex-1 text-sm font-medium text-green-900">{selectedPatientName}</span>
+                <button
+                  type="button"
+                  onClick={() => { setPatientId(""); setSelectedPatientName(null); }}
+                  className="text-xs text-green-700 hover:text-red-600"
+                >
+                  Change
+                </button>
+              </div>
+            ) : (
+              <input
+                type="text"
+                value={patientId}
+                onChange={(e) => { setPatientId(e.target.value); setSelectedPatientName(null); }}
+                placeholder="e.g., 123e4567-e89b-12d3-a456-426614174000"
+                className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm font-mono focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+                required
+              />
+            )}
             <p className="mt-1 text-xs text-dreams-textSecondary">
-              Enter the patient's UUID. You can find this from the patient list or timeline.
+              Enter the patient's UUID or select a recent patient above.
             </p>
           </div>
 

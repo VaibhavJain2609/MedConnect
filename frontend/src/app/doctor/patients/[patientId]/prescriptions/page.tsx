@@ -9,12 +9,13 @@
  */
 
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { PrescriptionCard } from "@/components/prescription/PrescriptionCard";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Avatar } from "@/components/ui/avatar";
-import { ArrowLeft, Pill } from "lucide-react";
+import { ArrowLeft, Pencil, Pill } from "lucide-react";
 
 export default function PatientPrescriptionsPage() {
   const params = useParams();
@@ -106,21 +107,32 @@ export default function PatientPrescriptionsPage() {
         ) : (
           <div className="space-y-4">
             {prescriptionsData?.data?.map((prescription: any) => (
-              <PrescriptionCard
-                key={prescription.id}
-                prescription={{
-                  id: prescription.id,
-                  medicines: prescription.medicines || [],
-                  diagnosis: prescription.diagnosis,
-                  notes: prescription.notes,
-                  created_at: prescription.created_at,
-                  valid_until: prescription.valid_until,
-                  doctor_name: prescription.doctor_name,
-                }}
-                variant="doctor"
-                collapsible={true}
-                defaultExpanded={false}
-              />
+              <div key={prescription.id} className="relative">
+                <PrescriptionCard
+                  prescription={{
+                    id: prescription.id,
+                    medicines: prescription.medicines || [],
+                    diagnosis: prescription.diagnosis,
+                    notes: prescription.notes,
+                    created_at: prescription.created_at,
+                    valid_until: prescription.valid_until,
+                    doctor_name: prescription.doctor_name,
+                  }}
+                  variant="doctor"
+                  collapsible={true}
+                  defaultExpanded={false}
+                />
+                {/* MD-260: Amend button — opens new record form pre-filled */}
+                <div className="mt-2 flex justify-end">
+                  <Link
+                    href={`/doctor/records/new?patient_id=${patientId}&amend_from=${prescription.record_id || prescription.id}&record_type=prescription&title=${encodeURIComponent("Amendment: " + (prescription.diagnosis || "Prescription"))}`}
+                    className="flex items-center gap-1.5 rounded-lg border border-dreams-border px-3 py-1.5 text-xs font-medium text-dreams-textSecondary hover:border-dreams-blue hover:text-dreams-blue transition-colors"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Amend
+                  </Link>
+                </div>
+              </div>
             ))}
           </div>
         )}

@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, field_validator
@@ -10,7 +11,7 @@ VALID_RECORD_TYPES = [
 
 
 class RecordCreate(BaseModel):
-    patient_id: UUID
+    patient_id: Optional[UUID] = None
     record_type: str
     title: str
     description: str | None = None
@@ -35,6 +36,7 @@ class RecordResponse(BaseModel):
     fhir_bundle: dict | None
     document_url: str | None = None
     source: str
+    amended_from_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
 
