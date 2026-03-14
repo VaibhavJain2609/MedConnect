@@ -15,6 +15,7 @@ class RecordCreate(BaseModel):
     title: str
     description: str | None = None
     fhir_bundle: dict | None = None
+    document_url: str | None = None
 
     @field_validator("record_type")
     @classmethod
@@ -32,6 +33,7 @@ class RecordResponse(BaseModel):
     title: str
     description: str | None
     fhir_bundle: dict | None
+    document_url: str | None = None
     source: str
     created_at: datetime
     updated_at: datetime

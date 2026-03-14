@@ -186,6 +186,7 @@ async def create_medical_record(
             description=req.description,
             fhir_bundle=req.fhir_bundle,
             clinic_id=clinic_id,
+            document_url=req.document_url,
         )
     except ValueError as e:
         raise HTTPException(

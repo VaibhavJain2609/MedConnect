@@ -13,12 +13,14 @@ from app.utils.fhir import create_fhir_bundle
 async def create_record(
     db: AsyncSession,
     patient_id: UUID,
-    doctor_id: UUID,
+    doctor_id: UUID | None,
     record_type: str,
     title: str,
     description: str | None = None,
     fhir_bundle: dict | None = None,
     clinic_id: UUID | None = None,
+    document_url: str | None = None,
+    source: str = "doctor",
 ) -> MedicalRecord:
     patient = await db.execute(
         select(User).where(User.id == patient_id, User.role == "patient", User.deleted_at.is_(None))
@@ -41,11 +43,28 @@ async def create_record(
         title=title,
         description=description,
         fhir_bundle=fhir_bundle,
-        source="doctor",
+        source=source,
         clinic_id=clinic_id,
+        document_url=document_url,
     )
     db.add(record)
     await db.flush()
+
+    from app.services.audit_service import log_change
+    await log_change(
+        db=db,
+        table_name="medical_records",
+        record_id=record.id,
+        action="INSERT",
+        old_values=None,
+        new_values={
+            "record_type": record_type,
+            "patient_id": str(patient_id),
+            "doctor_id": str(doctor_id) if doctor_id else None,
+            "title": title,
+        },
+    )
+
     return record
 
 
@@ -113,6 +132,7 @@ async def get_patient_timeline(
             "title": record.title,
             "source": record.source,
             "doctor_name": doctor_name,
+            "document_url": record.document_url,
             "created_at": record.created_at.isoformat(),
         }
 
