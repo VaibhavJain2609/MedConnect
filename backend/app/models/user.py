@@ -38,6 +38,11 @@ class User(Base):
     notification_preferences: Mapped["NotificationPreferences"] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
+    vitals: Mapped[list["PatientVital"]] = relationship(
+        back_populates="patient",
+        foreign_keys="PatientVital.patient_id",
+        cascade="all, delete-orphan",
+    )
 
     __table_args__ = (
         Index("idx_users_email", "email", postgresql_where=(deleted_at.is_(None))),

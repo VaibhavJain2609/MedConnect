@@ -648,6 +648,7 @@ export interface MedicineAutocompleteResult {
   manufacturer_id: string;
   dosage_form: string;
   strength: string;
+  salt_id?: string;  // Primary salt ID for drug interaction checking (MD-244)
 }
 
 export interface MedicineAutocompleteResponse {

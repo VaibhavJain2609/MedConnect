@@ -20,8 +20,12 @@ class MedicalRecord(Base):
     fhir_bundle: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     raw_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     ai_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    clinic_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("clinics.id"), nullable=True)
     source: Mapped[str] = mapped_column(String(20), default="manual")
     document_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    amended_from_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("medical_records.id"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -29,10 +33,18 @@ class MedicalRecord(Base):
     patient: Mapped["User"] = relationship(back_populates="records_as_patient", foreign_keys=[patient_id])
     doctor: Mapped["Doctor"] = relationship(back_populates="records")
     prescription: Mapped["Prescription"] = relationship(back_populates="record", uselist=False)
+    amended_from: Mapped["MedicalRecord | None"] = relationship(
+        "MedicalRecord",
+        foreign_keys="[MedicalRecord.amended_from_id]",
+        primaryjoin="MedicalRecord.amended_from_id == MedicalRecord.id",
+        uselist=False,
+    )
 
     __table_args__ = (
         Index("idx_records_patient_id", "patient_id", "created_at", postgresql_where=(deleted_at.is_(None))),
         Index("idx_records_doctor_id", "doctor_id", postgresql_where=(deleted_at.is_(None))),
         Index("idx_records_type", "record_type", postgresql_where=(deleted_at.is_(None))),
         Index("idx_records_created", "created_at", postgresql_where=(deleted_at.is_(None))),
+        Index("idx_records_clinic", "clinic_id", postgresql_where=(deleted_at.is_(None))),
+        Index("idx_records_amended_from", "amended_from_id"),
     )

@@ -1,0 +1,353 @@
+"use client";
+
+import { useParams } from "next/navigation";
+import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
+import api from "@/lib/api";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
+import { Badge } from "@/components/ui/badge";
+import { FileText, Pill, Activity, User, AlertCircle } from "lucide-react";
+
+const VITAL_LABELS: Record<string, { label: string; unit: string }> = {
+  bp_systolic: { label: "BP Systolic", unit: "mmHg" },
+  bp_diastolic: { label: "BP Diastolic", unit: "mmHg" },
+  pulse: { label: "Pulse", unit: "bpm" },
+  spo2: { label: "SpO2", unit: "%" },
+  temperature_c: { label: "Temperature", unit: "°C" },
+  weight_kg: { label: "Weight", unit: "kg" },
+  glucose_fasting: { label: "Glucose (Fasting)", unit: "mg/dL" },
+  glucose_pp: { label: "Glucose (PP)", unit: "mg/dL" },
+};
+
+const RECORD_TYPE_LABELS: Record<string, string> = {
+  prescription: "Prescription",
+  opd_note: "OPD Note",
+  lab_report: "Lab Report",
+  diagnostic_report: "Diagnostic Report",
+  discharge_summary: "Discharge Summary",
+  imaging: "Imaging",
+  immunization: "Immunization",
+  other: "Other",
+};
+
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+export default function DoctorPatientProfilePage() {
+  const params = useParams();
+  const patientId = params.id as string;
+
+  const { data: profile, isLoading: profileLoading } = useQuery({
+    queryKey: ["doctor-patient-profile", patientId],
+    queryFn: async () => {
+      const res = await api.get(`/api/v1/doctors/patients/${patientId}/profile`);
+      return res.data;
+    },
+    enabled: !!patientId,
+  });
+
+  const { data: recordsData, isLoading: recordsLoading } = useQuery({
+    queryKey: ["doctor-patient-records", patientId],
+    queryFn: async () => {
+      const res = await api.get(`/api/v1/doctors/patients/${patientId}/records`, {
+        params: { limit: 3 },
+      });
+      return res.data;
+    },
+    enabled: !!patientId,
+  });
+
+  const { data: prescriptionsData, isLoading: prescriptionsLoading } = useQuery({
+    queryKey: ["doctor-patient-prescriptions-latest", patientId],
+    queryFn: async () => {
+      const res = await api.get(`/api/v1/doctors/patients/${patientId}/prescriptions`, {
+        params: { limit: 1 },
+      });
+      return res.data;
+    },
+    enabled: !!patientId,
+  });
+
+  const { data: vitalsData, isLoading: vitalsLoading } = useQuery({
+    queryKey: ["doctor-patient-vitals", patientId],
+    queryFn: async () => {
+      const res = await api.get(`/api/v1/doctors/patients/${patientId}/vitals`, {
+        params: { days: 7 },
+      });
+      return res.data;
+    },
+    enabled: !!patientId,
+  });
+
+  const patientName = profile?.full_name || "Patient";
+
+  // Deduplicate vitals — keep only latest reading per type
+  const latestVitals: Record<string, { value: number; unit: string; recorded_at: string }> = {};
+  if (vitalsData?.data) {
+    for (const vital of vitalsData.data) {
+      if (!latestVitals[vital.vital_type]) {
+        latestVitals[vital.vital_type] = {
+          value: vital.value,
+          unit: vital.unit,
+          recorded_at: vital.recorded_at,
+        };
+      }
+    }
+  }
+
+  // Latest prescription medicines
+  const latestPrescription = prescriptionsData?.data?.[0];
+  const activeMedicines: string[] = latestPrescription?.medicines?.map((m: any) => m.name) || [];
+
+  return (
+    <div className="space-y-6">
+      <Breadcrumb
+        items={[
+          { label: "Dashboard", href: "/doctor/dashboard" },
+          { label: "Patients", href: "/doctor/patients" },
+          { label: profileLoading ? "Loading..." : patientName },
+        ]}
+      />
+
+      {/* Header */}
+      {profileLoading ? (
+        <div className="animate-pulse rounded-xl border border-dreams-border bg-white p-6 shadow-card">
+          <div className="flex items-center gap-4">
+            <div className="h-16 w-16 rounded-full bg-gray-200" />
+            <div className="space-y-2">
+              <div className="h-5 w-48 rounded bg-gray-200" />
+              <div className="h-4 w-32 rounded bg-gray-200" />
+            </div>
+          </div>
+        </div>
+      ) : profile ? (
+        <div className="rounded-xl border border-dreams-border bg-white p-6 shadow-card">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-dreams-blue text-xl font-bold text-white">
+                {getInitials(profile.full_name)}
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-dreams-textPrimary">{profile.full_name}</h1>
+                <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-dreams-textSecondary">
+                  {profile.phone && <span>{profile.phone}</span>}
+                  {profile.email && <span>{profile.email}</span>}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center">
+          <AlertCircle className="mx-auto h-6 w-6 text-red-500" />
+          <p className="mt-2 text-sm font-medium text-red-800">Patient not found</p>
+        </div>
+      )}
+
+      {/* Medical Info */}
+      {profile && (
+        <div className="rounded-xl border border-dreams-border bg-white p-6 shadow-card">
+          <div className="mb-4 flex items-center gap-2">
+            <User className="h-4 w-4 text-dreams-textSecondary" />
+            <h2 className="text-base font-semibold text-dreams-textPrimary">Medical Information</h2>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div>
+              <p className="text-xs text-dreams-textSecondary">Blood Group</p>
+              {profile.blood_group ? (
+                <Badge variant="inProgress" className="mt-1">
+                  {profile.blood_group}
+                </Badge>
+              ) : (
+                <p className="mt-1 text-sm text-dreams-textSecondary">Not recorded</p>
+              )}
+            </div>
+            <div>
+              <p className="text-xs text-dreams-textSecondary">Allergies</p>
+              {profile.allergies && profile.allergies.length > 0 ? (
+                <p className="mt-1 text-sm text-dreams-textPrimary">
+                  {profile.allergies.join(", ")}
+                </p>
+              ) : (
+                <p className="mt-1 text-sm text-dreams-textSecondary">None recorded</p>
+              )}
+            </div>
+            <div>
+              <p className="text-xs text-dreams-textSecondary">Chronic Conditions</p>
+              {profile.chronic_conditions && profile.chronic_conditions.length > 0 ? (
+                <p className="mt-1 text-sm text-dreams-textPrimary">
+                  {profile.chronic_conditions.join(", ")}
+                </p>
+              ) : (
+                <p className="mt-1 text-sm text-dreams-textSecondary">None recorded</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Vitals Panel (MD-255) */}
+      <div className="rounded-xl border border-dreams-border bg-white p-6 shadow-card">
+        <div className="mb-4 flex items-center gap-2">
+          <Activity className="h-4 w-4 text-dreams-textSecondary" />
+          <h2 className="text-base font-semibold text-dreams-textPrimary">Recent Vitals</h2>
+          <span className="text-xs text-dreams-textSecondary">(last 7 days)</span>
+        </div>
+        {vitalsLoading ? (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-16 animate-pulse rounded-lg bg-gray-100" />
+            ))}
+          </div>
+        ) : Object.keys(latestVitals).length === 0 ? (
+          <div className="rounded-lg border border-dashed border-dreams-border p-4 text-center">
+            <p className="text-sm text-dreams-textSecondary">No vitals recorded in the last 7 days</p>
+            <p className="mt-1 text-xs text-dreams-textSecondary">
+              Patient can add vitals from their portal
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {Object.entries(latestVitals).map(([type, reading]) => {
+              const meta = VITAL_LABELS[type];
+              return (
+                <div
+                  key={type}
+                  className="rounded-lg border border-dreams-border bg-dreams-lightBg p-3"
+                >
+                  <p className="text-xs text-dreams-textSecondary">
+                    {meta?.label || type}
+                  </p>
+                  <p className="mt-1 text-lg font-bold text-dreams-textPrimary">
+                    {reading.value}
+                    <span className="ml-1 text-xs font-normal text-dreams-textSecondary">
+                      {meta?.unit || reading.unit}
+                    </span>
+                  </p>
+                  <p className="mt-0.5 text-xs text-dreams-textSecondary">
+                    {formatDate(reading.recorded_at)}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* Recent Records */}
+        <div className="rounded-xl border border-dreams-border bg-white p-6 shadow-card">
+          <div className="mb-4 flex items-center gap-2">
+            <FileText className="h-4 w-4 text-dreams-textSecondary" />
+            <h2 className="text-base font-semibold text-dreams-textPrimary">Recent Records</h2>
+          </div>
+          {recordsLoading ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-14 animate-pulse rounded-lg bg-gray-100" />
+              ))}
+            </div>
+          ) : recordsData?.data?.length === 0 ? (
+            <p className="text-sm text-dreams-textSecondary">No records found.</p>
+          ) : (
+            <div className="space-y-2">
+              {recordsData?.data?.map((record: any) => (
+                <div
+                  key={record.id}
+                  className="rounded-lg border border-dreams-border p-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-dreams-textPrimary">
+                        {record.title}
+                      </p>
+                      <p className="text-xs text-dreams-textSecondary">
+                        {RECORD_TYPE_LABELS[record.record_type] || record.record_type} &middot;{" "}
+                        {formatDate(record.created_at)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Active Medications */}
+        <div className="rounded-xl border border-dreams-border bg-white p-6 shadow-card">
+          <div className="mb-4 flex items-center gap-2">
+            <Pill className="h-4 w-4 text-dreams-textSecondary" />
+            <h2 className="text-base font-semibold text-dreams-textPrimary">Active Medications</h2>
+            {latestPrescription && (
+              <span className="text-xs text-dreams-textSecondary">
+                (from {formatDate(latestPrescription.created_at)})
+              </span>
+            )}
+          </div>
+          {prescriptionsLoading ? (
+            <div className="space-y-2">
+              {[1, 2].map((i) => (
+                <div key={i} className="h-8 animate-pulse rounded-lg bg-gray-100" />
+              ))}
+            </div>
+          ) : activeMedicines.length === 0 ? (
+            <p className="text-sm text-dreams-textSecondary">No active medications found.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {activeMedicines.map((name: string, idx: number) => (
+                <span
+                  key={idx}
+                  className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-dreams-blue"
+                >
+                  {name}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="rounded-xl border border-dreams-border bg-white p-6 shadow-card">
+        <h2 className="mb-4 text-base font-semibold text-dreams-textPrimary">Quick Actions</h2>
+        <div className="flex flex-wrap gap-3">
+          <Link
+            href={`/doctor/prescriptions/new?patientId=${patientId}`}
+            className="flex items-center gap-2 rounded-lg bg-dreams-blue px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+          >
+            <Pill className="h-4 w-4" />
+            New Prescription
+          </Link>
+          <Link
+            href={`/doctor/records/new?patient_id=${patientId}`}
+            className="flex items-center gap-2 rounded-lg border border-dreams-border px-4 py-2 text-sm font-medium text-dreams-textPrimary hover:bg-dreams-lightBg transition-colors"
+          >
+            <FileText className="h-4 w-4" />
+            New Record
+          </Link>
+          <Link
+            href={`/doctor/patients/${patientId}/prescriptions`}
+            className="flex items-center gap-2 rounded-lg border border-dreams-border px-4 py-2 text-sm font-medium text-dreams-textPrimary hover:bg-dreams-lightBg transition-colors"
+          >
+            <Activity className="h-4 w-4" />
+            View All Records
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}

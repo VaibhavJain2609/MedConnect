@@ -40,9 +40,21 @@ export default function TimelinePage() {
     <div className="space-y-6">
       <Breadcrumb items={[{ label: "Health Timeline" }]} />
 
-      <div>
-        <h1 className="text-3xl font-bold text-dreams-textPrimary">Health Timeline</h1>
-        <p className="text-dreams-textSecondary mt-1">Your complete health record history</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-dreams-textPrimary">Health Timeline</h1>
+          <p className="text-dreams-textSecondary mt-1">Your complete health record history</p>
+        </div>
+        <Link
+          href="/patient/records/new"
+          className="flex flex-shrink-0 items-center gap-2 rounded-lg bg-dreams-blue px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+          </svg>
+          Upload Record
+        </Link>
       </div>
 
       {/* Filters */}
@@ -75,7 +87,7 @@ export default function TimelinePage() {
         <div className="bg-white rounded-lg shadow-card p-12 text-center">
           <p className="text-dreams-textSecondary">No records found.</p>
           <p className="mt-1 text-sm text-dreams-textSecondary/70">
-            Your health records will appear here when a doctor creates them for you.
+            Your health records will appear here when a doctor creates them for you, or when you upload one.
           </p>
         </div>
       ) : (
@@ -116,12 +128,31 @@ export default function TimelinePage() {
                       <span className="text-xs text-dreams-textSecondary">
                         {formatDate(record.created_at)}
                       </span>
+                      {record.source === "patient_uploaded" && (
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-dreams-textSecondary">
+                          Self-uploaded
+                        </span>
+                      )}
+                      {record.amended_from_id && (
+                        <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+                          Amended
+                        </span>
+                      )}
                     </div>
                     <h3 className="font-medium text-dreams-textPrimary">{record.title}</h3>
                     {record.doctor_name && (
                       <p className="mt-0.5 text-sm text-dreams-textSecondary">
                         by {record.doctor_name}
                       </p>
+                    )}
+                    {record.document_url && (
+                      <div className="mt-1.5 flex items-center gap-1.5 text-xs text-dreams-blue">
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                        </svg>
+                        Document attached
+                      </div>
                     )}
                   </div>
                   <svg

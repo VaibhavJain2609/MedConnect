@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { DoctorSidebar } from "./doctor-sidebar";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
@@ -13,11 +15,38 @@ import {
 } from "lucide-react";
 import { logout } from "@/lib/auth";
 import { useAuthStore } from "@/stores/auth-store";
+import { ClinicSelector } from "@/components/layout/clinic-selector";
+import api from "@/lib/api";
 
 export function DoctorLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { user } = useAuthStore();
+  const pathname = usePathname();
+  const router = useRouter();
+
+  // Check onboarding status and redirect if incomplete
+  const { data: onboardingStatus } = useQuery({
+    queryKey: ["onboarding-status"],
+    queryFn: () =>
+      api.get("/api/v1/onboarding/status").then((r) => r.data).catch(() => null),
+    enabled: !!user && user.role === "doctor",
+    staleTime: 30_000,
+  });
+
+  useEffect(() => {
+    if (!onboardingStatus) return;
+    const isOnboardingPage = pathname.startsWith("/doctor/onboarding");
+    const isComplete = onboardingStatus.onboarding_step === "completed" && onboardingStatus.verified;
+    const isPendingVerification = onboardingStatus.onboarding_step === "completed" && !onboardingStatus.verified;
+
+    if (!isOnboardingPage && !isComplete && !isPendingVerification) {
+      router.replace("/doctor/onboarding");
+    }
+    if (!isOnboardingPage && isPendingVerification) {
+      router.replace("/doctor/onboarding");
+    }
+  }, [onboardingStatus, pathname, router]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-dreams-lightBg">
@@ -46,6 +75,9 @@ export function DoctorLayout({ children }: { children: React.ReactNode }) {
 
             {/* Global search trigger */}
             <GlobalSearchTrigger onOpen={() => {}} />
+
+            {/* Clinic selector */}
+            <ClinicSelector />
           </div>
 
           {/* Utility icons */}

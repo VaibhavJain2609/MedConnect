@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -14,9 +15,20 @@ class MedicineItem(BaseModel):
     notes: str | None = None
 
 
+class PrescriptionMedicineItem(BaseModel):
+    brand_name: str
+    salt_id: Optional[str] = None
+    brand_id: Optional[str] = None
+    dose: str
+    frequency: str  # "BD" | "TDS" | "OD" | "1-0-1" | "SOS" | "QID" | "HS"
+    duration: str   # "7 days" | "1 month" | "Ongoing"
+    route: str = "oral"  # oral | topical | IV | IM | SC | inhaled | sublingual
+    instructions: Optional[str] = None
+
+
 class PrescriptionCreate(BaseModel):
     patient_id: UUID
-    medicines: list[MedicineItem]
+    medicines: list[PrescriptionMedicineItem]
     diagnosis: str | None = None
     notes: str | None = None
     valid_until: date | None = None

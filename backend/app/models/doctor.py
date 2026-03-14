@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -18,6 +18,11 @@ class Doctor(Base):
     facility_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     facility_city: Mapped[str | None] = mapped_column(String(100), nullable=True)
     verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    license_council: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    license_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    nhr_verification_status: Mapped[str] = mapped_column(String(20), default="not_checked")
+    verification_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    onboarding_step: Mapped[str] = mapped_column(String(20), default="pending")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

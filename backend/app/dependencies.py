@@ -1,9 +1,12 @@
-from fastapi import Depends, HTTPException, status
+import uuid
+
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models.clinic import ClinicMembership
 from app.models.doctor import Doctor
 from app.models.user import User
 from app.utils.security import decode_keycloak_token
@@ -138,3 +141,86 @@ async def require_admin(user: User = Depends(get_current_user)) -> User:
             detail={"error": {"code": "FORBIDDEN", "message": "Admin access required"}},
         )
     return user
+
+
+async def get_active_clinic(
+    x_clinic_id: str | None = Header(None, alias="X-Clinic-Id"),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> tuple[uuid.UUID, str] | None:
+    """
+    Reads X-Clinic-Id header, verifies the user has an active ClinicMembership.
+    Returns (clinic_id, membership_role) or None if header is absent.
+    Raises 403 if header is present but user is not a member.
+    """
+    if not x_clinic_id:
+        return None
+    try:
+        clinic_id = uuid.UUID(x_clinic_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"error": {"code": "INVALID_CLINIC_ID", "message": "Invalid clinic ID format"}},
+        )
+
+    result = await db.execute(
+        select(ClinicMembership).where(
+            ClinicMembership.clinic_id == clinic_id,
+            ClinicMembership.user_id == user.id,
+            ClinicMembership.is_active.is_(True),
+            ClinicMembership.deleted_at.is_(None),
+        )
+    )
+    membership = result.scalar_one_or_none()
+    if not membership:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": {"code": "NOT_CLINIC_MEMBER", "message": "Not a member of this clinic"}},
+        )
+    return clinic_id, membership.role
+
+
+async def require_active_clinic(
+    x_clinic_id: str | None = Header(None, alias="X-Clinic-Id"),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> tuple[uuid.UUID, str]:
+    """
+    Same as get_active_clinic but raises 400 if header missing (strict version).
+    Use for clinic-specific endpoints that always require a clinic context.
+    """
+    if not x_clinic_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": {"code": "MISSING_CLINIC", "message": "X-Clinic-Id header required"}},
+        )
+    result = await get_active_clinic(x_clinic_id, user, db)
+    return result  # type: ignore
+
+
+async def get_verified_doctor(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> tuple[User, Doctor]:
+    """Requires doctor role + verified=True + onboarding_step=completed."""
+    if user.role != "doctor":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": {"code": "FORBIDDEN", "message": "Doctor access required"}},
+        )
+    result = await db.execute(
+        select(Doctor).where(Doctor.user_id == user.id, Doctor.deleted_at.is_(None))
+    )
+    doctor = result.scalar_one_or_none()
+    if not doctor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "NOT_FOUND", "message": "Doctor profile not found"}},
+        )
+    if not doctor.verified or doctor.onboarding_step != "completed":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": {"code": "ONBOARDING_INCOMPLETE",
+                              "message": "Doctor verification not complete"}},
+        )
+    return user, doctor

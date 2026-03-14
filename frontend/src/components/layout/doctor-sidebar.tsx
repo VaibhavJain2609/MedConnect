@@ -12,6 +12,9 @@ import {
   ChevronLeft,
   LogOut,
   Stethoscope,
+  Building2,
+  UserPlus,
+  Calendar,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/auth";
@@ -39,12 +42,15 @@ const navSections: NavSection[] = [
     label: "MAIN",
     items: [
       { href: "/doctor/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/doctor/appointments", label: "Appointments", icon: Calendar },
     ],
   },
   {
     label: "CLINICAL",
     items: [
       { href: "/doctor/prescriptions", label: "My Prescriptions", icon: Pill },
+      { href: "/doctor/clinic", label: "My Clinic", icon: Building2 },
+      { href: "/doctor/patients/link", label: "Link Patient", icon: UserPlus },
     ],
   },
   {

@@ -4,9 +4,11 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.doctor import Doctor
 from app.models.medical_record import MedicalRecord
 from app.models.prescription import Prescription
 from app.models.user import User
+from app.services.notification_service import create_notification
 from app.utils.fhir import create_fhir_bundle
 
 
@@ -18,11 +20,13 @@ async def create_prescription(
     diagnosis: str | None = None,
     notes: str | None = None,
     valid_until: date | None = None,
+    clinic_id: UUID | None = None,
 ) -> Prescription:
-    patient = await db.execute(
+    patient_result = await db.execute(
         select(User).where(User.id == patient_id, User.role == "patient", User.deleted_at.is_(None))
     )
-    if not patient.scalar_one_or_none():
+    patient = patient_result.scalar_one_or_none()
+    if not patient:
         raise ValueError("Patient not found")
 
     fhir_bundle = create_fhir_bundle(
@@ -40,6 +44,7 @@ async def create_prescription(
         description=notes,
         fhir_bundle=fhir_bundle,
         source="doctor",
+        clinic_id=clinic_id,
     )
     db.add(record)
     await db.flush()
@@ -52,9 +57,49 @@ async def create_prescription(
         diagnosis=diagnosis,
         notes=notes,
         valid_until=valid_until,
+        clinic_id=clinic_id,
     )
     db.add(prescription)
     await db.flush()
+
+    from app.services.audit_service import log_change
+    await log_change(
+        db=db,
+        table_name="prescriptions",
+        record_id=prescription.id,
+        action="INSERT",
+        old_values=None,
+        new_values={
+            "patient_id": str(patient_id),
+            "doctor_id": str(doctor_id),
+            "diagnosis": diagnosis,
+            "medicines_count": len(medicines),
+        },
+    )
+
+    # Notify the patient about the new prescription
+    doctor_result = await db.execute(
+        select(Doctor).where(Doctor.id == doctor_id, Doctor.deleted_at.is_(None))
+    )
+    doctor = doctor_result.scalar_one_or_none()
+    if doctor:
+        doctor_user_result = await db.execute(
+            select(User).where(User.id == doctor.user_id, User.deleted_at.is_(None))
+        )
+        doctor_user = doctor_user_result.scalar_one_or_none()
+        doctor_name = doctor_user.full_name if doctor_user else "your doctor"
+    else:
+        doctor_name = "your doctor"
+
+    await create_notification(
+        db=db,
+        user_id=patient_id,
+        notif_type="prescription",
+        title=f"New prescription from Dr. {doctor_name}",
+        body=f"Diagnosis: {diagnosis or 'See prescription for details'}",
+        action_url="/patient/timeline",
+    )
+
     return prescription
 
 

@@ -35,6 +35,47 @@ export interface AdminUserDetail extends AdminUserListItem {
   } | null;
   records_count: number;
   prescriptions_count: number;
+  allergies: string[] | null;
+  chronic_conditions: string[] | null;
+  height_cm: number | null;
+  weight_kg: number | null;
+  last_visit: string | null;
+}
+
+export interface AdminUserPrescriptionItem {
+  id: string;
+  doctor_name: string;
+  diagnosis: string | null;
+  notes: string | null;
+  medicines: Record<string, any>;
+  valid_until: string | null;
+  created_at: string;
+}
+
+export interface AdminUserPrescriptionsResponse {
+  data: AdminUserPrescriptionItem[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface AdminUserRecordItem {
+  id: string;
+  record_type: string;
+  title: string;
+  description: string | null;
+  source: string;
+  doctor_name: string | null;
+  created_at: string;
+}
+
+export interface AdminUserRecordsResponse {
+  data: AdminUserRecordItem[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 }
 
 export interface AdminUserUpdateRequest {
@@ -97,5 +138,21 @@ export async function deleteAdminUser(
   id: string
 ): Promise<AdminUserDeleteResponse> {
   const response = await api.delete(`/api/v1/admin/users/${id}`);
+  return response.data;
+}
+
+export async function getAdminUserPrescriptions(
+  userId: string,
+  params?: { page?: number; limit?: number }
+): Promise<AdminUserPrescriptionsResponse> {
+  const response = await api.get(`/api/v1/admin/users/${userId}/prescriptions`, { params });
+  return response.data;
+}
+
+export async function getAdminUserRecords(
+  userId: string,
+  params?: { page?: number; limit?: number }
+): Promise<AdminUserRecordsResponse> {
+  const response = await api.get(`/api/v1/admin/users/${userId}/records`, { params });
   return response.data;
 }

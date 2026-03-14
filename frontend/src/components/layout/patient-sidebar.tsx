@@ -11,6 +11,8 @@ import {
   Heart,
   User,
   ClipboardList,
+  Building2,
+  Calendar,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/auth";
@@ -38,6 +40,7 @@ const navSections: NavSection[] = [
     label: "MAIN",
     items: [
       { href: "/patient/timeline", label: "Health Timeline", icon: Activity },
+      { href: "/patient/appointments", label: "Appointments", icon: Calendar },
     ],
   },
   {
@@ -45,6 +48,12 @@ const navSections: NavSection[] = [
     items: [
       { href: "/patient/records", label: "My Records", icon: FileText },
       { href: "/patient/medical-history", label: "Medical History", icon: ClipboardList },
+    ],
+  },
+  {
+    label: "CLINICS",
+    items: [
+      { href: "/patient/clinics", label: "My Clinics", icon: Building2 },
     ],
   },
   {

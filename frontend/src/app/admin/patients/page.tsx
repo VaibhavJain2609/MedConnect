@@ -11,12 +11,14 @@ import { ProfileCard } from "@/components/cards/profile-card";
 import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { PatientDetailDrawer } from "@/components/admin/patient-detail-drawer";
 
 export default function AdminPatientsPage() {
   const [viewMode, setViewMode] = useViewMode("admin-patients-view", "grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [page, setPage] = useState(1);
+  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [limit] = useState(viewMode === "table" ? 10 : 12);
 
   // Fetch patients from backend
@@ -96,6 +98,18 @@ export default function AdminPatientsPage() {
       accessorKey: "department",
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Department" />
+      ),
+    },
+    {
+      id: "actions",
+      header: () => null,
+      cell: ({ row }) => (
+        <button
+          onClick={() => setSelectedPatientId(row.original.id)}
+          className="px-3 py-1.5 text-xs font-medium text-dreams-blue border border-dreams-blue rounded-md hover:bg-blue-50 transition-colors"
+        >
+          View Profile
+        </button>
       ),
     },
   ];
@@ -188,7 +202,7 @@ export default function AdminPatientsPage() {
                   { label: "Gender", value: patient.gender },
                   { label: "Location", value: patient.location },
                 ]}
-                href={`/admin/patients/${patient.id}`}
+                onCtaClick={() => setSelectedPatientId(patient.id)}
                 ctaLabel="View Profile"
               />
             ))
@@ -210,6 +224,11 @@ export default function AdminPatientsPage() {
           searchPlaceholder="Search patients..."
         />
       )}
+
+      <PatientDetailDrawer
+        patientId={selectedPatientId}
+        onClose={() => setSelectedPatientId(null)}
+      />
     </div>
   );
 }

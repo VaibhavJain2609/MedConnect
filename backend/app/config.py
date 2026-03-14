@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     BACKEND_URL: str = "http://localhost:8000"
     FRONTEND_URL: str = "http://localhost:3000"
 
+    # File storage
+    STORAGE_BACKEND: str = "local"  # "local" | "s3"
+    UPLOADS_DIR: str = "/tmp/medconnect-uploads"
+
     class Config:
         env_file = ".env"
 

@@ -1,16 +1,17 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import require_patient
 from app.models.user import User
 from app.schemas.common import PaginatedResponse, PaginationMeta
-from app.schemas.record import RecordResponse
+from app.schemas.record import RecordResponse, VALID_RECORD_TYPES
 from app.schemas.user import MedicalHistoryUpdate, PatientProfileUpdate
 from app.services.prescription_service import get_patient_prescriptions
-from app.services.record_service import get_patient_timeline, get_record_detail
+from app.services.record_service import create_record, get_patient_timeline, get_record_detail
 
 router = APIRouter(prefix="/api/v1/patients", tags=["patients"])
 
@@ -139,3 +140,53 @@ async def update_medical_history(
         "height_cm": user.height_cm,
         "weight_kg": user.weight_kg,
     }
+
+
+# Patient self-upload record types (subset — excludes doctor-only types)
+PATIENT_UPLOAD_RECORD_TYPES = [
+    "lab_report", "diagnostic_report", "discharge_summary", "imaging", "immunization",
+]
+
+
+class PatientRecordCreate(BaseModel):
+    record_type: str
+    title: str
+    description: str | None = None
+    document_url: str | None = None
+
+    @field_validator("record_type")
+    @classmethod
+    def validate_record_type(cls, v: str) -> str:
+        if v not in PATIENT_UPLOAD_RECORD_TYPES:
+            raise ValueError(
+                f"record_type must be one of: {', '.join(PATIENT_UPLOAD_RECORD_TYPES)}"
+            )
+        return v
+
+
+@router.post("/records", response_model=RecordResponse, status_code=status.HTTP_201_CREATED)
+async def create_patient_record(
+    body: PatientRecordCreate,
+    user: User = Depends(require_patient),
+    db: AsyncSession = Depends(get_db),
+):
+    """Allow a patient to self-upload a health record with an optional document attachment."""
+    try:
+        record = await create_record(
+            db=db,
+            patient_id=user.id,
+            doctor_id=None,
+            record_type=body.record_type,
+            title=body.title,
+            description=body.description,
+            document_url=body.document_url,
+            source="patient_uploaded",
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": {"code": "VALIDATION_ERROR", "message": str(e)}},
+        )
+    await db.commit()
+    await db.refresh(record)
+    return record

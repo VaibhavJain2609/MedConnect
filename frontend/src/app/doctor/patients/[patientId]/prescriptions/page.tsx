@@ -14,7 +14,7 @@ import api from "@/lib/api";
 import { PrescriptionCard } from "@/components/prescription/PrescriptionCard";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Avatar } from "@/components/ui/avatar";
-import { ArrowLeft, Pill } from "lucide-react";
+import { ArrowLeft, Pill, Printer } from "lucide-react";
 
 export default function PatientPrescriptionsPage() {
   const params = useParams();
@@ -106,21 +106,38 @@ export default function PatientPrescriptionsPage() {
         ) : (
           <div className="space-y-4">
             {prescriptionsData?.data?.map((prescription: any) => (
-              <PrescriptionCard
-                key={prescription.id}
-                prescription={{
-                  id: prescription.id,
-                  medicines: prescription.medicines || [],
-                  diagnosis: prescription.diagnosis,
-                  notes: prescription.notes,
-                  created_at: prescription.created_at,
-                  valid_until: prescription.valid_until,
-                  doctor_name: prescription.doctor_name,
-                }}
-                variant="doctor"
-                collapsible={true}
-                defaultExpanded={false}
-              />
+              <div key={prescription.id} className="relative">
+                <div className="absolute top-4 right-4 z-10">
+                  <button
+                    type="button"
+                    title="Print prescription"
+                    onClick={() =>
+                      window.open(
+                        `/doctor/prescriptions/${prescription.id}/print`,
+                        "_blank"
+                      )
+                    }
+                    className="flex items-center gap-1.5 rounded-md border border-dreams-border bg-white px-2.5 py-1.5 text-xs font-medium text-dreams-textSecondary hover:border-dreams-blue hover:text-dreams-blue transition-colors shadow-sm"
+                  >
+                    <Printer className="h-3.5 w-3.5" />
+                    Print
+                  </button>
+                </div>
+                <PrescriptionCard
+                  prescription={{
+                    id: prescription.id,
+                    medicines: prescription.medicines || [],
+                    diagnosis: prescription.diagnosis,
+                    notes: prescription.notes,
+                    created_at: prescription.created_at,
+                    valid_until: prescription.valid_until,
+                    doctor_name: prescription.doctor_name,
+                  }}
+                  variant="doctor"
+                  collapsible={true}
+                  defaultExpanded={false}
+                />
+              </div>
             ))}
           </div>
         )}
