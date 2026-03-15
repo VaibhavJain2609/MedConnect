@@ -11,13 +11,14 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { Plus, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { AlertTriangle, Plus, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import {
   VITAL_META,
   VITAL_TYPES,
   createVital,
   getMyVitals,
+  isVitalAbnormal,
   type VitalType,
 } from "@/lib/api/vitals";
 import { cn } from "@/lib/utils";
@@ -64,12 +65,21 @@ function AddVitalForm({ selectedType, onClose, onSuccess }: AddVitalFormProps) {
     new Date().toISOString().slice(0, 16)
   );
   const [error, setError] = useState("");
+  const [criticalWarning, setCriticalWarning] = useState("");
 
   const mutation = useMutation({
     mutationFn: createVital,
-    onSuccess: () => {
+    onSuccess: (data) => {
       onSuccess();
-      onClose();
+      if (data.abnormal_flag) {
+        setCriticalWarning(
+          `Critical reading detected for ${meta.label}. Your doctor has been notified.`
+        );
+        // Keep modal open briefly to show warning, then close
+        setTimeout(onClose, 3000);
+      } else {
+        onClose();
+      }
     },
     onError: () => {
       setError("Failed to save reading. Please try again.");
@@ -145,6 +155,12 @@ function AddVitalForm({ selectedType, onClose, onSuccess }: AddVitalFormProps) {
         />
       </div>
       {error && <p className="text-sm text-red-500">{error}</p>}
+      {criticalWarning && (
+        <div className="flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 p-3">
+          <AlertTriangle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
+          <p className="text-sm text-red-700">{criticalWarning}</p>
+        </div>
+      )}
       <div className="flex gap-2 justify-end">
         <button
           type="button"
@@ -356,16 +372,35 @@ export default function VitalsPage() {
               <tbody>
                 {tableData.map((vital, idx) => {
                   const next = tableData[idx + 1];
+                  const abnormal =
+                    vital.abnormal_flag ||
+                    isVitalAbnormal(vital.vital_type as VitalType, Number(vital.value));
                   return (
                     <tr
                       key={vital.id}
-                      className="border-b border-dreams-border/50 hover:bg-dreams-lightBg/50"
+                      className={cn(
+                        "border-b border-dreams-border/50 hover:bg-dreams-lightBg/50",
+                        abnormal && "bg-red-50"
+                      )}
                     >
                       <td className="py-2.5 pr-4 text-dreams-textPrimary">
                         {formatDateTime(vital.recorded_at)}
                       </td>
-                      <td className="py-2.5 pr-4 font-semibold text-dreams-textPrimary">
-                        {vital.value} {vital.unit}
+                      <td className="py-2.5 pr-4">
+                        <div className="flex items-center gap-2">
+                          <span className={cn(
+                            "font-semibold",
+                            abnormal ? "text-red-600" : "text-dreams-textPrimary"
+                          )}>
+                            {vital.value} {vital.unit}
+                          </span>
+                          {abnormal && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                              <AlertTriangle className="h-3 w-3" />
+                              Critical
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-2.5 pr-4">
                         <TrendIndicator

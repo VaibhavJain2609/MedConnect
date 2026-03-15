@@ -82,6 +82,30 @@ export interface Vital {
   notes?: string;
   recorded_by?: string;
   created_at: string;
+  abnormal_flag?: boolean;
+}
+
+/**
+ * Client-side threshold check matching the backend VITAL_THRESHOLDS.
+ * Returns true if the value is outside the critical range.
+ */
+export const VITAL_THRESHOLDS: Partial<
+  Record<VitalType, { min?: number; max?: number }>
+> = {
+  bp_systolic:     { max: 180 },
+  bp_diastolic:    { max: 120 },
+  glucose_fasting: { min: 70, max: 300 },
+  glucose_pp:      { min: 70, max: 300 },
+  spo2:            { min: 92 },
+  pulse:           { min: 40, max: 150 },
+};
+
+export function isVitalAbnormal(vitalType: VitalType, value: number): boolean {
+  const t = VITAL_THRESHOLDS[vitalType];
+  if (!t) return false;
+  if (t.min !== undefined && value < t.min) return true;
+  if (t.max !== undefined && value > t.max) return true;
+  return false;
 }
 
 export interface VitalsListResponse {

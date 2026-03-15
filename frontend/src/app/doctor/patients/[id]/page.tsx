@@ -2,11 +2,12 @@
 
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Pill, Activity, User, AlertCircle } from "lucide-react";
+import { FileText, Pill, Activity, User, AlertCircle, Edit2, X } from "lucide-react";
 
 const VITAL_LABELS: Record<string, { label: string; unit: string }> = {
   bp_systolic: { label: "BP Systolic", unit: "mmHg" },
@@ -47,9 +48,89 @@ function formatDate(iso: string): string {
   });
 }
 
+interface AmendFormState {
+  recordId: string;
+  title: string;
+  description: string;
+}
+
+function AmendModal({
+  initial,
+  onClose,
+  onSubmit,
+  isPending,
+}: {
+  initial: AmendFormState;
+  onClose: () => void;
+  onSubmit: (data: AmendFormState) => void;
+  isPending: boolean;
+}) {
+  const [title, setTitle] = useState(initial.title);
+  const [description, setDescription] = useState(initial.description || "");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-dreams-textPrimary">Amend Record</h2>
+          <button onClick={onClose} className="text-dreams-textSecondary hover:text-dreams-textPrimary">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <p className="mb-4 text-sm text-dreams-textSecondary">
+          Creating an amendment preserves the original record and creates a new linked version.
+        </p>
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+              Title
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full rounded-lg border border-dreams-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
+              required
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+              Description / Notes
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={4}
+              className="w-full resize-none rounded-lg border border-dreams-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
+            />
+          </div>
+        </div>
+        <div className="mt-6 flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-dreams-border px-4 py-2 text-sm font-medium text-dreams-textPrimary hover:bg-dreams-lightBg transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={isPending || !title.trim()}
+            onClick={() => onSubmit({ recordId: initial.recordId, title, description })}
+            className="rounded-lg bg-dreams-blue px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+          >
+            {isPending ? "Saving..." : "Save Amendment"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function DoctorPatientProfilePage() {
   const params = useParams();
   const patientId = params.id as string;
+  const queryClient = useQueryClient();
 
   const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: ["doctor-patient-profile", patientId],
@@ -91,6 +172,31 @@ export default function DoctorPatientProfilePage() {
       return res.data;
     },
     enabled: !!patientId,
+  });
+
+  // Amend record state
+  const [amendTarget, setAmendTarget] = useState<AmendFormState | null>(null);
+  const [amendError, setAmendError] = useState("");
+
+  const amendMutation = useMutation({
+    mutationFn: async (data: AmendFormState) => {
+      const res = await api.post(
+        `/api/v1/doctors/records/${data.recordId}/amend`,
+        {
+          record_type: "opd_note",
+          title: data.title,
+          description: data.description,
+        }
+      );
+      return res.data;
+    },
+    onSuccess: () => {
+      setAmendTarget(null);
+      queryClient.invalidateQueries({ queryKey: ["doctor-patient-records", patientId] });
+    },
+    onError: () => {
+      setAmendError("Failed to save amendment. Please try again.");
+    },
   });
 
   const patientName = profile?.full_name || "Patient";
@@ -271,15 +377,40 @@ export default function DoctorPatientProfilePage() {
                   className="rounded-lg border border-dreams-border p-3"
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-dreams-textPrimary">
-                        {record.title}
-                      </p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <p className="truncate text-sm font-medium text-dreams-textPrimary">
+                          {record.title}
+                        </p>
+                        {record.amended_from_id && (
+                          <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 border border-amber-200">
+                            Amendment
+                          </span>
+                        )}
+                        {record.source === "amended" && !record.amended_from_id && (
+                          <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 border border-blue-200">
+                            Amended
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-dreams-textSecondary">
                         {RECORD_TYPE_LABELS[record.record_type] || record.record_type} &middot;{" "}
                         {formatDate(record.created_at)}
                       </p>
                     </div>
+                    <button
+                      onClick={() =>
+                        setAmendTarget({
+                          recordId: record.id,
+                          title: record.title,
+                          description: record.description || "",
+                        })
+                      }
+                      className="shrink-0 flex items-center gap-1 rounded-lg border border-dreams-border px-2.5 py-1 text-xs font-medium text-dreams-textSecondary hover:bg-dreams-lightBg hover:text-dreams-textPrimary transition-colors"
+                    >
+                      <Edit2 className="h-3 w-3" />
+                      Amend
+                    </button>
                   </div>
                 </div>
               ))}
@@ -348,6 +479,27 @@ export default function DoctorPatientProfilePage() {
           </Link>
         </div>
       </div>
+
+      {/* Amend Record Modal */}
+      {amendTarget && (
+        <AmendModal
+          initial={amendTarget}
+          onClose={() => {
+            setAmendTarget(null);
+            setAmendError("");
+          }}
+          onSubmit={(data) => {
+            setAmendError("");
+            amendMutation.mutate(data);
+          }}
+          isPending={amendMutation.isPending}
+        />
+      )}
+      {amendError && (
+        <div className="fixed bottom-4 right-4 z-50 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-lg">
+          {amendError}
+        </div>
+      )}
     </div>
   );
 }

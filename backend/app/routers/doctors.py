@@ -362,6 +362,59 @@ async def create_medical_record(
     return record
 
 
+@router.get("/records/{record_id}/amendments")
+async def list_record_amendments(
+    record_id: UUID,
+    doctor_info=Depends(get_current_doctor),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    List all amendment records that point back to record_id via amended_from_id.
+    Returns them in ascending created_at order (oldest amendment first).
+    """
+    from sqlalchemy import select
+
+    # Verify original record exists
+    original = await db.get(MedicalRecord, record_id)
+    if not original or original.deleted_at:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "NOT_FOUND", "message": "Record not found"}},
+        )
+
+    stmt = (
+        select(MedicalRecord)
+        .where(
+            MedicalRecord.amended_from_id == record_id,
+            MedicalRecord.deleted_at.is_(None),
+        )
+        .order_by(MedicalRecord.created_at.asc())
+    )
+    result = await db.execute(stmt)
+    amendments = result.scalars().all()
+
+    return {
+        "data": [
+            {
+                "id": str(a.id),
+                "patient_id": str(a.patient_id),
+                "doctor_id": str(a.doctor_id) if a.doctor_id else None,
+                "record_type": a.record_type,
+                "title": a.title,
+                "description": a.description,
+                "fhir_bundle": a.fhir_bundle,
+                "source": a.source,
+                "amended_from_id": str(a.amended_from_id),
+                "created_at": a.created_at.isoformat(),
+                "updated_at": a.updated_at.isoformat(),
+            }
+            for a in amendments
+        ],
+        "total": len(amendments),
+        "original_record_id": str(record_id),
+    }
+
+
 @router.post("/records/{record_id}/amend", response_model=RecordResponse, status_code=status.HTTP_201_CREATED)
 async def amend_record(
     record_id: UUID,
@@ -439,7 +492,9 @@ async def create_rx(
     clinic_context: tuple | None = Depends(get_active_clinic),
 ):
     _, doctor = doctor_info
-    clinic_id = clinic_context[0] if clinic_context else None
+    # clinic_id: prefer X-Clinic-Id header (existing context); fall back to body field
+    clinic_id = (clinic_context[0] if clinic_context else None) or req.clinic_id
+    branch_id = req.branch_id
     if clinic_id:
         await _check_patient_consent(db, req.patient_id, clinic_id)
     try:
@@ -452,6 +507,8 @@ async def create_rx(
             notes=req.notes,
             valid_until=req.valid_until,
             clinic_id=clinic_id,
+            branch_id=branch_id,
+            appointment_id=req.appointment_id,
         )
     except ValueError as e:
         raise HTTPException(
