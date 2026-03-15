@@ -9,6 +9,7 @@ from app.models.patient_link import PatientClinicLink, PatientLinkCode
 from app.models.appointment import Appointment
 from app.models.vital import PatientVital, VITAL_TYPES
 from app.models.audit import AuditLog
+from app.models.lab_result import LabResult
 
 # EMR Medicine Models
 from app.models.medicine import (
@@ -65,6 +66,7 @@ __all__ = [
     "PatientVital",
     "VITAL_TYPES",
     "AuditLog",
+    "LabResult",
     # Medicine models
     "ChemicalClass",
     "TherapeuticClass",
