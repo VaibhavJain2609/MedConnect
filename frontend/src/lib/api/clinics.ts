@@ -127,6 +127,11 @@ export async function createBranch(
   return res.data
 }
 
+export async function getClinicBranches(clinicId: string): Promise<ClinicBranch[]> {
+  const res = await api.get(`/api/v1/clinics/${clinicId}/branches`)
+  return res.data.data ?? []
+}
+
 // ── Admin API ─────────────────────────────────────────────────────────────
 
 export interface ClinicCreatePayload {

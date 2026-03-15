@@ -8,6 +8,7 @@ PUT    /api/v1/clinics/{id}     — update (owner/admin)
 GET    /api/v1/clinics/{id}/members  — list members
 PUT    /api/v1/clinics/{id}/settings — update record_sharing_mode
 POST   /api/v1/clinics/{id}/branches — create branch
+GET    /api/v1/clinics/{id}/branches — list branches [MD-274]
 """
 import uuid
 
@@ -19,6 +20,7 @@ from app.dependencies import get_current_user
 from app.models.user import User
 from app.schemas.clinic import (
     ClinicBranchCreate,
+    ClinicBranchListResponse,
     ClinicBranchResponse,
     ClinicCreate,
     ClinicListResponse,
@@ -140,3 +142,15 @@ async def create_branch(
     await _require_membership(db, user, clinic_id, roles=["owner", "admin"])
     branch = await clinic_service.create_branch(db, uuid.UUID(clinic_id), data)
     return ClinicBranchResponse.model_validate(branch)
+
+
+@router.get("/{clinic_id}/branches", response_model=ClinicBranchListResponse)
+async def list_branches(
+    clinic_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all active branches for a clinic. Requires clinic membership. [MD-274]"""
+    await _require_membership(db, user, clinic_id)
+    branches = await clinic_service.list_clinic_branches(db, uuid.UUID(clinic_id))
+    return ClinicBranchListResponse(data=branches, total=len(branches))

@@ -12,6 +12,7 @@ from app.schemas.clinic import (
     AdminClinicDetailResponse,
     AdminClinicListItem,
     ClinicBranchCreate,
+    ClinicBranchListResponse,
     ClinicBranchResponse,
     ClinicCreate,
     ClinicMemberListResponse,
@@ -145,6 +146,21 @@ async def list_clinic_members(
         for m, u in rows
     ]
     return ClinicMemberListResponse(data=members, total=len(members))
+
+
+async def list_clinic_branches(
+    db: AsyncSession, clinic_id: uuid.UUID
+) -> list[ClinicBranchResponse]:
+    """Return all active (non-deleted) branches for a clinic. [MD-274]"""
+    result = await db.execute(
+        select(ClinicBranch).where(
+            ClinicBranch.clinic_id == clinic_id,
+            ClinicBranch.is_active.is_(True),
+            ClinicBranch.deleted_at.is_(None),
+        ).order_by(ClinicBranch.name)
+    )
+    branches = result.scalars().all()
+    return [ClinicBranchResponse.model_validate(b) for b in branches]
 
 
 async def create_branch(

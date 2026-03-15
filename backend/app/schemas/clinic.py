@@ -32,6 +32,11 @@ class ClinicBranchResponse(BaseModel):
         return str(v) if v is not None else v
 
 
+class ClinicBranchListResponse(BaseModel):
+    data: list[ClinicBranchResponse]
+    total: int
+
+
 # ── Membership schemas ─────────────────────────────────────────────────────
 
 class ClinicMemberResponse(BaseModel):
