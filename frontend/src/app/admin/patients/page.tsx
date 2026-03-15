@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ColumnDef } from "@tanstack/react-table";
 import { Plus, Search } from "lucide-react";
 import { getPatients, Patient } from "@/lib/api/patients";
@@ -12,6 +12,168 @@ import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { PatientDetailDrawer } from "@/components/admin/patient-detail-drawer";
+import { useClinicStore } from "@/stores/clinic-store";
+import api from "@/lib/api";
+
+// ---------------------------------------------------------------------------
+// CreatePatientModal
+// ---------------------------------------------------------------------------
+
+interface CreatePatientModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+  clinicId: string | null;
+}
+
+function CreatePatientModal({
+  isOpen,
+  onClose,
+  onSuccess,
+  clinicId,
+}: CreatePatientModalProps) {
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const response = await api.post("/api/v1/admin/users", {
+        full_name: fullName,
+        phone: phone || undefined,
+        email: email || undefined,
+        role: "patient",
+      });
+      const newUser = response.data;
+
+      if (clinicId && newUser.id) {
+        await api.post(`/api/v1/admin/clinics/${clinicId}/patients`, {
+          patient_id: newUser.id,
+        });
+      }
+
+      // Reset form
+      setFullName("");
+      setPhone("");
+      setEmail("");
+      onSuccess();
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Failed to create patient. Please try again.";
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 bg-black/40 z-50"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      {/* Modal */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div
+          className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 space-y-5"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <h2 className="text-lg font-semibold text-dreams-textPrimary">
+            New Patient
+          </h2>
+
+          {error && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2">
+              {error}
+            </p>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-dreams-textPrimary mb-1">
+                Full Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Enter full name"
+                className="w-full h-10 px-3 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-dreams-textPrimary mb-1">
+                Phone
+              </label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="Enter phone number"
+                className="w-full h-10 px-3 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-dreams-textPrimary mb-1">
+                Email
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter email address"
+                className="w-full h-10 px-3 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={loading}
+                className="px-4 py-2 text-sm font-medium text-dreams-textSecondary border border-dreams-border rounded-lg hover:bg-dreams-lightBg transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={loading || !fullName.trim()}
+                className="flex items-center gap-2 px-4 py-2 bg-dreams-blue text-white text-sm font-medium rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+              >
+                {loading ? (
+                  <>
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                    Creating...
+                  </>
+                ) : (
+                  "Create Patient"
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// AdminPatientsPage
+// ---------------------------------------------------------------------------
 
 export default function AdminPatientsPage() {
   const [viewMode, setViewMode] = useViewMode("admin-patients-view", "grid");
@@ -20,16 +182,21 @@ export default function AdminPatientsPage() {
   const [page, setPage] = useState(1);
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [limit] = useState(viewMode === "table" ? 10 : 12);
+  const [showModal, setShowModal] = useState(false);
+
+  const { activeClinicId } = useClinicStore();
+  const queryClient = useQueryClient();
 
   // Fetch patients from backend
   const { data, isLoading, error } = useQuery({
-    queryKey: ["admin-patients", searchQuery, statusFilter, page, limit],
+    queryKey: ["admin-patients", searchQuery, statusFilter, page, limit, activeClinicId],
     queryFn: () =>
       getPatients({
         search: searchQuery || undefined,
         status: statusFilter !== "all" ? statusFilter : undefined,
         page,
         limit,
+        clinic_id: activeClinicId || undefined,
       }),
   });
 
@@ -151,7 +318,10 @@ export default function AdminPatientsPage() {
 
         <div className="flex items-center gap-3">
           <ViewToggle value={viewMode} onChange={setViewMode} />
-          <button className="flex items-center gap-2 px-4 py-2 bg-dreams-blue text-white rounded-lg hover:opacity-90 transition-opacity">
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-dreams-blue text-white rounded-lg hover:opacity-90 transition-opacity"
+          >
             <Plus className="h-5 w-5" />
             <span>New Patient</span>
           </button>
@@ -225,9 +395,21 @@ export default function AdminPatientsPage() {
         />
       )}
 
+      <CreatePatientModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        onSuccess={() => {
+          setShowModal(false);
+          queryClient.invalidateQueries({ queryKey: ["admin-patients"] });
+        }}
+        clinicId={activeClinicId || null}
+      />
+
       <PatientDetailDrawer
         patientId={selectedPatientId}
         onClose={() => setSelectedPatientId(null)}
+        clinicId={activeClinicId || undefined}
+        consentStatus={patients?.find((p) => p.id === selectedPatientId)?.consent_status}
       />
     </div>
   );

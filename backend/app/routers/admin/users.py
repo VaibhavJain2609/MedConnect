@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.dependencies import require_admin
 from app.models.medical_record import MedicalRecord
+from app.models.patient_link import PatientClinicLink
 from app.models.prescription import Prescription
 from app.models.user import User
 from app.models.doctor import Doctor
@@ -39,10 +40,59 @@ async def list_users(
     search: Optional[str] = Query(None),
     role: Optional[str] = Query(None),
     is_active: Optional[bool] = Query(None),
+    clinic_id: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
+    if clinic_id:
+        # When filtering by clinic, force role=patient and join PatientClinicLink
+        query = (
+            select(User, PatientClinicLink.consent_status)
+            .join(
+                PatientClinicLink,
+                (PatientClinicLink.patient_id == User.id)
+                & (PatientClinicLink.clinic_id == clinic_id)
+                & (PatientClinicLink.deleted_at.is_(None)),
+            )
+            .where(User.deleted_at.is_(None), User.role == "patient")
+        )
+        if search:
+            query = query.where(
+                User.full_name.ilike(f"%{search}%")
+                | User.email.ilike(f"%{search}%")
+                | User.phone.ilike(f"%{search}%")
+            )
+        if is_active is not None:
+            query = query.where(User.is_active.is_(is_active))
+
+        count_query = select(func.count()).select_from(query.subquery())
+        total = await db.scalar(count_query) or 0
+        result = await db.execute(
+            query.order_by(User.created_at.desc()).offset((page - 1) * limit).limit(limit)
+        )
+        rows = result.all()
+
+        return AdminUsersListResponse(
+            data=[
+                {
+                    "id": str(row.User.id),
+                    "full_name": row.User.full_name,
+                    "email": row.User.email,
+                    "phone": row.User.phone,
+                    "role": row.User.role,
+                    "is_active": row.User.is_active,
+                    "created_at": row.User.created_at,
+                    "consent_status": row.consent_status,
+                }
+                for row in rows
+            ],
+            total=total,
+            page=page,
+            limit=limit,
+            totalPages=math.ceil(total / limit) if total else 0,
+        )
+
     query = select(User).where(User.deleted_at.is_(None))
 
     if search:
@@ -72,6 +122,7 @@ async def list_users(
                 "role": u.role,
                 "is_active": u.is_active,
                 "created_at": u.created_at,
+                "consent_status": None,
             }
             for u in users
         ],
@@ -98,14 +149,7 @@ async def create_patient(
         role="patient",
     )
     db.add(user)
-    try:
-        await db.commit()
-    except Exception:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"error": {"code": "CONFLICT", "message": "A user with this email or phone already exists"}},
-        )
+    await db.commit()
     await db.refresh(user)
     return user
 
@@ -399,3 +443,49 @@ async def delete_user(
         id=str(user.id),
         message="User deleted successfully",
     )
+
+
+@router.get("/{user_id}/related-patients")
+async def get_related_patients(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Find other patients sharing the same email or phone (family group)."""
+    from sqlalchemy import or_
+
+    result = await db.execute(
+        select(User).where(User.id == user_id, User.deleted_at.is_(None))
+    )
+    target = result.scalar_one_or_none()
+    if not target:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "NOT_FOUND", "message": "User not found"}},
+        )
+
+    conditions = []
+    if target.email:
+        conditions.append(User.email == target.email)
+    if target.phone:
+        conditions.append(User.phone == target.phone)
+
+    if not conditions:
+        return {"data": []}
+
+    result = await db.execute(
+        select(User)
+        .where(
+            User.id != target.id,
+            User.deleted_at.is_(None),
+            User.role == "patient",
+            or_(*conditions),
+        )
+    )
+    related = result.scalars().all()
+
+    return {
+        "data": [
+            {"id": str(u.id), "full_name": u.full_name, "phone": u.phone, "email": u.email}
+            for u in related
+        ]
+    }

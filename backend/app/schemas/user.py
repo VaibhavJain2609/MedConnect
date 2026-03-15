@@ -62,6 +62,7 @@ class AdminUserListItem(BaseModel):
     role: str
     is_active: bool
     created_at: datetime
+    consent_status: str | None = None
 
     class Config:
         from_attributes = True

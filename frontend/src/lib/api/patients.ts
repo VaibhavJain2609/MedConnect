@@ -26,6 +26,7 @@ export interface Patient {
   zipCode?: string;
   emergencyContact?: string;
   emergencyPhone?: string;
+  consent_status?: string;
 }
 
 export interface PatientVital {
@@ -62,6 +63,8 @@ export interface PatientsListParams {
   status?: string;
   page?: number;
   limit?: number;
+  clinic_id?: string;
+  consent_status?: string;
 }
 
 export interface PatientsListResponse {
@@ -80,13 +83,49 @@ export async function getPatients(
 ): Promise<PatientsListResponse> {
   const queryParams = new URLSearchParams();
 
+  queryParams.append("role", "patient");
+
   if (params.search) queryParams.append("search", params.search);
   if (params.status) queryParams.append("status", params.status);
   if (params.page) queryParams.append("page", params.page.toString());
   if (params.limit) queryParams.append("limit", params.limit.toString());
+  if (params.clinic_id) queryParams.append("clinic_id", params.clinic_id);
+  if (params.consent_status) queryParams.append("consent_status", params.consent_status);
 
-  const response = await api.get(`/api/v1/admin/patients?${queryParams}`);
-  return response.data;
+  const response = await api.get(`/api/v1/admin/users?${queryParams}`);
+  const raw = response.data;
+
+  const patients: Patient[] = (raw.data ?? []).map((u: {
+    id: string;
+    full_name: string;
+    is_active: boolean;
+    phone?: string;
+    email?: string;
+    consent_status?: string;
+  }) => ({
+    id: u.id,
+    name: u.full_name,
+    photo: null,
+    status: u.is_active ? "completed" : "pending",
+    statusLabel: u.is_active ? "Active" : "Inactive",
+    lastVisit: "—",
+    gender: "—",
+    location: "—",
+    doctor: "—",
+    department: "—",
+    age: 0,
+    phone: u.phone,
+    email: u.email,
+    consent_status: u.consent_status,
+  }));
+
+  return {
+    patients,
+    total: raw.total,
+    page: raw.page,
+    limit: raw.limit,
+    totalPages: raw.totalPages,
+  };
 }
 
 /**
@@ -131,8 +170,12 @@ export async function getPatientAppointments(
 /**
  * Create new patient
  */
-export async function createPatient(data: Partial<Patient>): Promise<Patient> {
-  const response = await api.post("/api/v1/admin/patients", data);
+export async function createPatient(data: {
+  full_name: string;
+  phone?: string;
+  email?: string;
+}): Promise<{ id: string; [key: string]: unknown }> {
+  const response = await api.post("/api/v1/admin/users", data);
   return response.data;
 }
 
