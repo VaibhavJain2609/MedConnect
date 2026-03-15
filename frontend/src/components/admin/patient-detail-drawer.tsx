@@ -20,6 +20,7 @@ import {
   getAdminUserPrescriptions,
   getAdminUserRecords,
 } from "@/lib/api/admin-users";
+import api from "@/lib/api";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
@@ -36,11 +37,15 @@ const recordTypeBadge: Record<string, string> = {
 interface PatientDetailDrawerProps {
   patientId: string | null;
   onClose: () => void;
+  clinicId?: string;
+  consentStatus?: string;
 }
 
 export function PatientDetailDrawer({
   patientId,
   onClose,
+  clinicId,
+  consentStatus,
 }: PatientDetailDrawerProps) {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [rxPage, setRxPage] = useState(1);
@@ -64,6 +69,15 @@ export function PatientDetailDrawer({
     enabled: !!patientId && activeTab === "records",
   });
 
+  const { data: relatedData } = useQuery({
+    queryKey: ["admin-user-related", patientId],
+    queryFn: () =>
+      api
+        .get(`/api/v1/admin/users/${patientId}/related-patients`)
+        .then((r) => r.data),
+    enabled: !!patientId,
+  });
+
   const isOpen = !!patientId;
 
   // Reset tabs when opening a new patient
@@ -72,6 +86,8 @@ export function PatientDetailDrawer({
     if (tab === "prescriptions") setRxPage(1);
     if (tab === "records") setRecPage(1);
   };
+
+  const consentBlocked = !!clinicId && !!consentStatus && consentStatus !== "approved";
 
   return (
     <>
@@ -339,13 +355,51 @@ export function PatientDetailDrawer({
                         )}
                     </div>
                   )}
+
+                  {/* Family Group */}
+                  {relatedData?.data && relatedData.data.length > 0 && (
+                    <div className="bg-amber-50 rounded-xl border border-amber-200 p-5">
+                      <h3 className="text-sm font-semibold text-amber-800 mb-3">
+                        Family Group
+                      </h3>
+                      <div className="space-y-2">
+                        {relatedData.data.map(
+                          (rel: {
+                            id: string;
+                            full_name: string;
+                            phone?: string;
+                            email?: string;
+                          }) => (
+                            <div
+                              key={rel.id}
+                              className="flex items-center justify-between text-sm"
+                            >
+                              <span className="font-medium text-amber-900">
+                                {rel.full_name}
+                              </span>
+                              <span className="text-amber-600">
+                                {rel.phone || rel.email || "—"}
+                              </span>
+                            </div>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* Prescriptions Tab */}
               {activeTab === "prescriptions" && (
                 <div className="bg-white rounded-xl border border-dreams-border shadow-card overflow-hidden">
-                  {!prescriptions ? (
+                  {consentBlocked ? (
+                    <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border-b border-amber-200">
+                      <span className="text-amber-600 text-sm font-medium">
+                        Consent pending — prescriptions are restricted until the
+                        patient approves clinic access.
+                      </span>
+                    </div>
+                  ) : !prescriptions ? (
                     <div className="flex justify-center py-12">
                       <div className="h-6 w-6 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
                     </div>
@@ -426,7 +480,14 @@ export function PatientDetailDrawer({
               {/* Records Tab */}
               {activeTab === "records" && (
                 <div className="bg-white rounded-xl border border-dreams-border shadow-card overflow-hidden">
-                  {!records ? (
+                  {consentBlocked ? (
+                    <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border-b border-amber-200">
+                      <span className="text-amber-600 text-sm font-medium">
+                        Consent pending — records are restricted until the
+                        patient approves clinic access.
+                      </span>
+                    </div>
+                  ) : !records ? (
                     <div className="flex justify-center py-12">
                       <div className="h-6 w-6 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
                     </div>
