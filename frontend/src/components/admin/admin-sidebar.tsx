@@ -9,7 +9,6 @@ import {
   Pill,
   Users,
   UserCheck,
-  FileText,
   Settings,
   ChevronLeft,
   ChevronDown,
@@ -21,7 +20,6 @@ import {
   TestTube,
   Bell,
   Shield,
-  Layers,
   Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -51,7 +49,6 @@ const navSections: NavSection[] = [
     label: "MAIN",
     items: [
       { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/admin/applications", label: "Applications", icon: Layers },
     ],
   },
   {
@@ -59,23 +56,9 @@ const navSections: NavSection[] = [
     items: [
       { href: "/admin/patients", label: "Patients", icon: Users },
       { href: "/admin/doctors", label: "Doctors", icon: Stethoscope },
-      {
-        label: "Appointments",
-        icon: Calendar,
-        children: [
-          { href: "/admin/appointments", label: "All Appointments", icon: Calendar },
-          { href: "/admin/appointments/consultation", label: "Consultation", icon: Activity },
-        ],
-      },
+      { href: "/admin/appointments", label: "Appointments", icon: Calendar },
       { href: "/admin/visits", label: "Visits", icon: Activity },
-      {
-        label: "Laboratory",
-        icon: TestTube,
-        children: [
-          { href: "/admin/lab-results", label: "Lab Results", icon: TestTube },
-          { href: "/admin/medical-results", label: "Medical Results", icon: FileText },
-        ],
-      },
+      { href: "/admin/lab-results", label: "Lab Results", icon: TestTube },
       { href: "/admin/medicines", label: "Pharmacy", icon: Pill },
     ],
   },

@@ -48,6 +48,7 @@ const navSections: NavSection[] = [
   {
     label: "CLINICAL",
     items: [
+      { href: "/doctor/patients", label: "My Patients", icon: Users },
       { href: "/doctor/prescriptions", label: "My Prescriptions", icon: Pill },
       { href: "/doctor/clinic", label: "My Clinic", icon: Building2 },
       { href: "/doctor/patients/link", label: "Link Patient", icon: UserPlus },
@@ -75,10 +76,12 @@ function SidebarNavItem({
 }) {
   const Icon = item.icon;
   // Exact match for action pages to avoid highlighting "new" when on list page
+  // Also avoid /doctor/patients matching /doctor/patients/link
   const isActive =
     pathname === item.href ||
     (item.href !== "/doctor/prescriptions/new" &&
       item.href !== "/doctor/records/new" &&
+      item.href !== "/doctor/patients" &&
       pathname.startsWith(item.href + "/"));
 
   return (

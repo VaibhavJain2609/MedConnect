@@ -142,3 +142,29 @@ export async function getDoctorSpecialties(): Promise<string[]> {
   const response = await api.get("/api/v1/admin/doctors/specialties");
   return response.data;
 }
+
+export interface DoctorPatient {
+  id: string;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+}
+
+export interface DoctorPatientsResponse {
+  data: DoctorPatient[];
+  total: number;
+}
+
+/**
+ * Get patients linked to the currently authenticated doctor
+ */
+export async function getDoctorPatients(params: {
+  search?: string;
+  limit?: number;
+} = {}): Promise<DoctorPatientsResponse> {
+  const queryParams = new URLSearchParams();
+  if (params.search) queryParams.append("search", params.search);
+  if (params.limit) queryParams.append("limit", params.limit.toString());
+  const response = await api.get(`/api/v1/doctors/patients?${queryParams}`);
+  return response.data;
+}
