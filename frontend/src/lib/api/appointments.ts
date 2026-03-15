@@ -69,6 +69,17 @@ export interface UpdateAppointmentStatusData {
   cancelled_reason?: string | null;
 }
 
+export interface UpdateAppointmentData {
+  doctor_id?: string | null;
+  clinic_id?: string | null;
+  branch_id?: string | null;
+  scheduled_at?: string;
+  duration_minutes?: number;
+  type?: "in-person" | "teleconsult" | "follow-up";
+  chief_complaint?: string | null;
+  notes?: string | null;
+}
+
 /**
  * Get list of appointments.
  * - Doctors get today's schedule by default (use date/upcoming params)
@@ -128,8 +139,22 @@ export async function updateAppointmentStatus(
 }
 
 /**
- * Cancel appointment (soft delete)
+ * Update appointment details (doctor, time, type, etc.). Only works for scheduled appointments.
  */
-export async function cancelAppointment(id: string): Promise<void> {
-  await api.delete(`/api/v1/appointments/${id}`);
+export async function updateAppointment(
+  id: string,
+  data: UpdateAppointmentData
+): Promise<Appointment> {
+  const response = await api.put(`/api/v1/appointments/${id}`, data);
+  return response.data;
+}
+
+/**
+ * Cancel appointment with optional reason.
+ */
+export async function cancelAppointment(id: string, reason?: string): Promise<void> {
+  await api.put(`/api/v1/appointments/${id}/status`, {
+    status: "cancelled",
+    cancelled_reason: reason || null,
+  });
 }

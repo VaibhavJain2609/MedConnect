@@ -34,7 +34,7 @@ class NotificationResponse(BaseModel):
         return cls(
             id=str(notification.id),
             user_id=str(notification.user_id),
-            type=notification.type.value,
+            type=notification.type.value if hasattr(notification.type, "value") else notification.type,
             title=notification.title,
             message=notification.message,
             read=notification.read,

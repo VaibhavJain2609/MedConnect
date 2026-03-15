@@ -1,10 +1,11 @@
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import cast, func, select
+from sqlalchemy.dialects.postgresql import INTERVAL
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -48,6 +49,17 @@ class AppointmentCreate(BaseModel):
 class AppointmentStatusUpdate(BaseModel):
     status: str
     cancelled_reason: str | None = None
+
+
+class AppointmentUpdate(BaseModel):
+    doctor_id: UUID | None = None
+    clinic_id: UUID | None = None
+    branch_id: UUID | None = None
+    scheduled_at: datetime | None = None
+    duration_minutes: int | None = None
+    type: str | None = None
+    chief_complaint: str | None = None
+    notes: str | None = None
 
 
 class AppointmentResponse(BaseModel):
@@ -141,6 +153,83 @@ async def _load_appointment_with_names(db: AsyncSession, appt: Appointment) -> d
     return _serialize_appointment(appt, patient_name, doctor_name, clinic_name, branch_name)
 
 
+# ─── Conflict helpers ─────────────────────────────────────────────────────────
+
+ACTIVE_STATUSES = ["scheduled", "arrived", "in-progress"]
+
+
+def _existing_end_expr():
+    """SQL expression: scheduled_at + duration_minutes as a PostgreSQL interval."""
+    return Appointment.scheduled_at + cast(
+        func.concat(Appointment.duration_minutes, " minutes"),
+        INTERVAL,
+    )
+
+
+async def _check_doctor_conflict(
+    db: AsyncSession,
+    doctor_id: UUID,
+    scheduled_at: datetime,
+    duration_minutes: int,
+    exclude_id: UUID | None = None,
+) -> None:
+    """Raise 409 if the doctor already has an active overlapping appointment."""
+    new_end = scheduled_at + timedelta(minutes=duration_minutes)
+    stmt = select(Appointment).where(
+        Appointment.doctor_id == doctor_id,
+        Appointment.deleted_at.is_(None),
+        Appointment.status.in_(ACTIVE_STATUSES),
+        Appointment.scheduled_at < new_end,
+        scheduled_at < _existing_end_expr(),
+    )
+    if exclude_id:
+        stmt = stmt.where(Appointment.id != exclude_id)
+    conflict = (await db.execute(stmt)).scalar_one_or_none()
+    if conflict:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": {
+                    "code": "DOCTOR_UNAVAILABLE",
+                    "message": "The doctor already has an appointment during this time slot",
+                }
+            },
+        )
+
+
+async def _check_patient_clinic_conflict(
+    db: AsyncSession,
+    patient_id: UUID,
+    clinic_id: UUID,
+    scheduled_at: datetime,
+    duration_minutes: int,
+    exclude_id: UUID | None = None,
+) -> None:
+    """Raise 409 if the patient already has an appointment at this clinic with overlapping time."""
+    new_end = scheduled_at + timedelta(minutes=duration_minutes)
+    stmt = select(Appointment).where(
+        Appointment.patient_id == patient_id,
+        Appointment.clinic_id == clinic_id,
+        Appointment.deleted_at.is_(None),
+        Appointment.status.in_(ACTIVE_STATUSES),
+        Appointment.scheduled_at < new_end,
+        scheduled_at < _existing_end_expr(),
+    )
+    if exclude_id:
+        stmt = stmt.where(Appointment.id != exclude_id)
+    conflict = (await db.execute(stmt)).scalar_one_or_none()
+    if conflict:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": {
+                    "code": "PATIENT_CLINIC_CONFLICT",
+                    "message": "Patient already has an appointment at this clinic during this time",
+                }
+            },
+        )
+
+
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -188,6 +277,13 @@ async def create_appointment(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"error": {"code": "NOT_FOUND", "message": "Patient not found"}},
         )
+
+    # Check doctor availability
+    await _check_doctor_conflict(db, doctor_id, req.scheduled_at, req.duration_minutes)
+
+    # Check patient-clinic conflict (only when a clinic is specified)
+    if req.clinic_id:
+        await _check_patient_clinic_conflict(db, req.patient_id, req.clinic_id, req.scheduled_at, req.duration_minutes)
 
     appt = Appointment(
         id=uuid.uuid4(),
@@ -353,6 +449,112 @@ async def get_appointment(
                 detail={"error": {"code": "FORBIDDEN", "message": "Access denied"}},
             )
 
+    return await _load_appointment_with_names(db, appt)
+
+
+@router.put("/{appointment_id}")
+async def update_appointment(
+    appointment_id: UUID,
+    req: AppointmentUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update appointment details (doctor, time, type, etc.). Only allowed when status is 'scheduled'."""
+    result = await db.execute(
+        select(Appointment).where(
+            Appointment.id == appointment_id,
+            Appointment.deleted_at.is_(None),
+        )
+    )
+    appt = result.scalar_one_or_none()
+    if not appt:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "NOT_FOUND", "message": "Appointment not found"}},
+        )
+
+    if appt.status != "scheduled":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"error": {"code": "INVALID_STATUS", "message": "Only scheduled appointments can be modified"}},
+        )
+
+    # Access control
+    if current_user.role == "patient":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": {"code": "FORBIDDEN", "message": "Patients cannot modify appointments; use cancel instead"}},
+        )
+
+    if current_user.role == "doctor":
+        doc_res = await db.execute(
+            select(Doctor).where(Doctor.user_id == current_user.id, Doctor.deleted_at.is_(None))
+        )
+        doctor = doc_res.scalar_one_or_none()
+        if not doctor or appt.doctor_id != doctor.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "FORBIDDEN", "message": "Access denied"}},
+            )
+        if req.doctor_id is not None and req.doctor_id != doctor.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "FORBIDDEN", "message": "Doctors cannot reassign appointments to other doctors"}},
+            )
+
+    # Resolve effective values for conflict checking
+    new_doctor_id = req.doctor_id if req.doctor_id is not None else appt.doctor_id
+    new_scheduled_at = req.scheduled_at if req.scheduled_at is not None else appt.scheduled_at
+    new_duration = req.duration_minutes if req.duration_minutes is not None else appt.duration_minutes
+    new_clinic_id = req.clinic_id if req.clinic_id is not None else appt.clinic_id
+
+    # Verify new doctor exists if changing
+    if new_doctor_id != appt.doctor_id:
+        doctor_res = await db.execute(
+            select(Doctor).where(Doctor.id == new_doctor_id, Doctor.deleted_at.is_(None))
+        )
+        if not doctor_res.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"error": {"code": "NOT_FOUND", "message": "Doctor not found"}},
+            )
+
+    # Validate type if changing
+    if req.type is not None and req.type not in VALID_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": {"code": "INVALID_TYPE", "message": f"type must be one of: {', '.join(sorted(VALID_TYPES))}"}},
+        )
+
+    # Check doctor availability (exclude self to allow updating non-conflicting fields)
+    await _check_doctor_conflict(db, new_doctor_id, new_scheduled_at, new_duration, exclude_id=appointment_id)
+
+    # Check patient-clinic conflict
+    if new_clinic_id:
+        await _check_patient_clinic_conflict(
+            db, appt.patient_id, new_clinic_id, new_scheduled_at, new_duration, exclude_id=appointment_id
+        )
+
+    # Apply updates
+    if req.doctor_id is not None:
+        appt.doctor_id = req.doctor_id
+    if req.clinic_id is not None:
+        appt.clinic_id = req.clinic_id
+    if req.branch_id is not None:
+        appt.branch_id = req.branch_id
+    if req.scheduled_at is not None:
+        appt.scheduled_at = req.scheduled_at
+    if req.duration_minutes is not None:
+        appt.duration_minutes = req.duration_minutes
+    if req.type is not None:
+        appt.type = req.type
+    if req.chief_complaint is not None:
+        appt.chief_complaint = req.chief_complaint
+    if req.notes is not None:
+        appt.notes = req.notes
+
+    await db.flush()
+    await db.refresh(appt)
     return await _load_appointment_with_names(db, appt)
 
 

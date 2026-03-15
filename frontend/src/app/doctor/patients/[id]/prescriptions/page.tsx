@@ -19,7 +19,7 @@ import { ArrowLeft, Pill, Printer } from "lucide-react";
 export default function PatientPrescriptionsPage() {
   const params = useParams();
   const router = useRouter();
-  const patientId = params.patientId as string;
+  const patientId = params.id as string;
 
   const { data: patientData } = useQuery({
     queryKey: ["patient-info", patientId],

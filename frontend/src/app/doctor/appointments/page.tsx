@@ -2,11 +2,19 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Calendar, Clock, User, FileText, FilePlus, CheckCircle, XCircle, UserCheck, Plus, X } from "lucide-react";
+import { Calendar, Clock, User, FileText, FilePlus, CheckCircle, XCircle, UserCheck, Plus, X, Pencil } from "lucide-react";
 import Link from "next/link";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
-import { getAppointments, updateAppointmentStatus, createAppointment, type Appointment } from "@/lib/api/appointments";
+import {
+  getAppointments,
+  updateAppointmentStatus,
+  updateAppointment,
+  cancelAppointment,
+  createAppointment,
+  type Appointment,
+  type UpdateAppointmentData,
+} from "@/lib/api/appointments";
 import { getClinicBranches, type ClinicBranch } from "@/lib/api/clinics";
 import api from "@/lib/api";
 
@@ -408,6 +416,268 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
 }
 
 // ---------------------------------------------------------------------------
+// Edit Appointment Modal (doctor: cannot change patient or reassign doctor)
+// ---------------------------------------------------------------------------
+
+function EditAppointmentModal({
+  appointment,
+  onClose,
+  onSuccess,
+}: {
+  appointment: Appointment;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const initialDate = appointment.scheduled_at.slice(0, 10);
+  const initialTime = new Date(appointment.scheduled_at).toTimeString().slice(0, 5);
+
+  const [date, setDate] = useState(initialDate);
+  const [time, setTime] = useState(initialTime);
+  const [duration, setDuration] = useState(appointment.duration_minutes);
+  const [type, setType] = useState<"in-person" | "teleconsult" | "follow-up">(appointment.type);
+  const [chiefComplaint, setChiefComplaint] = useState(appointment.chief_complaint ?? "");
+  const [clinicId, setClinicId] = useState(appointment.clinic_id ?? "");
+  const [branchId, setBranchId] = useState(appointment.branch_id ?? "");
+  const [clinics, setClinics] = useState<ClinicOption[]>([]);
+  const [branches, setBranches] = useState<ClinicBranch[]>([]);
+  const [branchesLoading, setBranchesLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    api.get("/api/v1/clinics/my")
+      .then((res) => { const d = res.data?.data || res.data || []; setClinics(Array.isArray(d) ? d : []); })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    setBranchId(""); setBranches([]);
+    if (!clinicId) return;
+    setBranchesLoading(true);
+    getClinicBranches(clinicId)
+      .then((d) => setBranches(d))
+      .catch(() => setBranches([]))
+      .finally(() => setBranchesLoading(false));
+  }, [clinicId]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSubmitting(true);
+    try {
+      const payload: UpdateAppointmentData = {
+        scheduled_at: new Date(`${date}T${time}:00`).toISOString(),
+        duration_minutes: duration,
+        type,
+        chief_complaint: chiefComplaint || null,
+        clinic_id: clinicId || null,
+        branch_id: branchId || null,
+      };
+      await updateAppointment(appointment.id, payload);
+      onSuccess();
+      onClose();
+    } catch (err: any) {
+      const msg = err.response?.data?.detail?.error?.message || err.response?.data?.detail || "Failed to update appointment";
+      setError(typeof msg === "string" ? msg : JSON.stringify(msg));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-lg rounded-xl bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-dreams-border px-6 py-4">
+          <h2 className="text-lg font-semibold text-dreams-textPrimary">Edit Appointment</h2>
+          <button type="button" onClick={onClose} className="text-dreams-textSecondary hover:text-dreams-textPrimary">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4 max-h-[80vh] overflow-y-auto">
+          {error && (
+            <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">{error}</div>
+          )}
+
+          {/* Patient (read-only) */}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Patient</label>
+            <div className="h-10 rounded-lg border border-dreams-border bg-dreams-lightBg px-3 flex items-center text-sm text-dreams-textSecondary">
+              {appointment.patient_name ?? "—"}
+            </div>
+          </div>
+
+          {/* Date + Time */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Date *</label>
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required
+                className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20" />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Time *</label>
+              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} required
+                className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20" />
+            </div>
+          </div>
+
+          {/* Duration + Type */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Duration</label>
+              <select value={duration} onChange={(e) => setDuration(Number(e.target.value))}
+                className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20">
+                <option value={15}>15 min</option>
+                <option value={30}>30 min</option>
+                <option value={45}>45 min</option>
+                <option value={60}>60 min</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Type *</label>
+              <select value={type} onChange={(e) => setType(e.target.value as typeof type)}
+                className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20">
+                <option value="in-person">In Person</option>
+                <option value="teleconsult">Teleconsult</option>
+                <option value="follow-up">Follow-up</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Chief Complaint */}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Chief Complaint</label>
+            <input type="text" value={chiefComplaint} onChange={(e) => setChiefComplaint(e.target.value)}
+              placeholder="e.g., Fever, headache for 2 days"
+              className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20" />
+          </div>
+
+          {/* Clinic */}
+          {clinics.length > 0 && (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Clinic</label>
+              <select value={clinicId} onChange={(e) => setClinicId(e.target.value)}
+                className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20">
+                <option value="">No clinic (private)</option>
+                {clinics.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+          )}
+
+          {/* Branch */}
+          {clinicId && (branchesLoading || branches.length > 0) && (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Branch</label>
+              {branchesLoading ? (
+                <div className="h-10 rounded-lg border border-dreams-border bg-gray-50 flex items-center px-3">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-dreams-blue border-t-transparent" />
+                  <span className="ml-2 text-sm text-dreams-textSecondary">Loading branches...</span>
+                </div>
+              ) : (
+                <select value={branchId} onChange={(e) => setBranchId(e.target.value)}
+                  className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20">
+                  <option value="">Any branch</option>
+                  {branches.map((b) => <option key={b.id} value={b.id}>{b.name}{b.city ? ` — ${b.city}` : ""}</option>)}
+                </select>
+              )}
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex gap-3 pt-2">
+            <button type="submit" disabled={submitting}
+              className="flex-1 rounded-lg bg-dreams-blue px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity">
+              {submitting ? "Saving..." : "Save Changes"}
+            </button>
+            <button type="button" onClick={onClose}
+              className="rounded-lg border border-dreams-border px-4 py-2.5 text-sm font-medium text-dreams-textPrimary hover:bg-dreams-lightBg transition-colors">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Cancel Appointment Modal (doctor portal)
+// ---------------------------------------------------------------------------
+
+function CancelAppointmentModal({
+  appointment,
+  onClose,
+  onSuccess,
+}: {
+  appointment: Appointment;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleCancel = async () => {
+    setSubmitting(true);
+    setError("");
+    try {
+      await cancelAppointment(appointment.id, reason || undefined);
+      onSuccess();
+      onClose();
+    } catch (err: any) {
+      const msg = err.response?.data?.detail?.error?.message || "Failed to cancel appointment";
+      setError(typeof msg === "string" ? msg : JSON.stringify(msg));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-dreams-border px-6 py-4">
+          <h2 className="text-lg font-semibold text-dreams-textPrimary">Cancel Appointment</h2>
+          <button type="button" onClick={onClose} className="text-dreams-textSecondary hover:text-dreams-textPrimary">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="px-6 py-4 space-y-4">
+          <p className="text-sm text-dreams-textSecondary">
+            Cancel appointment for <span className="font-medium text-dreams-textPrimary">{appointment.patient_name}</span>?
+          </p>
+          {error && (
+            <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">{error}</div>
+          )}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Reason (optional)</label>
+            <input
+              type="text"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="e.g., Doctor unavailable, patient requested..."
+              className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+            />
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button
+              onClick={handleCancel}
+              disabled={submitting}
+              className="flex-1 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+            >
+              {submitting ? "Cancelling..." : "Cancel Appointment"}
+            </button>
+            <button type="button" onClick={onClose}
+              className="rounded-lg border border-dreams-border px-4 py-2.5 text-sm font-medium text-dreams-textPrimary hover:bg-dreams-lightBg transition-colors">
+              Keep
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Status action buttons
 // ---------------------------------------------------------------------------
 
@@ -482,6 +752,8 @@ export default function DoctorAppointmentsPage() {
   const today = formatDateInput(new Date());
   const [selectedDate, setSelectedDate] = useState(today);
   const [showBookingModal, setShowBookingModal] = useState(false);
+  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
+  const [cancellingAppointment, setCancellingAppointment] = useState<Appointment | null>(null);
   const [doctorId, setDoctorId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
@@ -516,15 +788,29 @@ export default function DoctorAppointmentsPage() {
     year: "numeric",
   });
 
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["doctor-appointments", selectedDate] });
+
   return (
     <div className="space-y-6">
       {showBookingModal && (
         <BookAppointmentModal
           doctorId={doctorId}
           onClose={() => setShowBookingModal(false)}
-          onSuccess={() => {
-            queryClient.invalidateQueries({ queryKey: ["doctor-appointments", selectedDate] });
-          }}
+          onSuccess={invalidate}
+        />
+      )}
+      {editingAppointment && (
+        <EditAppointmentModal
+          appointment={editingAppointment}
+          onClose={() => setEditingAppointment(null)}
+          onSuccess={() => { invalidate(); setEditingAppointment(null); }}
+        />
+      )}
+      {cancellingAppointment && (
+        <CancelAppointmentModal
+          appointment={cancellingAppointment}
+          onClose={() => setCancellingAppointment(null)}
+          onSuccess={() => { invalidate(); setCancellingAppointment(null); }}
         />
       )}
 
@@ -669,11 +955,29 @@ export default function DoctorAppointmentsPage() {
                   </div>
                 </div>
 
-                {/* Right: status badge */}
-                <div className="flex-shrink-0">
+                {/* Right: status badge + actions */}
+                <div className="flex flex-col items-end gap-2 flex-shrink-0">
                   <Badge variant={STATUS_VARIANT_MAP[appt.status] as any}>
                     {STATUS_LABELS[appt.status] ?? appt.status}
                   </Badge>
+                  {appt.status === "scheduled" && (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => setEditingAppointment(appt)}
+                        className="flex items-center gap-1 rounded-md border border-dreams-border px-2 py-1 text-xs text-dreams-textSecondary hover:bg-dreams-lightBg transition-colors"
+                      >
+                        <Pencil className="h-3 w-3" />
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => setCancellingAppointment(appt)}
+                        className="flex items-center gap-1 rounded-md border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50 transition-colors"
+                      >
+                        <XCircle className="h-3 w-3" />
+                        Cancel
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
