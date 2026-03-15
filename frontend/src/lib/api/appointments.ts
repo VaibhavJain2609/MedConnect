@@ -14,6 +14,8 @@ export interface Appointment {
   doctor_photo?: string | null;
   clinic_id: string | null;
   clinic_name: string | null;
+  branch_id: string | null;
+  branch_name: string | null;
   scheduled_at: string;
   duration_minutes: number;
   type: "in-person" | "teleconsult" | "follow-up";
@@ -54,6 +56,7 @@ export interface CreateAppointmentData {
   patient_id: string;
   doctor_id: string;
   clinic_id?: string | null;
+  branch_id?: string | null;
   scheduled_at: string;
   duration_minutes?: number;
   type: "in-person" | "teleconsult" | "follow-up";

@@ -16,6 +16,8 @@ class Prescription(Base):
     doctor_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("doctors.id"), nullable=False)
     patient_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     clinic_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("clinics.id"), nullable=True)
+    branch_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("clinic_branches.id"), nullable=True)
+    appointment_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("appointments.id"), nullable=True)
     medicines: Mapped[dict] = mapped_column(JSONB, nullable=False)
     diagnosis: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -27,11 +29,14 @@ class Prescription(Base):
 
     record: Mapped["MedicalRecord"] = relationship(back_populates="prescription")
     doctor: Mapped["Doctor"] = relationship(back_populates="prescriptions")
+    appointment: Mapped["Appointment"] = relationship("Appointment", back_populates=None, lazy="select")
 
     __table_args__ = (
         Index("idx_rx_patient", "patient_id", "created_at", postgresql_where=(deleted_at.is_(None))),
         Index("idx_rx_doctor", "doctor_id", postgresql_where=(deleted_at.is_(None))),
         Index("idx_rx_clinic", "clinic_id", postgresql_where=(deleted_at.is_(None))),
+        Index("idx_rx_branch", "branch_id", postgresql_where=(deleted_at.is_(None))),
+        Index("idx_rx_appointment", "appointment_id"),
     )
 
 

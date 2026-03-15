@@ -2,10 +2,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, field_validator
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import require_patient
+from app.models.doctor import Doctor
 from app.models.user import User
 from app.schemas.common import PaginatedResponse, PaginationMeta
 from app.schemas.record import RecordResponse, VALID_RECORD_TYPES
@@ -190,3 +192,45 @@ async def create_patient_record(
     await db.commit()
     await db.refresh(record)
     return record
+
+
+@router.get("/doctors/search")
+async def search_doctors(
+    q: str = Query(..., min_length=2),
+    user: User = Depends(require_patient),
+    db: AsyncSession = Depends(get_db),
+):
+    """Search verified doctors by name or specialization for patient appointment booking."""
+    search_term = f"%{q.lower()}%"
+    stmt = (
+        select(Doctor, User.full_name, User.email)
+        .join(User, Doctor.user_id == User.id)
+        .where(
+            Doctor.deleted_at.is_(None),
+            User.deleted_at.is_(None),
+            User.is_active.is_(True),
+            Doctor.nhr_verification_status == "verified",
+            or_(
+                func.lower(User.full_name).like(search_term),
+                func.lower(Doctor.specialization).like(search_term),
+                func.lower(Doctor.facility_name).like(search_term),
+            ),
+        )
+        .order_by(User.full_name.asc())
+        .limit(20)
+    )
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    return {
+        "data": [
+            {
+                "id": str(row.Doctor.id),
+                "full_name": row.full_name,
+                "specialization": row.Doctor.specialization,
+                "facility_name": row.Doctor.facility_name,
+                "facility_city": row.Doctor.facility_city,
+            }
+            for row in rows
+        ]
+    }

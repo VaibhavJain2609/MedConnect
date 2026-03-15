@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import api from "@/lib/api";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import MedicineAutocomplete from "@/components/medicine/MedicineAutocomplete";
 import { AlertTriangle, X, ChevronDown, BookOpen, Save } from "lucide-react";
+import { getMyClinicss, getClinicBranches, type ClinicBranch } from "@/lib/api/clinics";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -20,6 +21,11 @@ interface Medicine {
   duration: string;
   route: string;
   instructions: string;
+}
+
+interface ClinicOption {
+  id: string;
+  name: string;
 }
 
 interface PatientSuggestion {
@@ -380,10 +386,22 @@ function SaveTemplateModal({
 
 export default function NewPrescriptionPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Read appointment context from query params (set when navigating from appointments page)
+  const appointmentId = searchParams.get("appointment_id");
+  const prefillPatientId = searchParams.get("patient_id");
 
   // Patient state
   const [selectedPatient, setSelectedPatient] =
     useState<PatientSuggestion | null>(null);
+
+  // Clinic + branch state
+  const [clinics, setClinics] = useState<ClinicOption[]>([]);
+  const [selectedClinicId, setSelectedClinicId] = useState("");
+  const [branches, setBranches] = useState<ClinicBranch[]>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState("");
+  const [branchesLoading, setBranchesLoading] = useState(false);
 
   // Form fields
   const [diagnosis, setDiagnosis] = useState("");
@@ -401,13 +419,46 @@ export default function NewPrescriptionPage() {
   const [showLoadModal, setShowLoadModal] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
 
-  // Load templates on mount
+  // Load templates and clinics on mount; pre-fill patient if appointment_id provided
   useEffect(() => {
     api
       .get("/api/v1/doctors/prescription-templates")
       .then((res) => setTemplates(res.data.data || []))
       .catch(() => {});
-  }, []);
+    getMyClinicss()
+      .then((res) => setClinics(res.data || []))
+      .catch(() => {});
+
+    // Pre-fill patient when navigating from appointments page
+    if (prefillPatientId) {
+      api
+        .get(`/api/v1/doctors/patients/${prefillPatientId}/profile`)
+        .then((res) => {
+          const p = res.data;
+          if (p?.id) {
+            setSelectedPatient({
+              id: p.id,
+              full_name: p.full_name || "Unknown",
+              phone: p.phone || null,
+              last_visit_at: p.last_visit_at || null,
+            });
+          }
+        })
+        .catch(() => {});
+    }
+  }, [prefillPatientId]);
+
+  // Fetch branches when a clinic is selected
+  useEffect(() => {
+    setSelectedBranchId("");
+    setBranches([]);
+    if (!selectedClinicId) return;
+    setBranchesLoading(true);
+    getClinicBranches(selectedClinicId)
+      .then((data) => setBranches(data))
+      .catch(() => setBranches([]))
+      .finally(() => setBranchesLoading(false));
+  }, [selectedClinicId]);
 
   // Drug interaction check whenever medicines change (2+ with salt_id)
   useEffect(() => {
@@ -545,6 +596,9 @@ export default function NewPrescriptionPage() {
         medicines: medicinesFormatted,
         diagnosis: diagnosis || undefined,
         notes: notes || undefined,
+        clinic_id: selectedClinicId || undefined,
+        branch_id: selectedBranchId || undefined,
+        appointment_id: appointmentId || undefined,
       });
       setSuccess(true);
       setTimeout(() => router.push("/doctor/prescriptions"), 1500);
@@ -608,6 +662,12 @@ export default function NewPrescriptionPage() {
           { label: "New Prescription" },
         ]}
       />
+
+      {appointmentId && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          Linked to appointment — prescription will be associated with this appointment on save.
+        </div>
+      )}
 
       <div className="flex items-center justify-between">
         <div>
@@ -683,6 +743,55 @@ export default function NewPrescriptionPage() {
               <PatientSearch onSelect={setSelectedPatient} />
             )}
           </div>
+
+          {/* Clinic selector */}
+          {clinics.length > 0 && (
+            <div className="mb-4">
+              <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+                Clinic
+              </label>
+              <select
+                value={selectedClinicId}
+                onChange={(e) => setSelectedClinicId(e.target.value)}
+                className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+              >
+                <option value="">No clinic (private)</option>
+                {clinics.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Branch selector (shown when clinic has branches) */}
+          {selectedClinicId && (branchesLoading || branches.length > 0) && (
+            <div className="mb-4">
+              <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+                Branch
+              </label>
+              {branchesLoading ? (
+                <div className="h-10 rounded-lg border border-dreams-border bg-gray-50 flex items-center px-3">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-dreams-blue border-t-transparent" />
+                  <span className="ml-2 text-sm text-dreams-textSecondary">Loading branches...</span>
+                </div>
+              ) : (
+                <select
+                  value={selectedBranchId}
+                  onChange={(e) => setSelectedBranchId(e.target.value)}
+                  className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+                >
+                  <option value="">Any branch</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}{b.city ? ` — ${b.city}` : ""}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
 
           <div className="mb-4">
             <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">

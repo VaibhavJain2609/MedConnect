@@ -11,7 +11,7 @@ from sqlalchemy.orm import joinedload
 from app.database import get_db
 from app.dependencies import get_current_doctor, get_current_user, require_admin
 from app.models.appointment import Appointment
-from app.models.clinic import Clinic
+from app.models.clinic import Clinic, ClinicBranch
 from app.models.doctor import Doctor
 from app.models.user import User
 
@@ -37,6 +37,7 @@ class AppointmentCreate(BaseModel):
     patient_id: UUID
     doctor_id: UUID
     clinic_id: UUID | None = None
+    branch_id: UUID | None = None
     scheduled_at: datetime
     duration_minutes: int = 30
     type: str
@@ -57,6 +58,8 @@ class AppointmentResponse(BaseModel):
     doctor_name: str | None = None
     clinic_id: UUID | None = None
     clinic_name: str | None = None
+    branch_id: UUID | None = None
+    branch_name: str | None = None
     scheduled_at: datetime
     duration_minutes: int
     type: str
@@ -79,6 +82,7 @@ def _serialize_appointment(
     patient_name: str | None = None,
     doctor_name: str | None = None,
     clinic_name: str | None = None,
+    branch_name: str | None = None,
 ) -> dict:
     return {
         "id": str(appt.id),
@@ -88,6 +92,8 @@ def _serialize_appointment(
         "doctor_name": doctor_name,
         "clinic_id": str(appt.clinic_id) if appt.clinic_id else None,
         "clinic_name": clinic_name,
+        "branch_id": str(appt.branch_id) if appt.branch_id else None,
+        "branch_name": branch_name,
         "scheduled_at": appt.scheduled_at.isoformat(),
         "duration_minutes": appt.duration_minutes,
         "type": appt.type,
@@ -106,6 +112,7 @@ async def _load_appointment_with_names(db: AsyncSession, appt: Appointment) -> d
     patient_name: str | None = None
     doctor_name: str | None = None
     clinic_name: str | None = None
+    branch_name: str | None = None
 
     patient_res = await db.execute(
         select(User.full_name).where(User.id == appt.patient_id)
@@ -125,7 +132,13 @@ async def _load_appointment_with_names(db: AsyncSession, appt: Appointment) -> d
         )
         clinic_name = clinic_res.scalar_one_or_none()
 
-    return _serialize_appointment(appt, patient_name, doctor_name, clinic_name)
+    if appt.branch_id:
+        branch_res = await db.execute(
+            select(ClinicBranch.name).where(ClinicBranch.id == appt.branch_id)
+        )
+        branch_name = branch_res.scalar_one_or_none()
+
+    return _serialize_appointment(appt, patient_name, doctor_name, clinic_name, branch_name)
 
 
 # ─── Endpoints ────────────────────────────────────────────────────────────────
@@ -168,6 +181,7 @@ async def create_appointment(
         patient_id=req.patient_id,
         doctor_id=req.doctor_id,
         clinic_id=req.clinic_id,
+        branch_id=req.branch_id,
         scheduled_at=req.scheduled_at,
         duration_minutes=req.duration_minutes,
         type=req.type,
@@ -251,6 +265,7 @@ async def list_appointments(
     patient_ids = list({a.patient_id for a in appointments})
     doctor_ids = list({a.doctor_id for a in appointments})
     clinic_ids = list({a.clinic_id for a in appointments if a.clinic_id})
+    branch_ids = list({a.branch_id for a in appointments if a.branch_id})
 
     patient_names: dict[uuid.UUID, str] = {}
     if patient_ids:
@@ -271,12 +286,18 @@ async def list_appointments(
         cr = await db.execute(select(Clinic.id, Clinic.name).where(Clinic.id.in_(clinic_ids)))
         clinic_names = {row.id: row.name for row in cr.all()}
 
+    branch_names: dict[uuid.UUID, str] = {}
+    if branch_ids:
+        br = await db.execute(select(ClinicBranch.id, ClinicBranch.name).where(ClinicBranch.id.in_(branch_ids)))
+        branch_names = {row.id: row.name for row in br.all()}
+
     data = [
         _serialize_appointment(
             a,
             patient_name=patient_names.get(a.patient_id),
             doctor_name=doctor_names.get(a.doctor_id),
             clinic_name=clinic_names.get(a.clinic_id) if a.clinic_id else None,
+            branch_name=branch_names.get(a.branch_id) if a.branch_id else None,
         )
         for a in appointments
     ]

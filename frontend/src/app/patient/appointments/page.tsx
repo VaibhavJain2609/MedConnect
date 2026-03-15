@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Calendar, Clock, Stethoscope, Building2, XCircle, Plus } from "lucide-react";
+import { Calendar, Clock, Stethoscope, Building2, XCircle, Plus, X } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
-import { getAppointments, updateAppointmentStatus, type Appointment } from "@/lib/api/appointments";
+import { getAppointments, updateAppointmentStatus, createAppointment, type Appointment } from "@/lib/api/appointments";
+import { useAuthStore } from "@/stores/auth-store";
+import api from "@/lib/api";
 
 const TYPE_LABELS: Record<string, string> = {
   "in-person": "In Person",
@@ -39,12 +41,311 @@ function formatDateTime(iso: string) {
   };
 }
 
+function formatDateInput(d: Date) {
+  return d.toISOString().slice(0, 10);
+}
+
 function isUpcoming(appt: Appointment) {
   return (
     (appt.status === "scheduled" || appt.status === "arrived" || appt.status === "in-progress") &&
     new Date(appt.scheduled_at) >= new Date()
   );
 }
+
+// ---------------------------------------------------------------------------
+// Doctor search typeahead
+// ---------------------------------------------------------------------------
+
+interface DoctorSuggestion {
+  id: string;
+  full_name: string;
+  specialization: string | null;
+  facility_name: string | null;
+  facility_city: string | null;
+}
+
+function DoctorSearchInput({
+  onSelect,
+}: {
+  onSelect: (d: DoctorSuggestion) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<DoctorSuggestion[]>([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const search = useCallback((q: string) => {
+    if (q.length < 2) {
+      setResults([]);
+      setOpen(false);
+      return;
+    }
+    setLoading(true);
+    api
+      .get(`/api/v1/patients/doctors/search?q=${encodeURIComponent(q)}`)
+      .then((res) => {
+        setResults(res.data.data || []);
+        setOpen(true);
+      })
+      .catch(() => setResults([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setQuery(val);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => search(val), 400);
+  };
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        value={query}
+        onChange={handleChange}
+        placeholder="Search doctor by name or specialization..."
+        className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+        onFocus={() => results.length > 0 && setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+      />
+      {loading && (
+        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-dreams-blue border-t-transparent" />
+        </div>
+      )}
+      {open && results.length > 0 && (
+        <div className="absolute z-50 mt-1 w-full rounded-lg border border-dreams-border bg-white shadow-lg">
+          {results.map((d) => (
+            <button
+              key={d.id}
+              type="button"
+              className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-dreams-lightBg transition-colors"
+              onMouseDown={() => {
+                onSelect(d);
+                setQuery("");
+                setOpen(false);
+              }}
+            >
+              <div className="flex-1">
+                <p className="text-sm font-medium text-dreams-textPrimary">{d.full_name}</p>
+                {d.specialization && (
+                  <p className="text-xs text-dreams-textSecondary">{d.specialization}</p>
+                )}
+                {d.facility_name && (
+                  <p className="text-xs text-dreams-textSecondary">{d.facility_name}{d.facility_city ? `, ${d.facility_city}` : ""}</p>
+                )}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+      {open && results.length === 0 && !loading && query.length >= 2 && (
+        <div className="absolute z-50 mt-1 w-full rounded-lg border border-dreams-border bg-white px-4 py-3 text-sm text-dreams-textSecondary shadow-lg">
+          No doctors found.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// BookAppointmentModal
+// ---------------------------------------------------------------------------
+
+interface BookAppointmentModalProps {
+  onClose: () => void;
+  onSuccess: () => void;
+  patientId: string;
+}
+
+function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointmentModalProps) {
+  const [selectedDoctor, setSelectedDoctor] = useState<DoctorSuggestion | null>(null);
+  const [date, setDate] = useState(formatDateInput(new Date()));
+  const [time, setTime] = useState("09:00");
+  const [duration, setDuration] = useState(30);
+  const [type, setType] = useState<"in-person" | "teleconsult" | "follow-up">("in-person");
+  const [chiefComplaint, setChiefComplaint] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (!selectedDoctor) {
+      setError("Please select a doctor");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const scheduledAt = new Date(`${date}T${time}:00`).toISOString();
+      await createAppointment({
+        patient_id: patientId,
+        doctor_id: selectedDoctor.id,
+        scheduled_at: scheduledAt,
+        duration_minutes: duration,
+        type,
+        chief_complaint: chiefComplaint || undefined,
+      });
+      onSuccess();
+      onClose();
+    } catch (err: any) {
+      const msg =
+        err.response?.data?.detail?.error?.message ||
+        err.response?.data?.detail ||
+        "Failed to book appointment";
+      setError(typeof msg === "string" ? msg : JSON.stringify(msg));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-lg rounded-xl bg-white shadow-xl">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-dreams-border px-6 py-4">
+          <h2 className="text-lg font-semibold text-dreams-textPrimary">Book Appointment</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-dreams-textSecondary hover:text-dreams-textPrimary"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
+          {error && (
+            <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          {/* Doctor */}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+              Doctor *
+            </label>
+            {selectedDoctor ? (
+              <div className="flex items-center gap-3 rounded-lg border border-dreams-blue bg-dreams-blue/5 px-4 py-2.5">
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-dreams-textPrimary">{selectedDoctor.full_name}</p>
+                  {selectedDoctor.specialization && (
+                    <p className="text-xs text-dreams-textSecondary">{selectedDoctor.specialization}</p>
+                  )}
+                  {selectedDoctor.facility_name && (
+                    <p className="text-xs text-dreams-textSecondary">{selectedDoctor.facility_name}</p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDoctor(null)}
+                  className="text-dreams-textSecondary hover:text-red-500 transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ) : (
+              <DoctorSearchInput onSelect={setSelectedDoctor} />
+            )}
+          </div>
+
+          {/* Date + Time */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Date *</label>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                min={formatDateInput(new Date())}
+                required
+                className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Time *</label>
+              <input
+                type="time"
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+                required
+                className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+              />
+            </div>
+          </div>
+
+          {/* Duration + Type */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Duration</label>
+              <select
+                value={duration}
+                onChange={(e) => setDuration(Number(e.target.value))}
+                className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+              >
+                <option value={15}>15 min</option>
+                <option value={30}>30 min</option>
+                <option value={45}>45 min</option>
+                <option value={60}>60 min</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Type *</label>
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value as typeof type)}
+                className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+              >
+                <option value="in-person">In Person</option>
+                <option value="teleconsult">Teleconsult</option>
+                <option value="follow-up">Follow-up</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Chief Complaint */}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+              Chief Complaint
+            </label>
+            <input
+              type="text"
+              value={chiefComplaint}
+              onChange={(e) => setChiefComplaint(e.target.value)}
+              placeholder="e.g., Fever, headache for 2 days"
+              className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+            />
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-3 pt-2">
+            <button
+              type="submit"
+              disabled={submitting || !selectedDoctor}
+              className="flex-1 rounded-lg bg-dreams-blue px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+            >
+              {submitting ? "Booking..." : "Book Appointment"}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-dreams-border px-4 py-2.5 text-sm font-medium text-dreams-textPrimary hover:bg-dreams-lightBg transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Appointment card
+// ---------------------------------------------------------------------------
 
 function AppointmentCard({
   appt,
@@ -126,9 +427,14 @@ function AppointmentCard({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Main page
+// ---------------------------------------------------------------------------
+
 export default function PatientAppointmentsPage() {
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
   const [showBooking, setShowBooking] = useState(false);
+  const { user } = useAuthStore();
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -156,6 +462,16 @@ export default function PatientAppointmentsPage() {
 
   return (
     <div className="space-y-6">
+      {showBooking && user && (
+        <BookAppointmentModal
+          patientId={user.id}
+          onClose={() => setShowBooking(false)}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ["patient-appointments"] });
+          }}
+        />
+      )}
+
       <Breadcrumb
         items={[
           { label: "Health Timeline", href: "/patient/timeline" },
@@ -166,23 +482,13 @@ export default function PatientAppointmentsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-dreams-textPrimary">My Appointments</h1>
         <button
-          onClick={() => setShowBooking(!showBooking)}
+          onClick={() => setShowBooking(true)}
           className="flex items-center gap-2 rounded-lg bg-dreams-blue px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
         >
           <Plus className="h-4 w-4" />
           Book Appointment
         </button>
       </div>
-
-      {/* "Book Appointment" coming-soon banner */}
-      {showBooking && (
-        <div className="rounded-xl border border-dreams-border bg-blue-50 p-4 shadow-card">
-          <p className="font-medium text-dreams-textPrimary">Book Appointment</p>
-          <p className="mt-1 text-sm text-dreams-textSecondary">
-            Online appointment booking is coming soon. Please contact your doctor or clinic to schedule an appointment.
-          </p>
-        </div>
-      )}
 
       {/* Tabs */}
       <div className="flex gap-1 rounded-lg border border-dreams-border bg-gray-100 p-1 w-fit">

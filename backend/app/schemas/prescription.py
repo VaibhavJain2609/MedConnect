@@ -32,6 +32,9 @@ class PrescriptionCreate(BaseModel):
     diagnosis: str | None = None
     notes: str | None = None
     valid_until: date | None = None
+    appointment_id: Optional[UUID] = None
+    clinic_id: Optional[UUID] = None
+    branch_id: Optional[UUID] = None
 
 
 class PrescriptionResponse(BaseModel):
@@ -39,6 +42,9 @@ class PrescriptionResponse(BaseModel):
     record_id: UUID
     doctor_id: UUID
     patient_id: UUID
+    clinic_id: Optional[UUID] = None
+    branch_id: Optional[UUID] = None
+    appointment_id: Optional[UUID] = None
     medicines: list[dict]
     diagnosis: str | None
     notes: str | None
