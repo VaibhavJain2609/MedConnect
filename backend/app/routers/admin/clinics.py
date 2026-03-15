@@ -10,10 +10,14 @@ DELETE /api/v1/admin/clinics/{id}   — soft delete
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel as PydanticBaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import require_admin
+from app.models.patient_link import PatientClinicLink
+from app.models.user import User
 from app.schemas.clinic import AdminClinicDetailResponse, ClinicCreate, ClinicUpdate
 from app.services import clinic_service
 
@@ -22,6 +26,10 @@ router = APIRouter(
     tags=["admin-clinics"],
     dependencies=[Depends(require_admin)],
 )
+
+
+class AdminAddPatientBody(PydanticBaseModel):
+    patient_id: str
 
 
 @router.post("", response_model=AdminClinicDetailResponse, status_code=status.HTTP_201_CREATED)
@@ -106,3 +114,63 @@ async def delete_clinic(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail={"error": {"code": "NOT_FOUND", "message": "Clinic not found"}})
     await clinic_service.delete_clinic(db, clinic)
+
+
+@router.post("/{clinic_id}/patients", status_code=status.HTTP_201_CREATED)
+async def admin_add_patient_to_clinic(
+    clinic_id: str,
+    body: AdminAddPatientBody,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Link a patient to a clinic with pending consent."""
+    try:
+        cid = uuid.UUID(clinic_id)
+        pid = uuid.UUID(body.patient_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"error": {"code": "INVALID_ID", "message": "Invalid ID format"}},
+        )
+
+    # Validate patient exists
+    patient = await db.scalar(
+        select(User).where(User.id == pid, User.deleted_at.is_(None), User.role == "patient")
+    )
+    if not patient:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "NOT_FOUND", "message": "Patient not found"}},
+        )
+
+    # Check for existing link (excluding soft-deleted ones)
+    existing = await db.scalar(
+        select(PatientClinicLink).where(
+            PatientClinicLink.patient_id == pid,
+            PatientClinicLink.clinic_id == cid,
+            PatientClinicLink.deleted_at.is_(None),
+        )
+    )
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": {"code": "DUPLICATE_LINK", "message": "Patient is already linked to this clinic"}},
+        )
+
+    link = PatientClinicLink(
+        id=uuid.uuid4(),
+        patient_id=pid,
+        clinic_id=cid,
+        linked_by=admin.id,
+        consent_status="pending",
+    )
+    db.add(link)
+    await db.commit()
+    await db.refresh(link)
+
+    return {
+        "link_id": str(link.id),
+        "patient_id": str(link.patient_id),
+        "clinic_id": str(link.clinic_id),
+        "consent_status": link.consent_status,
+    }
