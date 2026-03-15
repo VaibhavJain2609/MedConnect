@@ -1,6 +1,6 @@
 """Add appointment_id to prescriptions
 
-Revision ID: 015_add_appointment_id_to_prescriptions
+Revision ID: 015_rx_appointment_id
 Revises: 014_add_branch_id
 Create Date: 2026-03-15
 """
@@ -8,7 +8,7 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
 
-revision = "015_add_appointment_id_to_prescriptions"
+revision = "015_rx_appointment_id"
 down_revision = "014_add_branch_id"
 branch_labels = None
 depends_on = None
