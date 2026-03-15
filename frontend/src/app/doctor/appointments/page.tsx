@@ -150,7 +150,7 @@ interface ClinicOption {
 interface BookAppointmentModalProps {
   onClose: () => void;
   onSuccess: () => void;
-  doctorId: string;
+  doctorId: string | null;
 }
 
 function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentModalProps) {
@@ -202,7 +202,7 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
       const scheduledAt = new Date(`${date}T${time}:00`).toISOString();
       await createAppointment({
         patient_id: selectedPatient.id,
-        doctor_id: doctorId,
+        doctor_id: doctorId ?? undefined,
         clinic_id: clinicId || undefined,
         branch_id: branchId || undefined,
         scheduled_at: scheduledAt,
@@ -518,7 +518,7 @@ export default function DoctorAppointmentsPage() {
 
   return (
     <div className="space-y-6">
-      {showBookingModal && doctorId && (
+      {showBookingModal && (
         <BookAppointmentModal
           doctorId={doctorId}
           onClose={() => setShowBookingModal(false)}

@@ -54,7 +54,7 @@ export interface AppointmentsListResponse {
 
 export interface CreateAppointmentData {
   patient_id: string;
-  doctor_id: string;
+  doctor_id?: string | null;
   clinic_id?: string | null;
   branch_id?: string | null;
   scheduled_at: string;

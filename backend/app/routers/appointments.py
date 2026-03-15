@@ -35,7 +35,7 @@ STATUS_TRANSITIONS: dict[str, set[str]] = {
 
 class AppointmentCreate(BaseModel):
     patient_id: UUID
-    doctor_id: UUID
+    doctor_id: UUID | None = None   # inferred from auth token when omitted
     clinic_id: UUID | None = None
     branch_id: UUID | None = None
     scheduled_at: datetime
@@ -156,9 +156,22 @@ async def create_appointment(
             detail={"error": {"code": "INVALID_TYPE", "message": f"type must be one of: {', '.join(sorted(VALID_TYPES))}"}},
         )
 
+    # Resolve doctor_id: use request value or fall back to the authenticated user's doctor record
+    doctor_id = req.doctor_id
+    if doctor_id is None:
+        doc_res = await db.execute(
+            select(Doctor.id).where(Doctor.user_id == current_user.id, Doctor.deleted_at.is_(None))
+        )
+        doctor_id = doc_res.scalar_one_or_none()
+        if doctor_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": {"code": "MISSING_DOCTOR", "message": "doctor_id is required"}},
+            )
+
     # Verify doctor exists
     doctor_res = await db.execute(
-        select(Doctor).where(Doctor.id == req.doctor_id, Doctor.deleted_at.is_(None))
+        select(Doctor).where(Doctor.id == doctor_id, Doctor.deleted_at.is_(None))
     )
     if not doctor_res.scalar_one_or_none():
         raise HTTPException(
@@ -179,7 +192,7 @@ async def create_appointment(
     appt = Appointment(
         id=uuid.uuid4(),
         patient_id=req.patient_id,
-        doctor_id=req.doctor_id,
+        doctor_id=doctor_id,
         clinic_id=req.clinic_id,
         branch_id=req.branch_id,
         scheduled_at=req.scheduled_at,
