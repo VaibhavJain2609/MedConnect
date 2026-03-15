@@ -24,25 +24,21 @@ def decode_keycloak_token(token: str) -> dict | None:
         client = get_jwks_client()
         signing_key = client.get_signing_key_from_jwt(token)
         expected_issuer = f"{settings.KEYCLOAK_PUBLIC_URL}/realms/{settings.KEYCLOAK_REALM}"
-        print(f"Expected issuer: {expected_issuer}")
-        payload = jwt.decode(
-            token,
-            signing_key.key,
-            algorithms=["RS256"],
-            # For development: disable issuer verification to debug token validation
-            issuer=expected_issuer,
-            options={"verify_aud": False, "verify_iss": False},
-        )
-        actual_issuer = payload.get('iss')
-        print(f"✓ Token decoded successfully, actual issuer: {actual_issuer}")
-        if actual_issuer != expected_issuer:
-            print(f"⚠️  Issuer mismatch: expected {expected_issuer}, got {actual_issuer}")
+        logger.debug("Decoding token, expected issuer: %s", expected_issuer)
+        decode_kwargs: dict = {
+            "algorithms": ["RS256"],
+            "issuer": expected_issuer,
+        }
+        if settings.VERIFY_JWT_AUDIENCE:
+            decode_kwargs["audience"] = settings.KEYCLOAK_CLIENT_ID
+        else:
+            decode_kwargs["options"] = {"verify_aud": False}
+        payload = jwt.decode(token, signing_key.key, **decode_kwargs)
+        logger.debug("Token decoded successfully, issuer: %s", payload.get("iss"))
         return payload
     except jwt.PyJWTError as e:
-        print(f"❌ JWT validation failed: {type(e).__name__}: {e}")
         logger.error("JWT validation failed: %s: %s", type(e).__name__, e)
         return None
     except Exception as e:
-        print(f"❌ Unexpected error: {type(e).__name__}: {e}")
         logger.error("Unexpected error validating token: %s: %s", type(e).__name__, e)
         return None

@@ -278,6 +278,25 @@ async def create_appointment(
             detail={"error": {"code": "NOT_FOUND", "message": "Patient not found"}},
         )
 
+    # Authorization: patients can only book for themselves
+    if current_user.role == "patient" and req.patient_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": {"code": "FORBIDDEN", "message": "Patients can only book appointments for themselves"}},
+        )
+
+    # Authorization: doctors can only schedule under their own profile
+    if current_user.role == "doctor":
+        own_doc_res = await db.execute(
+            select(Doctor.id).where(Doctor.user_id == current_user.id, Doctor.deleted_at.is_(None))
+        )
+        own_doctor_id = own_doc_res.scalar_one_or_none()
+        if own_doctor_id and doctor_id != own_doctor_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "FORBIDDEN", "message": "Doctors can only create appointments under their own schedule"}},
+            )
+
     # Check doctor availability
     await _check_doctor_conflict(db, doctor_id, req.scheduled_at, req.duration_minutes)
 

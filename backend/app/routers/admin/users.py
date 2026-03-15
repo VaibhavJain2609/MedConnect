@@ -397,6 +397,15 @@ async def update_user(
     if updated:
         user.updated_at = datetime.now(timezone.utc)
 
+    from app.services.audit_service import log_change
+    await log_change(
+        db=db,
+        table_name="users",
+        record_id=user.id,
+        action="UPDATE",
+        old_values=None,
+        new_values={k: v for k, v in body.model_dump(exclude_none=True).items()},
+    )
     await db.commit()
     await db.refresh(user)
 
@@ -437,6 +446,15 @@ async def delete_user(
     user.deleted_at = datetime.now(timezone.utc)
     user.updated_at = datetime.now(timezone.utc)
 
+    from app.services.audit_service import log_change
+    await log_change(
+        db=db,
+        table_name="users",
+        record_id=user.id,
+        action="DELETE",
+        old_values={"is_active": user.is_active, "role": user.role},
+        new_values={"deleted": True},
+    )
     await db.commit()
 
     return AdminUserDeleteResponse(

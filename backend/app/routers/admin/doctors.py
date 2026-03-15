@@ -203,6 +203,7 @@ async def verify_doctor(
             detail={"error": {"code": "NOT_FOUND", "message": "Doctor not found"}},
         )
 
+    old_verified = doctor.verified
     doctor.verified = body.action == "approve"
 
     if body.action == "approve":
@@ -228,6 +229,16 @@ async def verify_doctor(
             message=notif_msg,
             action_url="/doctor/dashboard",
         )
+    )
+
+    from app.services.audit_service import log_change
+    await log_change(
+        db=db,
+        table_name="doctors",
+        record_id=doctor.id,
+        action="UPDATE",
+        old_values={"verified": old_verified},
+        new_values={"verified": doctor.verified, "action": body.action, "reason": body.reason},
     )
     await db.commit()
     await db.refresh(doctor)

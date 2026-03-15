@@ -3,6 +3,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app.models.doctor import Doctor
 from app.models.medical_record import MedicalRecord
@@ -83,17 +84,12 @@ async def create_prescription(
 
     # Notify the patient about the new prescription
     doctor_result = await db.execute(
-        select(Doctor).where(Doctor.id == doctor_id, Doctor.deleted_at.is_(None))
+        select(Doctor)
+        .options(joinedload(Doctor.user))
+        .where(Doctor.id == doctor_id, Doctor.deleted_at.is_(None))
     )
-    doctor = doctor_result.scalar_one_or_none()
-    if doctor:
-        doctor_user_result = await db.execute(
-            select(User).where(User.id == doctor.user_id, User.deleted_at.is_(None))
-        )
-        doctor_user = doctor_user_result.scalar_one_or_none()
-        doctor_name = doctor_user.full_name if doctor_user else "your doctor"
-    else:
-        doctor_name = "your doctor"
+    doctor = doctor_result.unique().scalar_one_or_none()
+    doctor_name = doctor.user.full_name if doctor and doctor.user else "your doctor"
 
     await create_notification(
         db=db,

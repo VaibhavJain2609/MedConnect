@@ -80,8 +80,8 @@ async def get_patient_timeline(
 
     stmt = (
         select(MedicalRecord, User.full_name.label("doctor_name"), Prescription)
-        .outerjoin(Doctor, MedicalRecord.doctor_id == Doctor.id)
-        .outerjoin(User, Doctor.user_id == User.id)
+        .outerjoin(Doctor, and_(MedicalRecord.doctor_id == Doctor.id, Doctor.deleted_at.is_(None)))
+        .outerjoin(User, and_(Doctor.user_id == User.id, User.deleted_at.is_(None)))
         .outerjoin(Prescription, and_(
             Prescription.record_id == MedicalRecord.id,
             Prescription.deleted_at.is_(None)

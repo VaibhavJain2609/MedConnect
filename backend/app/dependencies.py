@@ -14,27 +14,28 @@ from app.utils.security import decode_keycloak_token
 security = HTTPBearer(auto_error=False)
 
 
+import logging
+
+_logger = logging.getLogger(__name__)
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: AsyncSession = Depends(get_db),
 ) -> User:
     if not credentials:
-        print("❌ Authorization header missing")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error": {"code": "UNAUTHORIZED", "message": "Authorization header missing"}},
             headers={"WWW-Authenticate": "Bearer"},
         )
-    print(f"✓ Token received: {credentials.credentials[:50]}...")
     payload = decode_keycloak_token(credentials.credentials)
     if payload is None:
-        print(f"❌ Token validation failed")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error": {"code": "UNAUTHORIZED", "message": "Invalid or expired token"}},
             headers={"WWW-Authenticate": "Bearer"},
         )
-    print(f"✓ Token valid, issuer: {payload.get('iss')}")
 
     sub = payload.get("sub")
     if not sub:
@@ -100,6 +101,8 @@ async def get_current_user(
         if changed:
             await db.flush()
 
+    from app.services.audit_service import set_audit_user
+    set_audit_user(user.id)
     return user
 
 

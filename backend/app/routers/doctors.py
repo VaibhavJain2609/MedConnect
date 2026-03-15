@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_active_clinic, get_current_doctor
+from app.dependencies import get_active_clinic, get_current_doctor, get_verified_doctor
 from app.models.clinic import ClinicMembership
 from app.models.doctor import Doctor
 from app.models.medical_record import MedicalRecord
@@ -174,6 +174,8 @@ async def get_patient_profile(
     """
     from sqlalchemy import select
 
+    _, doctor = doctor_info
+
     patient_result = await db.execute(
         select(User).where(User.id == patient_id, User.deleted_at.is_(None))
     )
@@ -182,6 +184,12 @@ async def get_patient_profile(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"error": {"code": "NOT_FOUND", "message": "Patient not found"}},
+        )
+
+    if not await _check_doctor_patient_relationship(db, doctor, patient_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": {"code": "FORBIDDEN", "message": "No relationship with this patient"}},
         )
 
     return {
@@ -214,6 +222,43 @@ async def _check_patient_consent(db: AsyncSession, patient_id: UUID, clinic_id: 
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"error": {"code": "CONSENT_REQUIRED", "message": "Patient has not approved access for this clinic"}},
         )
+
+
+async def _check_doctor_patient_relationship(
+    db: AsyncSession, doctor: "Doctor", patient_id: UUID
+) -> bool:
+    """Returns True if doctor has created a record for patient, or shares an approved clinic."""
+    from sqlalchemy import select as _select
+
+    # Check 1: doctor has created at least one medical record for this patient
+    record_exists = await db.execute(
+        _select(MedicalRecord.id)
+        .where(
+            MedicalRecord.doctor_id == doctor.id,
+            MedicalRecord.patient_id == patient_id,
+            MedicalRecord.deleted_at.is_(None),
+        )
+        .limit(1)
+    )
+    if record_exists.scalar_one_or_none():
+        return True
+
+    # Check 2: doctor is a member of a clinic that has an approved PatientClinicLink
+    # Note: ClinicMembership links doctor's User (doctor.user_id), not Doctor.id
+    shared_clinic = await db.execute(
+        _select(ClinicMembership.id)
+        .join(PatientClinicLink, PatientClinicLink.clinic_id == ClinicMembership.clinic_id)
+        .where(
+            ClinicMembership.user_id == doctor.user_id,
+            ClinicMembership.is_active.is_(True),
+            ClinicMembership.deleted_at.is_(None),
+            PatientClinicLink.patient_id == patient_id,
+            PatientClinicLink.consent_status == "approved",
+            PatientClinicLink.deleted_at.is_(None),
+        )
+        .limit(1)
+    )
+    return shared_clinic.scalar_one_or_none() is not None
 
 
 @router.get("/patients/{patient_id}/prescriptions")
@@ -286,6 +331,7 @@ async def get_patient_prescriptions(
     result = await db.execute(stmt)
     rows = result.all()
 
+    from datetime import date as _date
     prescriptions = [
         {
             "id": str(rx.id),
@@ -294,6 +340,7 @@ async def get_patient_prescriptions(
             "diagnosis": rx.diagnosis,
             "notes": rx.notes,
             "valid_until": rx.valid_until.isoformat() if rx.valid_until else None,
+            "is_expired": bool(rx.valid_until and rx.valid_until < _date.today()),
             "created_at": rx.created_at.isoformat(),
             "doctor_name": doc_name,
         }
@@ -317,6 +364,12 @@ async def patient_records(
     if clinic_context:
         clinic_id, _ = clinic_context
         await _check_patient_consent(db, patient_id, clinic_id)
+    else:
+        if not await _check_doctor_patient_relationship(db, doctor, patient_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "FORBIDDEN", "message": "No relationship with this patient"}},
+            )
     records, next_cursor, has_more = await get_patient_timeline(
         db=db, patient_id=patient_id, record_type=type, cursor=cursor, limit=limit
     )
@@ -329,7 +382,7 @@ async def patient_records(
 @router.post("/records", response_model=RecordResponse, status_code=status.HTTP_201_CREATED)
 async def create_medical_record(
     req: RecordCreate,
-    doctor_info: tuple[User, Doctor] = Depends(get_current_doctor),
+    doctor_info: tuple[User, Doctor] = Depends(get_verified_doctor),
     db: AsyncSession = Depends(get_db),
     clinic_context: tuple | None = Depends(get_active_clinic),
 ):
@@ -342,6 +395,12 @@ async def create_medical_record(
     clinic_id = clinic_context[0] if clinic_context else None
     if clinic_id:
         await _check_patient_consent(db, req.patient_id, clinic_id)
+    else:
+        if not await _check_doctor_patient_relationship(db, doctor, req.patient_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "PATIENT_ACCESS_DENIED", "message": "No relationship with this patient"}},
+            )
     try:
         record = await create_record(
             db=db,
@@ -419,7 +478,7 @@ async def list_record_amendments(
 async def amend_record(
     record_id: UUID,
     req: RecordCreate,
-    doctor_info=Depends(get_current_doctor),
+    doctor_info=Depends(get_verified_doctor),
     db: AsyncSession = Depends(get_db),
     clinic_context=Depends(get_active_clinic),
 ):
@@ -440,6 +499,12 @@ async def amend_record(
 
     if clinic_id:
         await _check_patient_consent(db, original.patient_id, clinic_id)
+    else:
+        if not await _check_doctor_patient_relationship(db, doctor, original.patient_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "PATIENT_ACCESS_DENIED", "message": "No relationship with this patient"}},
+            )
 
     from app.utils.fhir import create_fhir_bundle
 
@@ -487,7 +552,7 @@ async def amend_record(
 @router.post("/prescriptions", response_model=PrescriptionResponse, status_code=status.HTTP_201_CREATED)
 async def create_rx(
     req: PrescriptionCreate,
-    doctor_info: tuple[User, Doctor] = Depends(get_current_doctor),
+    doctor_info: tuple[User, Doctor] = Depends(get_verified_doctor),
     db: AsyncSession = Depends(get_db),
     clinic_context: tuple | None = Depends(get_active_clinic),
 ):
@@ -497,6 +562,12 @@ async def create_rx(
     branch_id = req.branch_id
     if clinic_id:
         await _check_patient_consent(db, req.patient_id, clinic_id)
+    else:
+        if not await _check_doctor_patient_relationship(db, doctor, req.patient_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "PATIENT_ACCESS_DENIED", "message": "No relationship with this patient"}},
+            )
     try:
         prescription = await create_prescription(
             db=db,
@@ -660,6 +731,7 @@ async def get_prescription(
     doctor_user_result = await db.execute(doctor_user_stmt)
     doctor_user = doctor_user_result.scalar_one_or_none()
 
+    from datetime import date as _date
     return {
         "id": str(prescription.id),
         "record_id": str(record.id),
@@ -667,6 +739,7 @@ async def get_prescription(
         "diagnosis": prescription.diagnosis,
         "notes": prescription.notes,
         "valid_until": prescription.valid_until.isoformat() if prescription.valid_until else None,
+        "is_expired": bool(prescription.valid_until and prescription.valid_until < _date.today()),
         "created_at": prescription.created_at.isoformat(),
         "patient_id": str(prescription.patient_id),
         "patient_name": patient_name,

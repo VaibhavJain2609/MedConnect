@@ -51,6 +51,7 @@ def _get_user_key(request: Request) -> str:
     if auth.startswith("Bearer "):
         token = auth[7:]
         try:
+            # Signature not verified here — this is rate-limiting only, not auth.
             payload = jwt.decode(token, options={"verify_signature": False})
             sub = payload.get("sub")
             if sub:

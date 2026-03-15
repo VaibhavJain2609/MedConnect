@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     KEYCLOAK_PUBLIC_URL: str = "http://localhost:8080"
     KEYCLOAK_REALM: str = "medconnect"
     KEYCLOAK_CLIENT_ID: str = "medconnect-backend"
+    # Set to False in dev .env if Keycloak lacks audience mappers
+    VERIFY_JWT_AUDIENCE: bool = True
 
     SENTRY_DSN: str = ""
 
