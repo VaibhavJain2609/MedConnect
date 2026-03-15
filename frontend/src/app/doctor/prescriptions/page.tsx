@@ -18,25 +18,15 @@ import { FilePlus, Search } from "lucide-react";
 export default function DoctorPrescriptionsPage() {
   const [search, setSearch] = useState("");
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["doctor-prescriptions", search],
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set("limit", "50");
       if (search) params.set("q", search);
 
-      try {
-        const res = await api.get(`/api/v1/doctors/prescriptions?${params}`);
-        return res.data;
-      } catch (err) {
-        console.warn("Doctor prescriptions endpoint not available, using fallback");
-        const res = await api.get(`/api/v1/doctors/records?${params}`);
-        const records = res.data.data || [];
-        return {
-          data: records.filter((r: any) => r.record_type === "prescription"),
-          pagination: res.data.pagination,
-        };
-      }
+      const res = await api.get(`/api/v1/doctors/prescriptions?${params}`);
+      return res.data;
     },
   });
 
@@ -73,6 +63,11 @@ export default function DoctorPrescriptionsPage() {
       {isLoading ? (
         <div className="flex justify-center py-12">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
+        </div>
+      ) : isError ? (
+        <div className="bg-white rounded-lg shadow-card p-12 text-center">
+          <p className="text-red-500 font-medium">Failed to load prescriptions.</p>
+          <p className="mt-1 text-sm text-dreams-textSecondary">Please try again later.</p>
         </div>
       ) : data?.data?.length === 0 ? (
         <div className="bg-white rounded-lg shadow-card p-12 text-center">
