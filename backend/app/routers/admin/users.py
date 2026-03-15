@@ -14,6 +14,8 @@ from app.models.prescription import Prescription
 from app.models.user import User
 from app.models.doctor import Doctor
 from app.schemas.user import (
+    AdminCreatePatientRequest,
+    AdminCreatePatientResponse,
     AdminUserDeleteResponse,
     AdminUserDetailResponse,
     AdminUserPrescriptionItem,
@@ -78,6 +80,34 @@ async def list_users(
         limit=limit,
         totalPages=math.ceil(total / limit) if total else 0,
     )
+
+
+@router.post("", response_model=AdminCreatePatientResponse, status_code=status.HTTP_201_CREATED)
+async def create_patient(
+    body: AdminCreatePatientRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a walk-in patient without a Keycloak account."""
+    import uuid as uuid_module
+    keycloak_sub = f"walkin:{uuid_module.uuid4()}"
+    user = User(
+        full_name=body.full_name,
+        phone=body.phone or None,
+        email=body.email or None,
+        keycloak_sub=keycloak_sub,
+        role="patient",
+    )
+    db.add(user)
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": {"code": "CONFLICT", "message": "A user with this email or phone already exists"}},
+        )
+    await db.refresh(user)
+    return user
 
 
 @router.get("/{user_id}", response_model=AdminUserDetailResponse)

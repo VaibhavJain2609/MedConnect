@@ -101,6 +101,25 @@ class AdminUserDetailResponse(BaseModel):
         from_attributes = True
 
 
+class AdminCreatePatientRequest(BaseModel):
+    full_name: str
+    phone: str | None = None
+    email: str | None = None
+
+
+class AdminCreatePatientResponse(BaseModel):
+    id: str
+    full_name: str
+    phone: str | None
+    email: str | None
+    role: str
+    is_active: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class AdminUserUpdateRequest(BaseModel):
     full_name: str | None = None
     email: str | None = None

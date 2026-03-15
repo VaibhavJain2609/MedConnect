@@ -13,7 +13,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
 // ---------------------------------------------------------------------------
-// Patient search typeahead
+// Patient search typeahead (with inline quick-add)
 // ---------------------------------------------------------------------------
 
 interface PatientSuggestion {
@@ -27,12 +27,18 @@ function PatientSearchInput({ onSelect }: { onSelect: (p: PatientSuggestion) => 
   const [results, setResults] = useState<PatientSuggestion[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const search = useCallback((q: string) => {
     if (q.length < 2) { setResults([]); setOpen(false); return; }
     setLoading(true);
-    api.get(`/api/v1/doctors/patients/search?q=${encodeURIComponent(q)}`)
+    api.get(`/api/v1/admin/users?role=patient&search=${encodeURIComponent(q)}&limit=10`)
       .then((res) => { setResults(res.data.data || []); setOpen(true); })
       .catch(() => setResults([]))
       .finally(() => setLoading(false));
@@ -41,8 +47,34 @@ function PatientSearchInput({ onSelect }: { onSelect: (p: PatientSuggestion) => 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setQuery(val);
+    setShowQuickAdd(false);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => search(val), 400);
+  };
+
+  const handleQuickAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!newName.trim()) return;
+    setCreating(true);
+    setCreateError("");
+    try {
+      const res = await api.post("/api/v1/admin/users", {
+        full_name: newName.trim(),
+        phone: newPhone.trim() || undefined,
+        email: newEmail.trim() || undefined,
+      });
+      onSelect({ id: res.data.id, full_name: res.data.full_name, phone: res.data.phone });
+      setOpen(false);
+      setShowQuickAdd(false);
+      setQuery("");
+      setNewName(""); setNewPhone(""); setNewEmail("");
+    } catch (err: any) {
+      const msg = err.response?.data?.detail?.error?.message || "Failed to create patient";
+      setCreateError(typeof msg === "string" ? msg : JSON.stringify(msg));
+    } finally {
+      setCreating(false);
+    }
   };
 
   return (
@@ -53,19 +85,19 @@ function PatientSearchInput({ onSelect }: { onSelect: (p: PatientSuggestion) => 
         onChange={handleChange}
         placeholder="Search patient by name or phone..."
         className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
-        onFocus={() => results.length > 0 && setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => { if (!showQuickAdd) setOpen(false); }, 200)}
       />
       {loading && (
         <div className="absolute right-3 top-1/2 -translate-y-1/2">
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-dreams-blue border-t-transparent" />
         </div>
       )}
-      {open && results.length > 0 && (
+      {open && (
         <div className="absolute z-50 mt-1 w-full rounded-lg border border-dreams-border bg-white shadow-lg">
           {results.map((p) => (
             <button key={p.id} type="button"
-              className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-dreams-lightBg transition-colors"
+              className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-dreams-lightBg transition-colors border-b border-dreams-border last:border-0"
               onMouseDown={() => { onSelect(p); setQuery(""); setOpen(false); }}>
               <div className="flex-1">
                 <p className="text-sm font-medium text-dreams-textPrimary">{p.full_name}</p>
@@ -73,11 +105,58 @@ function PatientSearchInput({ onSelect }: { onSelect: (p: PatientSuggestion) => 
               </div>
             </button>
           ))}
-        </div>
-      )}
-      {open && results.length === 0 && !loading && query.length >= 2 && (
-        <div className="absolute z-50 mt-1 w-full rounded-lg border border-dreams-border bg-white px-4 py-3 text-sm text-dreams-textSecondary shadow-lg">
-          No patients found.
+          {!loading && query.length >= 2 && results.length === 0 && !showQuickAdd && (
+            <div className="px-4 py-3 text-sm text-dreams-textSecondary">No patients found.</div>
+          )}
+          {!showQuickAdd ? (
+            <button type="button"
+              className="flex w-full items-center gap-2 px-4 py-3 text-sm font-medium text-dreams-blue hover:bg-dreams-blue/5 transition-colors border-t border-dreams-border"
+              onMouseDown={(e) => { e.preventDefault(); setShowQuickAdd(true); setNewName(query); }}>
+              <Plus className="h-4 w-4" />
+              Add new patient{query ? ` "${query}"` : ""}
+            </button>
+          ) : (
+            <div className="px-4 py-3 border-t border-dreams-border" onMouseDown={(e) => e.preventDefault()}>
+              <p className="text-xs font-semibold text-dreams-textSecondary uppercase mb-2">Quick Add Patient</p>
+              {createError && (
+                <p className="mb-2 text-xs text-red-600">{createError}</p>
+              )}
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="Full name *"
+                  className="w-full h-9 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-1 focus:ring-dreams-blue/20"
+                  autoFocus
+                />
+                <input
+                  type="tel"
+                  value={newPhone}
+                  onChange={(e) => setNewPhone(e.target.value)}
+                  placeholder="Phone"
+                  className="w-full h-9 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-1 focus:ring-dreams-blue/20"
+                />
+                <input
+                  type="email"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  placeholder="Email (optional)"
+                  className="w-full h-9 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-1 focus:ring-dreams-blue/20"
+                />
+                <div className="flex gap-2 pt-1">
+                  <button type="button" onClick={handleQuickAdd} disabled={creating || !newName.trim()}
+                    className="flex-1 rounded-lg bg-dreams-blue px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity">
+                    {creating ? "Adding..." : "Add Patient"}
+                  </button>
+                  <button type="button" onClick={() => setShowQuickAdd(false)}
+                    className="rounded-lg border border-dreams-border px-3 py-1.5 text-xs font-medium text-dreams-textPrimary hover:bg-dreams-lightBg transition-colors">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
