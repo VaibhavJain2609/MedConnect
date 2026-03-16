@@ -133,9 +133,15 @@ export function connectNotificationWebSocket(
   if (!token) return null;
 
   const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const wsUrl = `${wsProtocol}//${window.location.host}/ws/notifications?token=${token}`;
+  // Token is NOT placed in the URL to avoid leaking it in server logs / browser history.
+  // It is sent as the first message after the connection opens.
+  const wsUrl = `${wsProtocol}//${window.location.host}/ws/notifications`;
 
   const ws = new WebSocket(wsUrl);
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ type: "auth", token }));
+  };
 
   ws.onmessage = (event) => {
     try {

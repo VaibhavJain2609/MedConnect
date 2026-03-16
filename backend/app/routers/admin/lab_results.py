@@ -271,8 +271,26 @@ async def update_lab_result(
             )
 
     update_fields = data.model_dump(exclude_unset=True)
-    for field, value in update_fields.items():
-        setattr(lab_result, field, value)
+    if "status" in update_fields:
+        lab_result.status = update_fields["status"]
+    if "result_value" in update_fields:
+        lab_result.result_value = update_fields["result_value"]
+    if "result_unit" in update_fields:
+        lab_result.result_unit = update_fields["result_unit"]
+    if "normal_range" in update_fields:
+        lab_result.normal_range = update_fields["normal_range"]
+    if "abnormal_flag" in update_fields:
+        lab_result.abnormal_flag = update_fields["abnormal_flag"]
+    if "notes" in update_fields:
+        lab_result.notes = update_fields["notes"]
+    if "test_name" in update_fields:
+        lab_result.test_name = update_fields["test_name"]
+    if "test_category" in update_fields:
+        lab_result.test_category = update_fields["test_category"]
+    if "appointment_date" in update_fields:
+        lab_result.appointment_date = update_fields["appointment_date"]
+    if "doctor_id" in update_fields:
+        lab_result.doctor_id = update_fields["doctor_id"]
     lab_result.updated_at = datetime.now(timezone.utc)
 
     await db.commit()

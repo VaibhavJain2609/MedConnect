@@ -98,8 +98,23 @@ async def list_user_clinics(db: AsyncSession, user_id: uuid.UUID) -> list[Clinic
 async def update_clinic(
     db: AsyncSession, clinic: Clinic, data: ClinicUpdate
 ) -> Clinic:
-    for field, value in data.model_dump(exclude_none=True).items():
-        setattr(clinic, field, value)
+    updates = data.model_dump(exclude_none=True)
+    if "name" in updates:
+        clinic.name = updates["name"]
+    if "address" in updates:
+        clinic.address = updates["address"]
+    if "city" in updates:
+        clinic.city = updates["city"]
+    if "state" in updates:
+        clinic.state = updates["state"]
+    if "phone" in updates:
+        clinic.phone = updates["phone"]
+    if "email" in updates:
+        clinic.email = updates["email"]
+    if "logo_url" in updates:
+        clinic.logo_url = updates["logo_url"]
+    if "is_active" in updates:
+        clinic.is_active = updates["is_active"]
     await db.flush()
     return clinic
 

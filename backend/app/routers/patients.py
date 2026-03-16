@@ -97,8 +97,15 @@ async def update_profile(
     user: User = Depends(require_patient),
     db: AsyncSession = Depends(get_db),
 ):
-    for field, value in body.model_dump(exclude_unset=True).items():
-        setattr(user, field, value)
+    data = body.model_dump(exclude_unset=True)
+    if "phone" in data:
+        user.phone = data["phone"]
+    if "language_pref" in data:
+        user.language_pref = data["language_pref"]
+    if "emergency_contact_name" in data:
+        user.emergency_contact_name = data["emergency_contact_name"]
+    if "emergency_contact_phone" in data:
+        user.emergency_contact_phone = data["emergency_contact_phone"]
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -130,8 +137,17 @@ async def update_medical_history(
     user: User = Depends(require_patient),
     db: AsyncSession = Depends(get_db),
 ):
-    for field, value in body.model_dump(exclude_unset=True).items():
-        setattr(user, field, value)
+    data = body.model_dump(exclude_unset=True)
+    if "blood_group" in data:
+        user.blood_group = data["blood_group"]
+    if "allergies" in data:
+        user.allergies = data["allergies"]
+    if "chronic_conditions" in data:
+        user.chronic_conditions = data["chronic_conditions"]
+    if "height_cm" in data:
+        user.height_cm = data["height_cm"]
+    if "weight_kg" in data:
+        user.weight_kg = data["weight_kg"]
     db.add(user)
     await db.commit()
     await db.refresh(user)

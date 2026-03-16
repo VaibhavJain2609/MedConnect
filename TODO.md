@@ -1,445 +1,108 @@
-# Dreams EMR UI Transformation - TODO
+# MedConnect — Security & Quality Backlog
 
-**Project:** Transform MedConnect UI to match Dreams EMR design system
-**Status:** Phase 3 Complete (3/10)
-**Started:** 2026-02-26
-
----
-
-## ✅ Completed Phases
-
-### Phase 1: Design System Foundation (MD-171) ✅
-**Branch:** `dreams-emr-ui-phase1-2`
-**Jira:** MD-171 ✅ Done
-
-- [x] Updated `tailwind.config.ts` with Dreams colors
-  - Royal blue primary (#4169E1)
-  - Dark sidebar (#1A1D1F)
-  - Light background (#F5F7FA)
-  - 5 status colors (inProgress, completed, pending, overdue, upcoming)
-- [x] Updated `globals.css` with CSS variables for light/dark modes
-- [x] Added dependencies: recharts, @tanstack/react-table
-- [x] Created test page at `/test-design-system`
-
-### Phase 2: Core Component Library (MD-172) ✅
-**Branch:** `dreams-emr-ui-phase1-2`
-**Jira:** MD-172 ✅ Done
-
-**Components Created:**
-- [x] Avatar component (`ui/avatar.tsx`)
-  - Circular profile images with fallback initials
-  - Sizes: sm, md, lg, xl, 2xl
-  - Status indicators (online/offline/busy/away)
-  - AvatarGroup for stacked avatars
-- [x] Enhanced Badge component (`ui/badge.tsx`)
-  - 5 status variants with proper colors
-- [x] StatCard component (`dashboard/stat-card.tsx`)
-  - Icon, metric, trend indicator
-  - Mini sparkline chart support
-- [x] Sparkline chart component (`charts/sparkline.tsx`)
-  - Mini line charts for stat cards
-- [x] ProfileCard component (`cards/profile-card.tsx`)
-  - Large circular avatar
-  - Status badge, info grid, CTA button
-- [x] Rich DataTable component (`ui/data-table.tsx`)
-  - Sortable columns with TanStack Table
-  - Pagination, search, filters
-  - Avatar and badge support in cells
-- [x] Icon sets
-  - Vital icons (9): Blood pressure, heart rate, SPO2, temperature, etc.
-  - Meal icons (6): Breakfast, lunch, tea, dinner, bedtime, water
-  - Department icons: Colored badges for medical departments
-
-### Phase 3: Navigation & Layout (MD-173) ✅
-**Branch:** `md-173-dreams-emr-ui-phase-3-navigation-layout`
-**Jira:** MD-173 ✅ Done
-
-- [x] Dark sidebar (`admin/admin-sidebar.tsx`)
-  - Background: #1A1D1F
-  - 4 grouped sections: MAIN, HEALTH CARE, MANAGEMENT, PAGES
-  - Expandable submenus (Appointments, Laboratory)
-  - Blue active state (#4169E1)
-  - Mobile: Full-width overlay
-- [x] Enhanced top bar (`admin/admin-layout.tsx`)
-  - Global search bar
-  - Utility icons: Grid, Language, Notifications (with badge), Settings
-  - User avatar dropdown
-- [x] Breadcrumb component (`ui/breadcrumb.tsx`)
-  - Home > Section > Page navigation
-- [x] ViewToggle component (`ui/view-toggle.tsx`)
-  - Grid/Table/List switcher
-  - localStorage persistence with `useViewMode` hook
+Generated from codebase audit. Critical issues (MD-290–293) have been fixed.
+Remaining items are tracked below by priority.
 
 ---
 
-## 🔜 Phase 4: Page Redesigns (6 tasks)
+## HIGH Priority
 
-### Phase 4.1: Redesign Admin Dashboard (MD-174) 🔄 NEXT
-**Jira:** MD-174
-**Estimated:** 2-3 hours
-**Priority:** High
+### MD-294 — Rate-limit JWT decoded without signature verification
+**File:** `backend/app/middleware/rate_limit.py:54-55`
+**Issue:** `jwt.decode(token, options={"verify_signature": False})` is used to extract a user ID for rate-limit keying. An attacker can forge any user ID to bypass per-user limits or target specific users.
+**Fix:** Use HMAC hash of the raw token bytes as the rate-limit key — no decoding needed.
 
-**Features:**
-- [ ] 4 stat cards with sparklines
-  - All Patients (count, trend, sparkline)
-  - Appointments (today/week)
-  - Total Doctors (count, trend)
-  - Transactions (revenue/count)
-- [ ] Appointment Request widget
-  - List of pending appointment requests
-  - Patient name, doctor, department, date/time
-  - Accept/Reject actions
-- [ ] Patient Statistics chart
-  - Bar chart: New patients vs Existing patients
-  - Monthly breakdown
-  - Using Recharts library
-- [ ] Date range selector (top-right)
-  - Last 7 days, 30 days, 90 days, Custom
-- [ ] Grid layout
-  - 4 columns for stat cards
-  - 2 columns below for widgets
+### MD-295 — Prescription medicines stored as unvalidated JSONB
+**File:** `backend/app/models/prescription.py:21`, `backend/app/services/prescription_service.py:59`
+**Issue:** `medicines` column is raw JSONB. No schema enforced on write — malformed dosage, missing medicine IDs, or impossible quantities are stored silently.
+**Fix:** Define a `PrescriptionMedicineItem` Pydantic schema and validate each item before persistence. Consider adding a DB check constraint on the JSONB structure.
 
-**Backend Endpoints Needed:**
-- [ ] `/api/v1/admin/stats` - Dashboard metrics with trends
-- [ ] `/api/v1/admin/appointment-requests` - Pending appointment list
-- [ ] `/api/v1/admin/stats/patient-trends` - New vs existing patient data
+### MD-296 — User auto-provisioning race condition
+**File:** `backend/app/dependencies.py:64-102`
+**Issue:** Two concurrent first-time requests for the same Keycloak user can both pass `if not user` and both attempt to INSERT a User row. Depending on DB isolation level, this either fails with an integrity error or creates duplicate rows.
+**Fix:** Replace the SELECT + INSERT pattern with PostgreSQL `INSERT ... ON CONFLICT (keycloak_sub) DO NOTHING` (upsert).
 
-**Files:**
-- [ ] `frontend/src/app/admin/dashboard/page.tsx` (modify)
-- [ ] `frontend/src/components/charts/bar-chart.tsx` (new)
-- [ ] `frontend/src/components/dashboard/appointment-request-widget.tsx` (new)
+### MD-297 — Doctor can view patient prescriptions without relationship verification
+**File:** `backend/app/routers/doctors.py:264-350`
+**Issue:** `get_patient_prescriptions` checks doctor relationship only via `doctor_id` filter on records. Without an explicit call to `_check_doctor_patient_relationship()`, a doctor with any record for the patient can see all their prescriptions across clinics.
+**Fix:** Add `_check_doctor_patient_relationship()` call at the top of the endpoint, same pattern as `get_patient_profile`.
 
 ---
 
-### Phase 4.2: Redesign Patients Page (MD-175) 🔜
-**Jira:** MD-175
-**Estimated:** 2-3 hours
-**Priority:** High
+## MEDIUM Priority
 
-**Features:**
-- [ ] View toggle (grid/table) - top-right
-- [ ] Grid view
-  - 2x3 ProfileCard layout
-  - Large circular photos
-  - "In Patient" / "Out Patient" status badges
-  - Info grid: Last Visit, Gender, Location
-- [ ] Table view
-  - Rich DataTable with avatars
-  - Sortable columns: ID, Name, Status, Last Visit, Doctor, Department
-  - Status badges
-  - Search by name/ID
-- [ ] Search + filter controls
-  - Search input (global)
-  - Filter by: Status, Gender, Department
-- [ ] "New Patient" button (blue, top-right)
-- [ ] Pagination
+### MD-298 — Rate limiter fails open silently when Redis is unavailable
+**File:** `backend/app/middleware/rate_limit.py:90-92`
+**Issue:** `except Exception: return True, 0` — all requests allowed through with no log or alert when Redis is down.
+**Fix:** Log the Redis failure with `logger.error(...)`. Emit an observable metric. Consider a simple in-process token bucket as a degraded fallback.
 
-**Files:**
-- [ ] `frontend/src/app/admin/patients/page.tsx` (new or modify)
-- [ ] `frontend/src/app/doctor/patients/page.tsx` (new)
+### MD-299 — File uploads validated by extension only, not MIME type
+**File:** `backend/app/routers/uploads.py:39-50`
+**Issue:** Only the file extension is checked. An attacker renames `.exe` → `.pdf` and the upload is accepted.
+**Fix:** Use `python-magic` to check actual MIME type from file magic bytes. Reject if MIME doesn't match the extension whitelist.
 
----
+### MD-300 — `datetime.utcnow()` deprecation — inconsistent timezone handling
+**Files:** `backend/app/services/clinic_service.py:53`, `backend/app/services/clinic_service.py:116`
+**Issue:** `datetime.utcnow()` is deprecated in Python 3.12. Other files correctly use `datetime.now(timezone.utc)`.
+**Fix:** Global search-replace `datetime.utcnow()` → `datetime.now(timezone.utc)` across all backend files.
 
-### Phase 4.3: Create Patient Details Page (MD-176) 🔜
-**Jira:** MD-176
-**Estimated:** 4-5 hours
-**Priority:** High
+### MD-301 — No cursor pagination on doctor-facing vitals endpoint
+**File:** `backend/app/routers/vitals.py:315-320`
+**Issue:** Hard-coded `LIMIT 200` with no offset/cursor. The patient-facing endpoint already has `limit` and `days` params — add the same to the doctor-facing endpoint and remove the hard-coded 200.
+**Fix:** Add `limit: int = Query(200, ge=1, le=500)` parameter consistent with the patient endpoint.
 
-**Features:**
-- [ ] Horizontal tab navigation (9 tabs)
-  1. Patient Profile
-  2. Appointments
-  3. Vital Signs
-  4. Visit History
-  5. Lab Results
-  6. Prescription
-  7. Medical History
-  8. Billings
-  9. Documents
-- [ ] Left sidebar: Patient profile card
-  - Large photo
-  - Basic info (name, ID, age, gender)
-  - Contact info
-  - Address
-- [ ] Right content area: Tab content
-- [ ] "Back to Patients" button (top-right)
+### MD-302 — N+1 clinic queries in appointments list
+**File:** `backend/app/routers/appointments.py:392-431`
+**Issue:** Patient and doctor names are batch-loaded, but clinic names are still fetched individually per appointment row.
+**Fix:** Add `clinic_ids = list({a.clinic_id for a in appointments if a.clinic_id})` and batch-load clinic names before the serialization loop.
 
-**Vital Signs Tab:**
-- [ ] 2x3 grid of vital cards
-  - Blood Pressure (droplet icon)
-  - Heart Rate (heart icon)
-  - SPO2 (lungs icon)
-  - Temperature (thermometer)
-  - Respiratory Rate (breath icon)
-  - Weight (scale icon)
-- [ ] "View Past Data" link (trends chart modal)
+### MD-303 — JWT tokens stored in localStorage — XSS-readable
+**File:** `frontend/src/lib/api/notifications.ts:132`, `frontend/src/lib/api.ts`
+**Issue:** `localStorage.getItem("access_token")` is used throughout. Any XSS payload can read and exfiltrate the token.
+**Fix (preferred):** Migrate token storage to HttpOnly, Secure, SameSite=Strict cookies managed server-side.
+**Fix (interim):** Document the risk, ensure strict CSP headers, and sanitize all user-rendered content.
 
-**Appointments Tab:**
-- [ ] 2-column card layout
-- [ ] Status badges (Upcoming/Completed/Cancelled)
-- [ ] Department + Doctor info with avatars
-- [ ] Date & Time
-- [ ] Action buttons (View Details, Reschedule)
+### MD-304 — JWKS client cache never expires — breaks on Keycloak key rotation
+**File:** `backend/app/utils/security.py:13-19`
+**Issue:** `_jwks_client` is a module-level singleton with `cache_keys=True` but no TTL. After Keycloak key rotation, all token verifications fail until the process restarts.
+**Fix:** Set a reasonable cache lifetime (`cache_jwk_set_duration=300`) or catch `PyJWKClientError` and force a cache refresh on failure.
 
-**Files:**
-- [ ] `frontend/src/app/patient/[id]/page.tsx` (new)
-- [ ] `frontend/src/components/patient/patient-sidebar.tsx` (new)
-- [ ] `frontend/src/components/patient/vitals-grid.tsx` (new)
-- [ ] `frontend/src/components/patient/appointments-tab.tsx` (new)
+### MD-305 — `JSON.parse` on localStorage without try-catch
+**File:** `frontend/src/lib/api.ts:25-31`
+**Issue:** `JSON.parse(localStorage.getItem("clinic-store"))` will throw if the stored value is corrupted, crashing the Axios interceptor for all requests.
+**Fix:** Wrap in `try { ... } catch { /* clear corrupted entry */ localStorage.removeItem("clinic-store") }`.
+
+### MD-306 — No startup validation for required environment variables
+**File:** `backend/app/config.py`
+**Issue:** Critical vars like `DATABASE_URL` and `KEYCLOAK_URL` have hardcoded dev defaults. A production deploy with a missing `.env` silently connects to dev infrastructure.
+**Fix:** Add a Pydantic validator that raises `ValueError` if `APP_ENV == "production"` and any critical var is still the default value.
+
+### MD-307 — Inconsistent soft-delete filtering in admin endpoints
+**Files:** Various files in `backend/app/routers/admin/`
+**Issue:** Some admin list endpoints return soft-deleted records because `deleted_at.is_(None)` is missing from their queries.
+**Fix:** Audit every `select()` in admin routers and ensure `.where(Model.deleted_at.is_(None))` is always present for user-facing data.
 
 ---
 
-### Phase 4.4: Redesign Doctors & Appointments Pages (MD-177) 🔜
-**Jira:** MD-177
-**Estimated:** 3-4 hours
-**Priority:** Medium
+## Reference
 
-**Doctors Page:**
-- [ ] Grid view (2x4 cards)
-- [ ] Large circular doctor photos
-- [ ] Info display:
-  - ID number (blue link)
-  - Specialty
-  - Experience + Appointments count
-  - Email + Phone
-- [ ] No action buttons (display only)
-
-**Appointments Page:**
-- [ ] Rich data table
-- [ ] Columns:
-  - Patient ID
-  - Patient Name (with avatar)
-  - Doctor Name (with avatar)
-  - Department (colored badge)
-  - Appointment Date (with time)
-  - Status (badge)
-- [ ] Sortable columns
-- [ ] Submenu in sidebar:
-  - All Appointments
-  - Consultation
-
-**Files:**
-- [ ] `frontend/src/app/admin/doctors/page.tsx` (modify)
-- [ ] `frontend/src/app/admin/appointments/page.tsx` (modify)
-
----
-
-### Phase 4.5: Create Visits & Lab Results Pages (MD-178) 🔜
-**Jira:** MD-178
-**Estimated:** 3-4 hours
-**Priority:** Medium
-
-**Visits Page:**
-- [ ] Rich data table
-- [ ] Columns:
-  - Visit ID
-  - Patient Name (avatar)
-  - Department (colored badge)
-  - Doctor Name (avatar)
-  - Visit Date
-  - Status (badge)
-- [ ] Badge count (orange) showing total
-- [ ] Search + sort controls
-
-**Lab Results Page:**
-- [ ] Rich data table
-- [ ] Columns:
-  - Test ID
-  - Patient Name (avatar)
-  - Gender
-  - Appointment Date
-  - Referred By (doctor avatar)
-  - Test Name
-  - Status (Received/In Progress/Pending)
-- [ ] Status colors:
-  - Received (green)
-  - In Progress (purple)
-  - Pending (orange)
-
-**Files:**
-- [ ] `frontend/src/app/admin/visits/page.tsx` (new)
-- [ ] `frontend/src/app/admin/lab-results/page.tsx` (new)
-
----
-
-### Phase 4.6: Update Pharmacy/Medicines Page (MD-178) 🔜
-**Jira:** MD-178 (included)
-**Estimated:** 1-2 hours
-**Priority:** Low
-
-**Features:**
-- [ ] Product inventory table
-- [ ] Columns:
-  - ID
-  - Product Name
-  - Price
-  - Offer Price
-  - Purchase Date
-  - Expire Date
-  - Stock
-  - Description (truncated)
-  - Unit (ml/mg)
-- [ ] "New Product" button
-- [ ] Search + sort controls
-
-**Files:**
-- [ ] `frontend/src/app/admin/pharmacy/page.tsx` (modify from medicines)
-
----
-
-## 🚀 Phase 5: Advanced Features (MD-179) 🔮
-
-**Jira:** MD-179
-**Estimated:** 6-8 hours
-**Priority:** Medium
-
-### 5.1: Profile Photo Upload
-- [ ] Photo upload component (`profile/photo-upload.tsx`)
-  - Drag-and-drop
-  - Image cropping (1:1 aspect ratio)
-  - Preview before upload
-- [ ] Backend endpoint: `/api/v1/users/photo`
-  - Store in `uploads/` folder (Option A) or S3 (Option B)
-  - Return photo URL
-- [ ] Display in Avatar component
-
-### 5.2: Enhanced Vital Signs
-- [ ] Interactive vital cards with hover states
-- [ ] Click to view historical trends (line chart modal)
-- [ ] Color-coded values (red for out-of-range, green for normal)
-- [ ] Unit conversion support (imperial/metric)
-- [ ] Backend: `/api/v1/patients/{id}/vitals/history`
-
-### 5.3: Charts & Data Visualization
-- [ ] Additional chart components
-  - Bar chart (`charts/bar-chart.tsx`)
-  - Line chart (`charts/line-chart.tsx`)
-  - Pie/donut chart (optional)
-- [ ] Backend: `/api/v1/stats/trends` (dashboard chart data)
-
-### 5.4: Global Search (Cmd+K)
-- [ ] Global search component (`ui/global-search.tsx`)
-- [ ] Keyboard shortcut: Cmd+K
-- [ ] Search across: Patients, Doctors, Appointments, Medicines
-- [ ] Recent searches
-- [ ] Quick actions
-- [ ] Fuzzy search with highlighting
-
-### 5.5: Notification System
-- [ ] Notification center component (`layout/notification-center.tsx`)
-- [ ] Bell icon with badge count
-- [ ] Dropdown panel with notification list
-- [ ] Mark as read/unread
-- [ ] Categories: Appointments, Lab Results, System
-- [ ] Real-time updates (WebSocket or polling)
-- [ ] Backend: `/api/v1/notifications`
-
----
-
-## 📋 Backend API Endpoints to Add
-
-**Dashboard:**
-- [ ] `GET /api/v1/admin/stats` - Dashboard metrics with trends
-- [ ] `GET /api/v1/admin/appointment-requests` - Pending appointments
-- [ ] `GET /api/v1/admin/stats/patient-trends` - Patient statistics for charts
-
-**Advanced Features:**
-- [ ] `POST /api/v1/users/photo` - Upload profile photo
-- [ ] `GET /api/v1/patients/{id}/vitals/history` - Historical vital signs
-- [ ] `GET /api/v1/notifications` - User notifications list
-- [ ] `PUT /api/v1/notifications/{id}/read` - Mark notification as read
-- [ ] `GET /api/v1/stats/trends` - Dashboard chart data
-
----
-
-## 🧪 Testing Checklist
-
-**Per Page:**
-- [ ] Desktop (Chrome, Firefox, Safari)
-- [ ] Tablet (iPad)
-- [ ] Mobile (iPhone, Android)
-- [ ] Keyboard navigation
-- [ ] Screen reader compatibility
-- [ ] All data loads from API correctly
-- [ ] Tables sortable and paginated
-- [ ] Search/filter functional
-- [ ] No console errors
-- [ ] Loading states show spinner
-
-**Performance:**
-- [ ] Lighthouse score: 90+ (Performance, Accessibility)
-- [ ] Charts render with real data
-- [ ] Images optimized
-- [ ] Lazy loading implemented
-
----
-
-## 📦 Dependencies to Add (If Needed)
-
-```json
-{
-  "dependencies": {
-    "react-dropzone": "^14.2.0",      // Phase 5: Photo upload
-    "react-image-crop": "^11.0.0",     // Phase 5: Photo cropping
-    "react-hot-toast": "^2.4.1"        // Phase 5: Notifications
-  }
-}
-```
-
----
-
-## 🔄 Git Workflow
-
-**Branch Naming:**
-- Format: `md-{ticket-number}-{description}`
-- Example: `md-174-admin-dashboard-redesign`
-
-**Commit Message Format:**
-```
-[MD-XXX] Brief description
-
-Detailed changes:
-- Point 1
-- Point 2
-
-Jira: MD-XXX
-Status: {In Progress|Complete}
-
-Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
-```
-
----
-
-## 📊 Progress Tracking
-
-**Overall Progress:** 3/10 phases complete (30%)
-
-- ✅ Phase 1: Design System Foundation
-- ✅ Phase 2: Core Component Library
-- ✅ Phase 3: Navigation & Layout
-- 🔄 Phase 4.1: Admin Dashboard (NEXT)
-- 🔜 Phase 4.2: Patients Page
-- 🔜 Phase 4.3: Patient Details Page
-- 🔜 Phase 4.4: Doctors & Appointments
-- 🔜 Phase 4.5: Visits & Lab Results
-- 🔜 Phase 4.6: Pharmacy
-- 🔮 Phase 5: Advanced Features
-
-**Estimated Total Time Remaining:** 25-35 hours
-
----
-
-## 🎯 Success Criteria
-
-- [ ] All pages match Dreams EMR visual design
-- [ ] No existing functionality broken
-- [ ] All tests passing
-- [ ] No TypeScript errors
-- [ ] Lighthouse score: 90+ (Performance, Accessibility)
-- [ ] Mobile responsive (all pages)
-- [ ] User acceptance testing passes
-
----
-
-**Last Updated:** 2026-02-26
-**Next Task:** Phase 4.1 - Admin Dashboard Redesign (MD-174)
+| Ticket | Summary | Priority |
+|--------|---------|----------|
+| MD-290 | ✅ Vitals endpoint missing doctor-patient auth check | Critical |
+| MD-291 | ✅ Mass-assignment via setattr loop | High |
+| MD-292 | ✅ No vital value range validation | Critical |
+| MD-293 | ✅ JWT token in WebSocket URL | High |
+| MD-294 | Rate-limit JWT decoded without signature verification | High |
+| MD-295 | Prescription medicines unvalidated JSONB | High |
+| MD-296 | User provisioning race condition | High |
+| MD-297 | Doctor prescriptions without relationship check | High |
+| MD-298 | Rate limiter fails open when Redis down | Medium |
+| MD-299 | File upload MIME type not validated | Medium |
+| MD-300 | datetime.utcnow() deprecation | Medium |
+| MD-301 | No cursor pagination on doctor vitals | Medium |
+| MD-302 | N+1 clinic queries in appointments | Medium |
+| MD-303 | Tokens in localStorage (XSS risk) | Medium |
+| MD-304 | JWKS cache never expires | Medium |
+| MD-305 | JSON.parse without try-catch | Medium |
+| MD-306 | No prod env var validation at startup | Medium |
+| MD-307 | Soft-delete filtering inconsistent | Medium |

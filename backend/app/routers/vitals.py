@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,12 +37,34 @@ VITAL_THRESHOLDS: dict[str, dict] = {
 
 # ── Pydantic schemas ───────────────────────────────────────────────────────
 
+# Clinically valid input bounds per vital type (wider than alert thresholds)
+VITAL_VALUE_BOUNDS: dict[str, dict] = {
+    "bp_systolic":     {"min": 40,   "max": 350},
+    "bp_diastolic":    {"min": 20,   "max": 250},
+    "glucose_fasting": {"min": 10,   "max": 2000},
+    "glucose_pp":      {"min": 10,   "max": 2000},
+    "spo2":            {"min": 1,    "max": 100},
+    "pulse":           {"min": 10,   "max": 400},
+}
+
+
 class VitalCreate(BaseModel):
     vital_type: str
     value: float
     unit: str
     recorded_at: Optional[datetime] = None
     notes: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_value_bounds(self) -> "VitalCreate":
+        bounds = VITAL_VALUE_BOUNDS.get(self.vital_type)
+        if bounds is not None:
+            if self.value < bounds["min"] or self.value > bounds["max"]:
+                raise ValueError(
+                    f"Value {self.value} is outside valid range "
+                    f"[{bounds['min']}, {bounds['max']}] for {self.vital_type}"
+                )
+        return self
 
 
 class VitalResponse(BaseModel):
@@ -283,13 +305,19 @@ async def get_patient_vitals(
     clinic_context: Optional[tuple] = Depends(get_active_clinic),
 ):
     """Read a patient's vital readings (doctor view)."""
-    from app.models.patient_link import PatientClinicLink
-    from app.routers.doctors import _check_patient_consent
+    from app.routers.doctors import _check_patient_consent, _check_doctor_patient_relationship
 
-    # If there is a clinic context, enforce consent
+    _, doctor = doctor_info
+
     if clinic_context:
         clinic_id, _ = clinic_context
         await _check_patient_consent(db, patient_id, clinic_id)
+    else:
+        if not await _check_doctor_patient_relationship(db, doctor, patient_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "FORBIDDEN", "message": "No relationship with this patient"}},
+            )
 
     since = datetime.now(timezone.utc) - timedelta(days=days)
 
