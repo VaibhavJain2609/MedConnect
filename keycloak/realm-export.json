@@ -113,6 +113,17 @@
             "claim.name": "name",
             "jsonType.label": "String"
           }
+        },
+        {
+          "name": "medconnect-backend-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "medconnect-backend",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
         }
       ]
     },

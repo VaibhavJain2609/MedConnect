@@ -70,11 +70,33 @@ function StepIndicator({ current }: { current: string }) {
   );
 }
 
+// ── Specializations ───────────────────────────────────────────────────────
+
+const SPECIALIZATIONS = [
+  "General Physician",
+  "Cardiologist",
+  "Dermatologist",
+  "ENT Specialist",
+  "Gastroenterologist",
+  "General Surgeon",
+  "Gynaecologist & Obstetrician",
+  "Neurologist",
+  "Oncologist",
+  "Ophthalmologist",
+  "Orthopaedic Surgeon",
+  "Paediatrician",
+  "Psychiatrist",
+  "Pulmonologist",
+  "Radiologist",
+  "Urologist",
+  "Other",
+];
+
 // ── Step components ───────────────────────────────────────────────────────
 
 function StepProfile({ status, onDone }: { status: OnboardingStatus; onDone: () => void }) {
   const [name, setName] = useState(status.profile.full_name ?? "");
-  const [phone, setPhone] = useState(status.profile.phone ?? "");
+  const [phone, setPhone] = useState(status.profile.phone ?? "+91 ");
   const [spec, setSpec] = useState(status.profile.specialization ?? "");
   const mut = useMutation({ mutationFn: saveProfile, onSuccess: onDone });
 
@@ -83,22 +105,46 @@ function StepProfile({ status, onDone }: { status: OnboardingStatus; onDone: () 
       <h2 className="text-lg font-semibold text-dreams-textPrimary">Your Profile</h2>
       <p className="text-sm text-dreams-textSecondary">Let us know who you are.</p>
 
-      {[
-        { label: "Full Name", value: name, set: setName, placeholder: "Dr. Priya Sharma" },
-        { label: "Phone", value: phone, set: setPhone, placeholder: "+91 98765 43210" },
-        { label: "Specialization", value: spec, set: setSpec, placeholder: "Cardiology" },
-      ].map(({ label, value, set, placeholder }) => (
-        <div key={label}>
-          <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">{label}</label>
+      <div>
+        <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Full Name</label>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Dr. Priya Sharma"
+          className="w-full rounded-lg border border-dreams-border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
+        />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Phone</label>
+        <div className="flex items-center rounded-lg border border-dreams-border focus-within:ring-2 focus-within:ring-dreams-blue overflow-hidden">
+          <span className="bg-gray-50 px-3 py-2.5 text-sm text-dreams-textSecondary border-r border-dreams-border select-none">
+            +91
+          </span>
           <input
-            type="text"
-            value={value}
-            onChange={(e) => set(e.target.value)}
-            placeholder={placeholder}
-            className="w-full rounded-lg border border-dreams-border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
+            type="tel"
+            value={phone.replace(/^\+91\s?/, "")}
+            onChange={(e) => setPhone("+91 " + e.target.value)}
+            placeholder="98765 43210"
+            className="flex-1 px-3 py-2.5 text-sm focus:outline-none"
           />
         </div>
-      ))}
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Specialization</label>
+        <select
+          value={spec}
+          onChange={(e) => setSpec(e.target.value)}
+          className="w-full rounded-lg border border-dreams-border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue bg-white"
+        >
+          <option value="">Select specialization…</option>
+          {SPECIALIZATIONS.map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+      </div>
 
       <button
         onClick={() => mut.mutate({ full_name: name, phone, specialization: spec })}
@@ -110,6 +156,42 @@ function StepProfile({ status, onDone }: { status: OnboardingStatus; onDone: () 
     </div>
   );
 }
+
+const MEDICAL_COUNCILS = [
+  "Medical Council of India (MCI)",
+  "National Medical Commission (NMC)",
+  "Andhra Pradesh Medical Council",
+  "Arunachal Pradesh Medical Council",
+  "Assam Medical Council",
+  "Bihar Medical Council",
+  "Chhattisgarh Medical Council",
+  "Delhi Medical Council",
+  "Goa Medical Council",
+  "Gujarat Medical Council",
+  "Haryana Medical Council",
+  "Himachal Pradesh Medical Council",
+  "Jammu & Kashmir Medical Council",
+  "Jharkhand Medical Council",
+  "Karnataka Medical Council",
+  "Kerala Medical Council",
+  "Madhya Pradesh Medical Council",
+  "Maharashtra Medical Council",
+  "Manipur Medical Council",
+  "Meghalaya Medical Council",
+  "Mizoram Medical Council",
+  "Nagaland Medical Council",
+  "Odisha Medical Council",
+  "Punjab Medical Council",
+  "Rajasthan Medical Council",
+  "Sikkim Medical Council",
+  "Tamil Nadu Medical Council",
+  "Telangana Medical Council",
+  "Tripura Medical Council",
+  "Uttar Pradesh Medical Council",
+  "Uttarakhand Medical Council",
+  "West Bengal Medical Council",
+  "Other",
+];
 
 function StepLicense({ status, onDone }: { status: OnboardingStatus; onDone: () => void }) {
   const [num, setNum] = useState(status.license.license_number ?? "");
@@ -124,22 +206,41 @@ function StepLicense({ status, onDone }: { status: OnboardingStatus; onDone: () 
         Enter your medical council registration details.
       </p>
 
-      {[
-        { label: "License Number", value: num, set: setNum, placeholder: "MH-12345" },
-        { label: "Issuing Council", value: council, set: setCouncil, placeholder: "Maharashtra Medical Council" },
-        { label: "Year of Registration", value: year, set: setYear, placeholder: "2015" },
-      ].map(({ label, value, set, placeholder }) => (
-        <div key={label}>
-          <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">{label}</label>
-          <input
-            type="text"
-            value={value}
-            onChange={(e) => set(e.target.value)}
-            placeholder={placeholder}
-            className="w-full rounded-lg border border-dreams-border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
-          />
-        </div>
-      ))}
+      <div>
+        <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">License Number</label>
+        <input
+          type="text"
+          value={num}
+          onChange={(e) => setNum(e.target.value)}
+          placeholder="MH-12345"
+          className="w-full rounded-lg border border-dreams-border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
+        />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Issuing Council</label>
+        <select
+          value={council}
+          onChange={(e) => setCouncil(e.target.value)}
+          className="w-full rounded-lg border border-dreams-border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue bg-white"
+        >
+          <option value="">Select council…</option>
+          {MEDICAL_COUNCILS.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Year of Registration</label>
+        <input
+          type="text"
+          value={year}
+          onChange={(e) => setYear(e.target.value)}
+          placeholder="2015"
+          className="w-full rounded-lg border border-dreams-border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
+        />
+      </div>
 
       <button
         onClick={() =>

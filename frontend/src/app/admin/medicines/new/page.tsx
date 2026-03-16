@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { ArrowLeft, Plus, X, Loader2 } from "lucide-react";
+import { getAccessToken } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -114,8 +115,7 @@ export default function AddMedicinePage() {
   // Create brand mutation
   const createMutation = useMutation({
     mutationFn: async (data: FormData) => {
-      // Get auth token (you'll need to adapt this to your auth system)
-      const token = localStorage.getItem("access_token") || "";
+      const token = getAccessToken() || "";
       return createBrand(data, token);
     },
     onSuccess: () => {

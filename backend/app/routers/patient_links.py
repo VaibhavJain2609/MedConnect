@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_active_clinic, get_current_user, require_patient
 from app.models.clinic import Clinic, ClinicMembership
+from app.models.doctor import Doctor
 from app.models.patient_link import PatientClinicLink, PatientLinkCode
 from app.models.user import User
 from app.services.notification_service import create_notification
@@ -253,6 +254,63 @@ async def update_consent(
         )
 
     return {"consent_status": link.consent_status}
+
+
+# ── Patient: list doctors at a linked clinic (for booking) ────────────────
+
+@router.get("/clinics/{clinic_id}/doctors")
+async def list_clinic_doctors(
+    clinic_id: str,
+    user: User = Depends(require_patient),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return verified doctors who are members of a clinic the patient is linked to."""
+    try:
+        cid = uuid.UUID(clinic_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail={"error": {"code": "INVALID_ID"}})
+
+    # Ensure patient has an approved link to this clinic
+    link_result = await db.execute(
+        select(PatientClinicLink).where(
+            PatientClinicLink.patient_id == user.id,
+            PatientClinicLink.clinic_id == cid,
+            PatientClinicLink.consent_status == "approved",
+            PatientClinicLink.deleted_at.is_(None),
+        )
+    )
+    if not link_result.scalar_one_or_none():
+        raise HTTPException(status_code=403, detail={"error": {"code": "NOT_LINKED", "message": "No approved link to this clinic"}})
+
+    stmt = (
+        select(Doctor, User)
+        .join(User, User.id == Doctor.user_id)
+        .join(ClinicMembership, ClinicMembership.user_id == Doctor.user_id)
+        .where(
+            ClinicMembership.clinic_id == cid,
+            ClinicMembership.is_active.is_(True),
+            ClinicMembership.deleted_at.is_(None),
+            Doctor.deleted_at.is_(None),
+            Doctor.verified == True,
+            User.deleted_at.is_(None),
+        )
+        .order_by(User.full_name)
+    )
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    return {
+        "data": [
+            {
+                "id": str(doctor.id),
+                "full_name": doc_user.full_name,
+                "specialization": doctor.specialization,
+                "facility_name": doctor.facility_name,
+                "facility_city": doctor.facility_city,
+            }
+            for doctor, doc_user in rows
+        ]
+    }
 
 
 # ── Clinic member: list linked patients ────────────────────────────────────

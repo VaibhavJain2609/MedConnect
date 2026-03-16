@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     APP_NAME: str = "MedConnect"
     APP_ENV: str = "development"
-    DEBUG: bool = True
+    DEBUG: bool = False
 
     DATABASE_URL: str = "postgresql+asyncpg://medconnect:medconnect@postgres:5432/medconnect"
     DATABASE_URL_SYNC: str = "postgresql://medconnect:medconnect@postgres:5432/medconnect"
@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     KEYCLOAK_CLIENT_ID: str = "medconnect-backend"
     # Set to False in dev .env if Keycloak lacks audience mappers
     VERIFY_JWT_AUDIENCE: bool = True
+    KEYCLOAK_ADMIN_USER: str = "admin"
+    KEYCLOAK_ADMIN_PASSWORD: str = "admin"
 
     SENTRY_DSN: str = ""
 
@@ -41,6 +43,8 @@ class Settings(BaseSettings):
                 raise ValueError("KEYCLOAK_URL must be set to a real Keycloak URL in production")
             if self.REDIS_URL == "redis://redis:6379/0":
                 raise ValueError("REDIS_URL must be set to a real Redis URL in production")
+            if "localhost" in self.FRONTEND_URL:
+                raise ValueError("FRONTEND_URL must be set to a real production URL in production")
         return self
 
     class Config:

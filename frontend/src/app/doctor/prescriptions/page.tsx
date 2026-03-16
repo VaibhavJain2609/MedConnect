@@ -80,38 +80,18 @@ export default function DoctorPrescriptionsPage() {
       ) : (
         <div className="space-y-4">
           {data?.data?.map((record: any) => {
-            let medicines: any[] = [];
-
-            if (record.fhir_bundle?.entry) {
-              const medicationRequests = record.fhir_bundle.entry.filter(
-                (e: any) => e.resource?.resourceType === "MedicationRequest"
-              );
-
-              medicines = medicationRequests.map((entry: any) => {
-                const resource = entry.resource;
-                const dosageInstruction = resource.dosageInstruction?.[0] || {};
-
-                return {
-                  name: resource.medicationCodeableConcept?.text || "Unknown",
-                  dosage: dosageInstruction.doseAndRate?.[0]?.doseQuantity?.value || "",
-                  frequency: dosageInstruction.timing?.code?.text || "",
-                  duration: "",
-                  timing: dosageInstruction.additionalInstruction?.[0]?.text,
-                  notes: resource.note?.[0]?.text,
-                };
-              });
-            }
-
-            if (medicines.length === 0) {
-              medicines = [
-                {
-                  name: "Prescription data not available",
-                  dosage: "",
-                  frequency: "N/A",
-                  duration: "N/A",
-                },
-              ];
-            }
+            // Map Prescription.medicines JSONB → PrescriptionCard shape
+            const rawMeds: any[] = record.medicines ?? [];
+            const medicines = rawMeds.length > 0
+              ? rawMeds.map((m: any) => ({
+                  name: m.brand_name || m.name || "Unknown",
+                  dosage: m.dose || m.dosage || "",
+                  frequency: m.frequency || "",
+                  duration: m.duration || "",
+                  timing: m.instructions || m.timing || undefined,
+                  notes: m.notes || undefined,
+                }))
+              : [{ name: "Prescription data not available", dosage: "", frequency: "N/A", duration: "N/A" }];
 
             const prescriptionData = {
               id: record.id,

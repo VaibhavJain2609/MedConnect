@@ -20,12 +20,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   initAuth: async () => {
     try {
       const authenticated = await initKeycloak();
-      console.log("initAuth - authenticated:", authenticated, "token:", !!getAccessToken());
 
       if (authenticated && getAccessToken()) {
         try {
           const user = await getMe();
-          console.log("initAuth - user loaded:", user);
           set({ user, loading: false, initialized: true });
         } catch (error) {
           console.error("initAuth - getMe failed:", error);

@@ -4,25 +4,30 @@ services:
       context: ./postgres
       dockerfile: Dockerfile
     environment:
-      POSTGRES_USER: medconnect
-      POSTGRES_PASSWORD: medconnect
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: medconnect
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    restart: unless-stopped
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U medconnect" ]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER}" ]
       interval: 5s
       timeout: 5s
       retries: 5
 
   redis:
     image: redis:7-alpine
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
+      test: [ "CMD-SHELL", "redis-cli -a ${REDIS_PASSWORD} ping" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -35,16 +40,17 @@ services:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/medconnect
       KC_DB_SCHEMA: keycloak
-      KC_DB_USERNAME: medconnect
-      KC_DB_PASSWORD: medconnect
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DB_USERNAME: ${POSTGRES_USER}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
     command: start-dev --import-realm --health-enabled=true
     ports:
       - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
+    restart: unless-stopped
     healthcheck:
       test: [ "CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080" ]
       interval: 10s
@@ -56,16 +62,19 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    user: root
     environment:
-      DATABASE_URL: postgresql+asyncpg://medconnect:medconnect@postgres:5432/medconnect
-      DATABASE_URL_SYNC: postgresql://medconnect:medconnect@postgres:5432/medconnect
-      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/medconnect
+      DATABASE_URL_SYNC: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/medconnect
+      MEDICINE_DB_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/medconnect_medicines
+      MEDICINE_DB_URL_SYNC: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/medconnect_medicines
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       KEYCLOAK_URL: http://keycloak:8080
       KEYCLOAK_PUBLIC_URL: http://localhost:8080
       KEYCLOAK_REALM: medconnect
       KEYCLOAK_CLIENT_ID: medconnect-backend
       APP_ENV: development
-      DEBUG: "true"
+      DEBUG: "false"
     volumes:
       - ./backend:/app
       - ./Dataset:/app/Dataset
@@ -78,6 +87,13 @@ services:
         condition: service_healthy
       keycloak:
         condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:8000/health || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     command: >
       sh -c "alembic upgrade head &&
              uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
@@ -98,14 +114,24 @@ services:
       - "3000:3000"
     depends_on:
       - backend
+    restart: unless-stopped
 
   nginx:
     image: nginx:alpine
     ports:
       - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - backend
       - frontend
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "nginx -t && curl -f http://localhost/health || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 volumes:
   postgres_data:
+  redis_data:

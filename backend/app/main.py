@@ -43,8 +43,8 @@ app = FastAPI(
     title="MedConnect API",
     description="EMR + Patient Portal for India's Digital Health Ecosystem",
     version="0.1.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url=None if settings.APP_ENV == "production" else "/docs",
+    redoc_url=None if settings.APP_ENV == "production" else "/redoc",
 )
 
 # CORS Configuration - Allow frontend to access API
@@ -90,6 +90,17 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: blob:; "
+        "font-src 'self'; "
+        f"connect-src 'self' {settings.FRONTEND_URL}"
+    )
+    if settings.APP_ENV == "production":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
 
 app.include_router(auth.router)
@@ -179,4 +190,20 @@ async def validation_exception_handler(request: Request, exc):
                 "details": exc.errors() if hasattr(exc, "errors") else [],
             }
         },
+    )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger = structlog.get_logger()
+    logger.error(
+        "unhandled_exception",
+        path=request.url.path,
+        method=request.method,
+        error=str(exc),
+        exc_info=True,
+    )
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"error": {"code": "INTERNAL_SERVER_ERROR", "message": "An unexpected error occurred"}},
     )

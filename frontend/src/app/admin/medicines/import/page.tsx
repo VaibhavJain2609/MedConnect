@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import { ArrowLeft, Upload, FileText, CheckCircle, XCircle, AlertCircle, Download } from "lucide-react";
+import { getAccessToken } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -200,7 +201,7 @@ export default function BulkImportPage() {
   // Import mutation
   const importMutation = useMutation({
     mutationFn: async (data: CSVRow[]) => {
-      const token = localStorage.getItem("access_token") || "";
+      const token = getAccessToken() || "";
       const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
       const response = await fetch(`${API_BASE_URL}/api/v1/admin/brands/bulk-import`, {

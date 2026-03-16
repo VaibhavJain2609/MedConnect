@@ -102,8 +102,8 @@ async def onboarding_profile(
     if data.specialization is not None:
         doctor.specialization = data.specialization
 
-    if doctor.onboarding_step == "pending":
-        doctor.onboarding_step = "profile"
+    if doctor.onboarding_step in ("pending", "profile"):
+        doctor.onboarding_step = "license"
 
     await db.flush()
     return {"onboarding_step": doctor.onboarding_step, "message": "Profile updated"}
@@ -130,8 +130,8 @@ async def onboarding_license(
     doctor.license_council = data.license_council
     doctor.license_year = data.license_year
 
-    if doctor.onboarding_step in ("pending", "profile"):
-        doctor.onboarding_step = "license"
+    if doctor.onboarding_step in ("pending", "profile", "license"):
+        doctor.onboarding_step = "clinic"
 
     await db.flush()
     return {"onboarding_step": doctor.onboarding_step, "message": "License details saved"}

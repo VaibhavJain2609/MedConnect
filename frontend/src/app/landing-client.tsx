@@ -56,7 +56,10 @@ export function LandingCTA() {
         I&apos;m a Patient
       </button>
       <button
-        onClick={signupRedirect}
+        onClick={() => {
+          sessionStorage.setItem("register_intent", "doctor");
+          signupRedirect();
+        }}
         className="rounded-lg border border-primary-600 px-6 py-3 text-sm font-medium text-primary-600 hover:bg-primary-50"
       >
         I&apos;m a Doctor

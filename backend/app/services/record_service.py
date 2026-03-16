@@ -184,30 +184,62 @@ async def get_doctor_patients(
     cursor: UUID | None = None,
     limit: int = 20,
 ) -> tuple[list[dict], str | None, bool]:
-    stmt = (
-        select(User)
+    from sqlalchemy import union
+    from app.models.clinic import ClinicMembership
+    from app.models.patient_link import PatientClinicLink
+
+    # doctor.user_id — needed for ClinicMembership lookup
+    doctor_user_subq = select(Doctor.user_id).where(Doctor.id == doctor_id).scalar_subquery()
+
+    # Sub-query 1: patients who have records created by this doctor
+    records_stmt = (
+        select(User.id, User.full_name, User.email, User.phone)
         .join(MedicalRecord, MedicalRecord.patient_id == User.id)
         .join(Doctor, MedicalRecord.doctor_id == Doctor.id)
-        .where(Doctor.id == doctor_id, MedicalRecord.deleted_at.is_(None), User.deleted_at.is_(None))
-        .distinct()
-        .order_by(User.full_name)
+        .where(
+            Doctor.id == doctor_id,
+            MedicalRecord.deleted_at.is_(None),
+            User.deleted_at.is_(None),
+        )
+    )
+
+    # Sub-query 2: patients with approved clinic links for any of the doctor's clinics
+    clinic_stmt = (
+        select(User.id, User.full_name, User.email, User.phone)
+        .join(PatientClinicLink, PatientClinicLink.patient_id == User.id)
+        .join(ClinicMembership, ClinicMembership.clinic_id == PatientClinicLink.clinic_id)
+        .where(
+            ClinicMembership.user_id == doctor_user_subq,
+            ClinicMembership.is_active.is_(True),
+            ClinicMembership.deleted_at.is_(None),
+            PatientClinicLink.consent_status == "approved",
+            PatientClinicLink.deleted_at.is_(None),
+            User.deleted_at.is_(None),
+        )
+    )
+
+    combined = union(records_stmt, clinic_stmt).subquery()
+
+    stmt = (
+        select(combined.c.id, combined.c.full_name, combined.c.email, combined.c.phone)
+        .order_by(combined.c.full_name)
         .limit(limit + 1)
     )
 
     result = await db.execute(stmt)
-    users = result.scalars().all()
+    rows = result.all()
 
-    has_more = len(users) > limit
-    items = users[:limit]
+    has_more = len(rows) > limit
+    items = rows[:limit]
 
     patients = [
         {
-            "id": str(u.id),
-            "full_name": u.full_name,
-            "email": u.email,
-            "phone": u.phone,
+            "id": str(row.id),
+            "full_name": row.full_name,
+            "email": row.email,
+            "phone": row.phone,
         }
-        for u in items
+        for row in items
     ]
 
     next_cursor = str(items[-1].id) if items and has_more else None

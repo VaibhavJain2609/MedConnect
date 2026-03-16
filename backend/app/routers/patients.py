@@ -225,7 +225,7 @@ async def search_doctors(
             Doctor.deleted_at.is_(None),
             User.deleted_at.is_(None),
             User.is_active.is_(True),
-            Doctor.nhr_verification_status == "verified",
+            Doctor.verified == True,
             or_(
                 func.lower(User.full_name).like(search_term),
                 func.lower(Doctor.specialization).like(search_term),

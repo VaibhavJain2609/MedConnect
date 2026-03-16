@@ -12,6 +12,7 @@ export interface User {
 }
 
 let initialized = false;
+let initPromise: Promise<boolean> | null = null;
 
 export async function initKeycloak(): Promise<boolean> {
   if (typeof window === "undefined") return false;
@@ -21,6 +22,12 @@ export async function initKeycloak(): Promise<boolean> {
     return !!keycloak.authenticated;
   }
 
+  // In-flight — return the same promise to avoid double-init
+  if (initPromise) {
+    return initPromise;
+  }
+
+  initPromise = (async () => {
   try {
     const authenticated = await keycloak.init({
       onLoad: "check-sso",
@@ -30,13 +37,6 @@ export async function initKeycloak(): Promise<boolean> {
     });
 
     initialized = true;
-
-    console.log("Keycloak init done:", {
-      authenticated,
-      hasToken: !!keycloak.token,
-      hasRefreshToken: !!keycloak.refreshToken,
-      hasIdToken: !!keycloak.idToken,
-    });
 
     if (authenticated && keycloak.token) {
       // Set up auto-refresh
@@ -52,7 +52,12 @@ export async function initKeycloak(): Promise<boolean> {
     console.error("Keycloak init error:", error);
     initialized = true;
     return false;
+  } finally {
+    initPromise = null;
   }
+  })();
+
+  return initPromise;
 }
 
 export function loginRedirect() {

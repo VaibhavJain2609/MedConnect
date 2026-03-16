@@ -615,10 +615,13 @@ async def list_prescriptions(
 
     _, doctor = doctor_info
 
-    # Build query for prescription records created by this doctor
+    from app.models.prescription import Prescription as PrescriptionModel
+
+    # Build query joining MedicalRecord → Prescription → Patient(User)
     stmt = (
-        select(MedicalRecord)
-        .options(joinedload(MedicalRecord.patient))
+        select(MedicalRecord, PrescriptionModel, User.full_name.label("patient_name"))
+        .outerjoin(PrescriptionModel, PrescriptionModel.record_id == MedicalRecord.id)
+        .outerjoin(User, User.id == MedicalRecord.patient_id)
         .where(
             MedicalRecord.doctor_id == doctor.id,
             MedicalRecord.record_type == "prescription",
@@ -640,23 +643,23 @@ async def list_prescriptions(
             )
 
     result = await db.execute(stmt)
-    records = result.unique().scalars().all()
+    rows = result.all()
 
-    has_more = len(records) > limit
-    records_list = list(records[:limit])
-    next_cursor = str(records_list[-1].id) if records_list and has_more else None
+    has_more = len(rows) > limit
+    rows_list = rows[:limit]
+    next_cursor = str(rows_list[-1].MedicalRecord.id) if rows_list and has_more else None
 
-    # Format response with patient names
+    # Format response — use Prescription.medicines JSONB as the authoritative medicine list
     data = []
-    for record in records_list:
+    for record, prescription, patient_name in rows_list:
         data.append({
             "id": str(record.id),
             "patient_id": str(record.patient_id),
-            "patient_name": record.patient.full_name if record.patient else None,
+            "patient_name": patient_name,
             "record_type": record.record_type,
             "title": record.title,
             "description": record.description,
-            "fhir_bundle": record.fhir_bundle,
+            "medicines": prescription.medicines if prescription else [],
             "source": record.source,
             "created_at": record.created_at.isoformat(),
             "updated_at": record.updated_at.isoformat(),

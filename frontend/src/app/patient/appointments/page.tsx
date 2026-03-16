@@ -161,6 +161,7 @@ interface BookAppointmentModalProps {
 }
 
 function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointmentModalProps) {
+  const [selectedClinicId, setSelectedClinicId] = useState("");
   const [selectedDoctor, setSelectedDoctor] = useState<DoctorSuggestion | null>(null);
   const [date, setDate] = useState(formatDateInput(new Date()));
   const [time, setTime] = useState("09:00");
@@ -169,6 +170,29 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
   const [chiefComplaint, setChiefComplaint] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  // Load patient's approved clinic links
+  const { data: clinicLinksData } = useQuery({
+    queryKey: ["patient-clinic-links"],
+    queryFn: () => api.get("/api/v1/patients/clinic-links").then((r) => r.data),
+  });
+  const approvedClinics: { id: string; clinic_id: string; clinic_name: string }[] =
+    (clinicLinksData?.data ?? []).filter((l: any) => l.consent_status === "approved");
+
+  // Load doctors at selected clinic
+  const { data: clinicDoctorsData } = useQuery({
+    queryKey: ["clinic-doctors", selectedClinicId],
+    queryFn: () =>
+      api.get(`/api/v1/clinics/${selectedClinicId}/doctors`).then((r) => r.data),
+    enabled: !!selectedClinicId,
+  });
+  const clinicDoctors: DoctorSuggestion[] = clinicDoctorsData?.data ?? [];
+
+  // Reset doctor when clinic changes
+  const handleClinicChange = (clinicId: string) => {
+    setSelectedClinicId(clinicId);
+    setSelectedDoctor(null);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -183,6 +207,7 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
       await createAppointment({
         patient_id: patientId,
         doctor_id: selectedDoctor.id,
+        clinic_id: selectedClinicId || undefined,
         scheduled_at: scheduledAt,
         duration_minutes: duration,
         type,
@@ -223,12 +248,54 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
             </div>
           )}
 
+          {/* Clinic */}
+          {approvedClinics.length > 0 && (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+                Clinic
+              </label>
+              <select
+                value={selectedClinicId}
+                onChange={(e) => handleClinicChange(e.target.value)}
+                className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20 bg-white"
+              >
+                <option value="">Any clinic / search by name</option>
+                {approvedClinics.map((c) => (
+                  <option key={c.clinic_id} value={c.clinic_id}>
+                    {c.clinic_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* Doctor */}
           <div>
             <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
               Doctor *
             </label>
-            {selectedDoctor ? (
+            {selectedClinicId ? (
+              // Clinic selected → show dropdown of that clinic's doctors
+              clinicDoctors.length === 0 ? (
+                <p className="text-sm text-dreams-textSecondary py-2">No verified doctors at this clinic yet.</p>
+              ) : (
+                <select
+                  value={selectedDoctor?.id ?? ""}
+                  onChange={(e) => {
+                    const doc = clinicDoctors.find((d) => d.id === e.target.value) ?? null;
+                    setSelectedDoctor(doc);
+                  }}
+                  className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20 bg-white"
+                >
+                  <option value="">Select doctor…</option>
+                  {clinicDoctors.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.full_name}{d.specialization ? ` — ${d.specialization}` : ""}
+                    </option>
+                  ))}
+                </select>
+              )
+            ) : selectedDoctor ? (
               <div className="flex items-center gap-3 rounded-lg border border-dreams-blue bg-dreams-blue/5 px-4 py-2.5">
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-dreams-textPrimary">{selectedDoctor.full_name}</p>

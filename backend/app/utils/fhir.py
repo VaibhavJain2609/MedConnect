@@ -19,20 +19,24 @@ def create_fhir_bundle(record_type: str, data: dict, patient_id: UUID, doctor_id
 
     if record_type == "prescription":
         for med in data.get("medicines", []):
+            # Support both old shape (name/dosage) and current shape (brand_name/dose)
+            med_name = med.get("brand_name") or med.get("name", "")
+            med_dose = med.get("dose") or med.get("dosage", "")
             entry = {
                 "resource": {
                     "resourceType": "MedicationRequest",
                     "status": "active",
                     "intent": "order",
                     "medicationCodeableConcept": {
-                        "text": med.get("name", ""),
-                        "coding": [{"display": med.get("salt", med.get("name", ""))}],
+                        "text": med_name,
+                        "coding": [{"display": med.get("salt", med_name)}],
                     },
                     "dosageInstruction": [
                         {
-                            "text": f"{med.get('dosage', '')} {med.get('frequency', '')} for {med.get('duration', '')}",
+                            "text": f"{med_dose} {med.get('frequency', '')} for {med.get('duration', '')}",
                             "timing": {"code": {"text": med.get("frequency", "")}},
-                            "doseAndRate": [{"doseQuantity": {"value": med.get("dosage", "")}}],
+                            "doseAndRate": [{"doseQuantity": {"value": med_dose}}],
+                            "additionalInstruction": [{"text": med.get("instructions", "")}] if med.get("instructions") else [],
                         }
                     ],
                     "note": [{"text": med.get("notes", "")}] if med.get("notes") else [],

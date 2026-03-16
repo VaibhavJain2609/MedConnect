@@ -8,6 +8,7 @@ from sqlalchemy import engine_from_config, pool
 # Add the parent directory to sys.path so 'app' can be imported
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from app.config import settings
 from app.database import Base
 from app.models import *  # noqa: F401, F403
 
@@ -18,8 +19,7 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-db_url = os.environ.get("DATABASE_URL_SYNC", config.get_main_option("sqlalchemy.url"))
-config.set_main_option("sqlalchemy.url", db_url)
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL_SYNC)
 
 
 def run_migrations_offline() -> None:

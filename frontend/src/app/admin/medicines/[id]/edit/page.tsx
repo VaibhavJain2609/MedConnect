@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { ArrowLeft, Plus, X, Loader2, Trash2 } from "lucide-react";
+import { getAccessToken } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -170,7 +171,7 @@ export default function EditMedicinePage() {
   // Update brand mutation
   const updateMutation = useMutation({
     mutationFn: async (data: FormData) => {
-      const token = localStorage.getItem("access_token") || "";
+      const token = getAccessToken() || "";
       return updateBrand(brandId, data, token);
     },
     onSuccess: () => {
@@ -194,7 +195,7 @@ export default function EditMedicinePage() {
   // Delete brand mutation
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      const token = localStorage.getItem("access_token") || "";
+      const token = getAccessToken() || "";
       return deleteBrand(brandId, token);
     },
     onSuccess: () => {

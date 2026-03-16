@@ -4,11 +4,27 @@ from sqlalchemy.orm import DeclarativeBase
 from app.config import settings
 
 # Main application database (users, doctors, prescriptions, medical records)
-engine = create_async_engine(settings.DATABASE_URL, echo=settings.DEBUG)
+engine = create_async_engine(
+    settings.DATABASE_URL,
+    echo=settings.DEBUG,
+    pool_size=10,
+    max_overflow=20,
+    pool_pre_ping=True,
+    pool_recycle=3600,
+    connect_args={"timeout": 10},
+)
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 # Separate medicine database
-medicine_engine = create_async_engine(settings.MEDICINE_DB_URL, echo=settings.DEBUG)
+medicine_engine = create_async_engine(
+    settings.MEDICINE_DB_URL,
+    echo=settings.DEBUG,
+    pool_size=10,
+    max_overflow=20,
+    pool_pre_ping=True,
+    pool_recycle=3600,
+    connect_args={"timeout": 10},
+)
 medicine_async_session = async_sessionmaker(medicine_engine, class_=AsyncSession, expire_on_commit=False)
 
 
