@@ -4,6 +4,7 @@
  */
 
 import api from "../api";
+import keycloak from "../keycloak";
 
 export interface Notification {
   id: string;
@@ -129,7 +130,9 @@ export function connectNotificationWebSocket(
 ): WebSocket | null {
   if (typeof window === "undefined") return null;
 
-  const token = localStorage.getItem("access_token");
+  // NOTE(MD-303): Read token from the Keycloak instance rather than localStorage.
+  // localStorage is XSS-readable; the preferred long-term fix is HttpOnly cookies (architectural change).
+  const token = keycloak?.token ?? null;
   if (!token) return null;
 
   const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";

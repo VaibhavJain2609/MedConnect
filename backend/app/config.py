@@ -1,3 +1,4 @@
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -30,6 +31,17 @@ class Settings(BaseSettings):
     # File storage
     STORAGE_BACKEND: str = "local"  # "local" | "s3"
     UPLOADS_DIR: str = "/tmp/medconnect-uploads"
+
+    @model_validator(mode="after")
+    def check_production_config(self) -> "Settings":
+        if self.APP_ENV == "production":
+            if "@postgres:5432" in self.DATABASE_URL:
+                raise ValueError("DATABASE_URL must be set to a real production database in production")
+            if self.KEYCLOAK_URL == "http://keycloak:8080":
+                raise ValueError("KEYCLOAK_URL must be set to a real Keycloak URL in production")
+            if self.REDIS_URL == "redis://redis:6379/0":
+                raise ValueError("REDIS_URL must be set to a real Redis URL in production")
+        return self
 
     class Config:
         env_file = ".env"

@@ -300,6 +300,7 @@ async def get_patient_vitals(
     patient_id: uuid.UUID,
     type: Optional[str] = Query(None, description="Filter by vital_type"),
     days: int = Query(90, ge=1, le=365),
+    limit: int = Query(200, ge=1, le=500),
     doctor_info: tuple[User, Doctor] = Depends(get_current_doctor),
     db: AsyncSession = Depends(get_db),
     clinic_context: Optional[tuple] = Depends(get_active_clinic),
@@ -344,7 +345,7 @@ async def get_patient_vitals(
         select(PatientVital)
         .where(and_(*conditions))
         .order_by(PatientVital.recorded_at.desc())
-        .limit(200)
+        .limit(limit)
     )
     result = await db.execute(stmt)
     vitals = result.scalars().all()
@@ -353,4 +354,5 @@ async def get_patient_vitals(
         "data": [VitalResponse.from_orm(v) for v in vitals],
         "total": len(vitals),
         "patient_id": str(patient_id),
+        "limit": limit,
     }

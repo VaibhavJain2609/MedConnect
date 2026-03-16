@@ -10,7 +10,7 @@ GET  /api/v1/clinics/{id}/patients           — list linked patients (clinic me
 import random
 import string
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -35,7 +35,7 @@ def _generate_code() -> str:
 
 def _next_sunday() -> datetime:
     """Return the next Sunday midnight UTC (weekly rotation)."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     days_until_sunday = (6 - now.weekday()) % 7 or 7
     return (now + timedelta(days=days_until_sunday)).replace(hour=0, minute=0, second=0, microsecond=0)
 
@@ -55,7 +55,7 @@ async def get_link_code(
     )
     link_code = result.scalar_one_or_none()
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     # Create or rotate if missing/expired
     if not link_code or link_code.expires_at < now:
@@ -122,7 +122,7 @@ async def link_patient(
             status_code=404,
             detail={"error": {"code": "INVALID_CODE", "message": "Patient link code not found"}},
         )
-    if link_code.expires_at < datetime.utcnow():
+    if link_code.expires_at < datetime.now(timezone.utc):
         raise HTTPException(
             status_code=400,
             detail={"error": {"code": "EXPIRED_CODE", "message": "Patient link code has expired"}},
@@ -235,7 +235,7 @@ async def update_consent(
 
     link.consent_status = data.action
     if data.action == "approved":
-        link.consented_at = datetime.utcnow()
+        link.consented_at = datetime.now(timezone.utc)
     await db.flush()
 
     # Notify the doctor who created the link

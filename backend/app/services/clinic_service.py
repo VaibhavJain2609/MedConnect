@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,7 +50,7 @@ async def create_clinic(
             user_id=owner_user_id,
             role="owner",
             is_active=True,
-            joined_at=datetime.utcnow(),
+            joined_at=datetime.now(timezone.utc),
         )
         db.add(membership)
         await db.flush()
@@ -128,7 +128,7 @@ async def update_clinic_settings(
 
 
 async def delete_clinic(db: AsyncSession, clinic: Clinic) -> None:
-    clinic.deleted_at = datetime.utcnow()
+    clinic.deleted_at = datetime.now(timezone.utc)
     await db.flush()
 
 

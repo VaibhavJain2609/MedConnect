@@ -31,6 +31,22 @@ ALLOWED_CONTENT_TYPES = {
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".pdf"}
 
+# Magic byte signatures for supported file types
+_MAGIC_SIGNATURES: dict[str, bytes] = {
+    "image/jpeg": b"\xff\xd8\xff",
+    "image/png": b"\x89PNG\r\n\x1a\n",
+    "application/pdf": b"%PDF",
+}
+
+
+def _check_magic_bytes(data: bytes, content_type: str) -> bool:
+    """Return True only when the leading bytes of *data* match the expected
+    magic signature for *content_type*.  Returns False for unknown types."""
+    sig = _MAGIC_SIGNATURES.get(content_type)
+    if sig is None:
+        return False
+    return data[: len(sig)] == sig
+
 
 class PresignRequest(BaseModel):
     file_name: str
@@ -103,6 +119,16 @@ async def upload_file(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"error": {"code": "EMPTY_BODY", "message": "Request body is empty"}},
+        )
+
+    # Validate magic bytes against the content type inferred from the object key
+    # extension before writing anything to disk.  This prevents an attacker from
+    # renaming an executable to .pdf (or similar) and having it stored as-is.
+    inferred_type, _ = mimetypes.guess_type(object_key)
+    if not inferred_type or not _check_magic_bytes(body_bytes, inferred_type):
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail={"error": {"code": "INVALID_FILE_TYPE", "message": "File content does not match declared type"}},
         )
 
     with open(file_path, "wb") as f:

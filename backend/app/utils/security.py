@@ -22,7 +22,14 @@ def get_jwks_client() -> PyJWKClient:
 def decode_keycloak_token(token: str) -> dict | None:
     try:
         client = get_jwks_client()
-        signing_key = client.get_signing_key_from_jwt(token)
+        try:
+            signing_key = client.get_signing_key_from_jwt(token)
+        except Exception:
+            # Force JWKS cache refresh (handles Keycloak key rotation)
+            global _jwks_client
+            _jwks_client = None
+            client = get_jwks_client()
+            signing_key = client.get_signing_key_from_jwt(token)
         expected_issuer = f"{settings.KEYCLOAK_PUBLIC_URL}/realms/{settings.KEYCLOAK_REALM}"
         logger.debug("Decoding token, expected issuer: %s", expected_issuer)
         decode_kwargs: dict = {

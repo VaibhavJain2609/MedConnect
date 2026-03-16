@@ -12,7 +12,7 @@ PUT    /api/v1/clinics/{id}/join-requests/{rid}  — approve/reject
 """
 import secrets
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -75,7 +75,7 @@ async def create_invite(
         code=code,
         email=data.email,
         role=data.role,
-        expires_at=datetime.utcnow() + timedelta(days=data.expires_days),
+        expires_at=datetime.now(timezone.utc) + timedelta(days=data.expires_days),
         max_uses=data.max_uses,
         use_count=0,
         created_by=user.id,
@@ -148,7 +148,7 @@ async def revoke_invite(
     invite = result.scalar_one_or_none()
     if not invite:
         raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND"}})
-    invite.deleted_at = datetime.utcnow()
+    invite.deleted_at = datetime.now(timezone.utc)
     await db.flush()
 
 
@@ -177,7 +177,7 @@ async def redeem_invite(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"error": {"code": "INVALID_CODE", "message": "Invite code not found or expired"}},
         )
-    if invite.expires_at and invite.expires_at < datetime.utcnow():
+    if invite.expires_at and invite.expires_at < datetime.now(timezone.utc):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"error": {"code": "EXPIRED_CODE", "message": "Invite code has expired"}},
@@ -202,7 +202,7 @@ async def redeem_invite(
         user_id=user.id,
         role=invite.role,
         is_active=True,
-        joined_at=datetime.utcnow(),
+        joined_at=datetime.now(timezone.utc),
     )
     db.add(membership)
     invite.use_count += 1
@@ -374,7 +374,7 @@ async def review_join_request(
 
     req.status = data.action
     req.reviewed_by = user.id
-    req.reviewed_at = datetime.utcnow()
+    req.reviewed_at = datetime.now(timezone.utc)
 
     if data.action == "approved":
         membership = ClinicMembership(
@@ -383,7 +383,7 @@ async def review_join_request(
             user_id=req.user_id,
             role="doctor",
             is_active=True,
-            joined_at=datetime.utcnow(),
+            joined_at=datetime.now(timezone.utc),
         )
         db.add(membership)
 

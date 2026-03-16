@@ -6,6 +6,7 @@ Limits per token hash or IP address:
 - Read endpoints (GET): 100 req/min
 """
 import hashlib
+import logging
 import time
 
 import redis.asyncio as aioredis
@@ -16,6 +17,8 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from app.config import settings
+
+_logger = logging.getLogger(__name__)
 
 # Paths exempt from rate limiting
 _EXEMPT_PATHS = {"/health", "/docs", "/redoc", "/openapi.json"}
@@ -81,8 +84,8 @@ async def _check_limit(
             retry_after = max(1, int(next_window - time.time()) + 1)
             return False, retry_after
         return True, 0
-    except Exception:
-        # If Redis is unavailable, allow the request (fail open)
+    except Exception as exc:
+        _logger.error("Redis rate-limit unavailable (%s: %s); failing open", type(exc).__name__, exc)
         return True, 0
 
 
