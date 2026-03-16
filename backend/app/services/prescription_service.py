@@ -1,6 +1,7 @@
 from datetime import date
 from uuid import UUID
 
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -9,6 +10,7 @@ from app.models.doctor import Doctor
 from app.models.medical_record import MedicalRecord
 from app.models.prescription import Prescription
 from app.models.user import User
+from app.schemas.prescription import PrescriptionMedicineItem
 from app.services.notification_service import create_notification
 from app.utils.fhir import create_fhir_bundle
 
@@ -25,6 +27,15 @@ async def create_prescription(
     branch_id: UUID | None = None,
     appointment_id: UUID | None = None,
 ) -> Prescription:
+    # Validate each medicine item before storage (defense-in-depth)
+    try:
+        validated_medicines = [
+            PrescriptionMedicineItem.model_validate(m).model_dump(exclude_none=True)
+            for m in medicines
+        ]
+    except ValidationError as e:
+        raise ValueError(f"Invalid medicine data: {e}")
+
     patient_result = await db.execute(
         select(User).where(User.id == patient_id, User.role == "patient", User.deleted_at.is_(None))
     )
@@ -34,7 +45,7 @@ async def create_prescription(
 
     fhir_bundle = create_fhir_bundle(
         record_type="prescription",
-        data={"medicines": medicines},
+        data={"medicines": validated_medicines},
         patient_id=patient_id,
         doctor_id=doctor_id,
     )
@@ -56,7 +67,7 @@ async def create_prescription(
         record_id=record.id,
         doctor_id=doctor_id,
         patient_id=patient_id,
-        medicines=medicines,
+        medicines=validated_medicines,
         diagnosis=diagnosis,
         notes=notes,
         valid_until=valid_until,

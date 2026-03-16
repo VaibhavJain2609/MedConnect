@@ -1,13 +1,13 @@
 """Redis-based rate limiting middleware.
 
-Limits per user (identified by JWT sub) or IP address:
+Limits per token hash or IP address:
 - Auth endpoints (/api/v1/auth/*): 5 req/min
 - Write endpoints (POST/PUT/PATCH/DELETE): 20 req/min
 - Read endpoints (GET): 100 req/min
 """
+import hashlib
 import time
 
-import jwt
 import redis.asyncio as aioredis
 from fastapi import status
 from fastapi.responses import JSONResponse
@@ -46,18 +46,12 @@ def _get_category(method: str, path: str) -> str:
 
 
 def _get_user_key(request: Request) -> str:
-    """Return a stable identifier for the caller (JWT sub or client IP)."""
+    """Return a stable identifier for the caller (token hash or client IP)."""
     auth = request.headers.get("Authorization", "")
     if auth.startswith("Bearer "):
         token = auth[7:]
-        try:
-            # Signature not verified here — this is rate-limiting only, not auth.
-            payload = jwt.decode(token, options={"verify_signature": False})
-            sub = payload.get("sub")
-            if sub:
-                return f"user:{sub}"
-        except Exception:
-            pass
+        token_hash = hashlib.sha256(token.encode()).hexdigest()[:32]
+        return f"token:{token_hash}"
 
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:

@@ -284,11 +284,20 @@ async def get_patient_prescriptions(
 
     _, doctor = doctor_info
 
+    if clinic_context:
+        clinic_id, _ = clinic_context
+        await _check_patient_consent(db, patient_id, clinic_id)
+    else:
+        if not await _check_doctor_patient_relationship(db, doctor, patient_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "FORBIDDEN", "message": "No relationship with this patient"}},
+            )
+
     filter_conditions = [MedicalRecord.doctor_id == doctor.id]
 
     if clinic_context:
         clinic_id, _ = clinic_context
-        await _check_patient_consent(db, patient_id, clinic_id)
         # Get clinic sharing mode
         clinic_result = await db.execute(
             select(Clinic).where(Clinic.id == clinic_id, Clinic.deleted_at.is_(None))

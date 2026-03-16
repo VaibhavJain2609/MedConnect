@@ -7,25 +7,7 @@ Remaining items are tracked below by priority.
 
 ## HIGH Priority
 
-### MD-294 — Rate-limit JWT decoded without signature verification
-**File:** `backend/app/middleware/rate_limit.py:54-55`
-**Issue:** `jwt.decode(token, options={"verify_signature": False})` is used to extract a user ID for rate-limit keying. An attacker can forge any user ID to bypass per-user limits or target specific users.
-**Fix:** Use HMAC hash of the raw token bytes as the rate-limit key — no decoding needed.
-
-### MD-295 — Prescription medicines stored as unvalidated JSONB
-**File:** `backend/app/models/prescription.py:21`, `backend/app/services/prescription_service.py:59`
-**Issue:** `medicines` column is raw JSONB. No schema enforced on write — malformed dosage, missing medicine IDs, or impossible quantities are stored silently.
-**Fix:** Define a `PrescriptionMedicineItem` Pydantic schema and validate each item before persistence. Consider adding a DB check constraint on the JSONB structure.
-
-### MD-296 — User auto-provisioning race condition
-**File:** `backend/app/dependencies.py:64-102`
-**Issue:** Two concurrent first-time requests for the same Keycloak user can both pass `if not user` and both attempt to INSERT a User row. Depending on DB isolation level, this either fails with an integrity error or creates duplicate rows.
-**Fix:** Replace the SELECT + INSERT pattern with PostgreSQL `INSERT ... ON CONFLICT (keycloak_sub) DO NOTHING` (upsert).
-
-### MD-297 — Doctor can view patient prescriptions without relationship verification
-**File:** `backend/app/routers/doctors.py:264-350`
-**Issue:** `get_patient_prescriptions` checks doctor relationship only via `doctor_id` filter on records. Without an explicit call to `_check_doctor_patient_relationship()`, a doctor with any record for the patient can see all their prescriptions across clinics.
-**Fix:** Add `_check_doctor_patient_relationship()` call at the top of the endpoint, same pattern as `get_patient_profile`.
+✅ All HIGH priority tickets (MD-294–MD-297) have been resolved.
 
 ---
 
@@ -92,10 +74,10 @@ Remaining items are tracked below by priority.
 | MD-291 | ✅ Mass-assignment via setattr loop | High |
 | MD-292 | ✅ No vital value range validation | Critical |
 | MD-293 | ✅ JWT token in WebSocket URL | High |
-| MD-294 | Rate-limit JWT decoded without signature verification | High |
-| MD-295 | Prescription medicines unvalidated JSONB | High |
-| MD-296 | User provisioning race condition | High |
-| MD-297 | Doctor prescriptions without relationship check | High |
+| MD-294 | ✅ Rate-limit JWT decoded without signature verification | High |
+| MD-295 | ✅ Prescription medicines unvalidated JSONB | High |
+| MD-296 | ✅ User provisioning race condition | High |
+| MD-297 | ✅ Doctor prescriptions without relationship check | High |
 | MD-298 | Rate limiter fails open when Redis down | Medium |
 | MD-299 | File upload MIME type not validated | Medium |
 | MD-300 | datetime.utcnow() deprecation | Medium |

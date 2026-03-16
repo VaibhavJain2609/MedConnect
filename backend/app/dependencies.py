@@ -3,6 +3,7 @@ import uuid
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -62,21 +63,35 @@ async def get_current_user(
         role = "patient"
 
     if not user:
-        # Auto-provision: create local user from Keycloak token claims
-        user = User(
-            keycloak_sub=sub,
-            email=payload.get("email"),
-            full_name=payload.get("name", payload.get("preferred_username", "Unknown")),
-            role=role,
+        # Auto-provision: use INSERT ... ON CONFLICT DO NOTHING to avoid race conditions
+        # when two concurrent requests arrive for the same new Keycloak user.
+        new_id = uuid.uuid4()
+        stmt = (
+            pg_insert(User)
+            .values(
+                id=new_id,
+                keycloak_sub=sub,
+                email=payload.get("email"),
+                full_name=payload.get("name", payload.get("preferred_username", "Unknown")),
+                role=role,
+            )
+            .on_conflict_do_nothing(index_elements=["keycloak_sub"])
         )
-        db.add(user)
-        await db.flush()
+        await db.execute(stmt)
+        # Re-fetch regardless of whether we won or lost the race
+        result = await db.execute(
+            select(User).where(User.keycloak_sub == sub, User.deleted_at.is_(None), User.is_active.is_(True))
+        )
+        user = result.scalar_one()
 
-        # If doctor role, also create Doctor profile
+        # Create Doctor profile if needed (only if we just inserted this user)
         if role == "doctor":
-            doctor = Doctor(user_id=user.id)
-            db.add(doctor)
-            await db.flush()
+            doc_result = await db.execute(
+                select(Doctor).where(Doctor.user_id == user.id, Doctor.deleted_at.is_(None))
+            )
+            if not doc_result.scalar_one_or_none():
+                db.add(Doctor(user_id=user.id))
+                await db.flush()
     else:
         # Sync: update local user from token claims on every request
         changed = False
