@@ -21,6 +21,7 @@ from app.routers import clinics
 from app.routers import onboarding
 from app.routers import clinic_invites
 from app.routers import patient_links
+from app.routers import record_access
 from app.routers import appointments
 from app.routers import uploads
 from app.routers import vitals
@@ -126,6 +127,7 @@ app.include_router(clinics.router)
 app.include_router(onboarding.router)
 app.include_router(clinic_invites.router)
 app.include_router(patient_links.router)
+app.include_router(record_access.router)
 app.include_router(appointments.router)
 app.include_router(uploads.router)
 app.include_router(vitals.router)

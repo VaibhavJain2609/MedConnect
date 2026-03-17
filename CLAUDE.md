@@ -165,10 +165,10 @@ pip install -r requirements.txt
 # Run server
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
-# Migrations
-alembic upgrade head
-alembic revision --autogenerate -m "Description"
-alembic downgrade -1
+# Migrations — always run via docker-compose (not local venv)
+docker-compose exec backend alembic upgrade head
+docker-compose exec backend alembic revision --autogenerate -m "Description"
+docker-compose exec backend alembic downgrade -1
 
 # Tests
 pytest                                             # all tests

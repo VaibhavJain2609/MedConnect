@@ -75,6 +75,7 @@ async def get_patient_timeline(
     query: str | None = None,
     cursor: UUID | None = None,
     limit: int = 20,
+    doctor_id: UUID | None = None,
 ) -> tuple[list[dict], str | None, bool]:
     from app.models.prescription import Prescription
 
@@ -91,6 +92,9 @@ async def get_patient_timeline(
             MedicalRecord.deleted_at.is_(None),
         )
     )
+
+    if doctor_id:
+        stmt = stmt.where(MedicalRecord.doctor_id == doctor_id)
 
     if record_type:
         stmt = stmt.where(MedicalRecord.record_type == record_type)
@@ -131,6 +135,7 @@ async def get_patient_timeline(
             "record_type": record.record_type,
             "title": record.title,
             "source": record.source,
+            "doctor_id": str(record.doctor_id) if record.doctor_id else None,
             "doctor_name": doctor_name,
             "document_url": record.document_url,
             "created_at": record.created_at.isoformat(),

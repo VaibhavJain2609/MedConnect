@@ -7,7 +7,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Pill, Activity, User, AlertCircle, Edit2, X } from "lucide-react";
+import { FileText, Pill, Activity, User, AlertCircle, Edit2, X, ShieldCheck, ShieldAlert, ShieldOff } from "lucide-react";
+import { getMyRecordAccessConsent, requestRecordAccess } from "@/lib/api/record-access";
 
 const VITAL_LABELS: Record<string, { label: string; unit: string }> = {
   bp_systolic: { label: "BP Systolic", unit: "mmHg" },
@@ -174,6 +175,31 @@ export default function DoctorPatientProfilePage() {
     enabled: !!patientId,
   });
 
+  const { data: consentData, isLoading: consentLoading } = useQuery({
+    queryKey: ["record-access", patientId],
+    queryFn: () => getMyRecordAccessConsent(patientId),
+    enabled: !!patientId,
+  });
+
+  // Record access request modal state
+  const [showAccessModal, setShowAccessModal] = useState(false);
+  const [accessPurpose, setAccessPurpose] = useState("");
+  const [accessDuration, setAccessDuration] = useState(30);
+
+  const requestAccessMutation = useMutation({
+    mutationFn: () =>
+      requestRecordAccess(patientId, {
+        purpose: accessPurpose || undefined,
+        access_duration_days: accessDuration,
+      }),
+    onSuccess: () => {
+      setShowAccessModal(false);
+      setAccessPurpose("");
+      setAccessDuration(30);
+      queryClient.invalidateQueries({ queryKey: ["record-access", patientId] });
+    },
+  });
+
   // Amend record state
   const [amendTarget, setAmendTarget] = useState<AmendFormState | null>(null);
   const [amendError, setAmendError] = useState("");
@@ -263,6 +289,63 @@ export default function DoctorPatientProfilePage() {
           <p className="mt-2 text-sm font-medium text-red-800">Patient not found</p>
         </div>
       )}
+
+      {/* Record Access Consent Banner */}
+      {!consentLoading && (() => {
+        const consent = consentData;
+        const now = new Date();
+        const isActive =
+          consent?.status === "approved" &&
+          consent.expires_at &&
+          new Date(consent.expires_at) > now;
+        const isPending = consent?.status === "pending";
+
+        if (isActive) {
+          return (
+            <div className="flex items-center gap-3 rounded-xl border border-green-200 bg-green-50 px-4 py-3">
+              <ShieldCheck className="h-5 w-5 shrink-0 text-green-600" />
+              <p className="text-sm text-green-800">
+                Full record access granted until{" "}
+                <span className="font-medium">
+                  {new Date(consent!.expires_at!).toLocaleDateString("en-IN", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })}
+                </span>.
+              </p>
+            </div>
+          );
+        }
+
+        if (isPending) {
+          return (
+            <div className="flex items-center gap-3 rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3">
+              <ShieldOff className="h-5 w-5 shrink-0 text-yellow-600" />
+              <p className="text-sm text-yellow-800">
+                Access request pending patient approval.
+              </p>
+            </div>
+          );
+        }
+
+        return (
+          <div className="flex flex-col gap-3 rounded-xl border border-dreams-border bg-dreams-lightBg px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <ShieldAlert className="h-5 w-5 shrink-0 text-dreams-textSecondary" />
+              <p className="text-sm text-dreams-textSecondary">
+                You are viewing your own records for this patient.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowAccessModal(true)}
+              className="shrink-0 rounded-lg bg-dreams-blue px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+            >
+              Request Full Record Access
+            </button>
+          </div>
+        );
+      })()}
 
       {/* Medical Info */}
       {profile && (
@@ -398,19 +481,21 @@ export default function DoctorPatientProfilePage() {
                         {formatDate(record.created_at)}
                       </p>
                     </div>
-                    <button
-                      onClick={() =>
-                        setAmendTarget({
-                          recordId: record.id,
-                          title: record.title,
-                          description: record.description || "",
-                        })
-                      }
-                      className="shrink-0 flex items-center gap-1 rounded-lg border border-dreams-border px-2.5 py-1 text-xs font-medium text-dreams-textSecondary hover:bg-dreams-lightBg hover:text-dreams-textPrimary transition-colors"
-                    >
-                      <Edit2 className="h-3 w-3" />
-                      Amend
-                    </button>
+                    {record.is_amendable && (
+                      <button
+                        onClick={() =>
+                          setAmendTarget({
+                            recordId: record.id,
+                            title: record.title,
+                            description: record.description || "",
+                          })
+                        }
+                        className="shrink-0 flex items-center gap-1 rounded-lg border border-dreams-border px-2.5 py-1 text-xs font-medium text-dreams-textSecondary hover:bg-dreams-lightBg hover:text-dreams-textPrimary transition-colors"
+                      >
+                        <Edit2 className="h-3 w-3" />
+                        Amend
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -479,6 +564,69 @@ export default function DoctorPatientProfilePage() {
           </Link>
         </div>
       </div>
+
+      {/* Record Access Request Modal */}
+      {showAccessModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-dreams-textPrimary">Request Full Record Access</h2>
+              <button onClick={() => setShowAccessModal(false)} className="text-dreams-textSecondary hover:text-dreams-textPrimary">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="mb-4 text-sm text-dreams-textSecondary">
+              The patient will receive a notification and can approve or reject your request.
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+                  Purpose (optional)
+                </label>
+                <input
+                  type="text"
+                  value={accessPurpose}
+                  onChange={(e) => setAccessPurpose(e.target.value)}
+                  placeholder="e.g. Continuity of care for ongoing treatment"
+                  className="w-full rounded-lg border border-dreams-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+                  Access Duration
+                </label>
+                <select
+                  value={accessDuration}
+                  onChange={(e) => setAccessDuration(Number(e.target.value))}
+                  className="w-full rounded-lg border border-dreams-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
+                >
+                  <option value={7}>7 days</option>
+                  <option value={14}>14 days</option>
+                  <option value={30}>30 days</option>
+                  <option value={90}>90 days</option>
+                </select>
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowAccessModal(false)}
+                className="rounded-lg border border-dreams-border px-4 py-2 text-sm font-medium text-dreams-textPrimary hover:bg-dreams-lightBg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={requestAccessMutation.isPending}
+                onClick={() => requestAccessMutation.mutate()}
+                className="rounded-lg bg-dreams-blue px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+              >
+                {requestAccessMutation.isPending ? "Sending..." : "Send Request"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Amend Record Modal */}
       {amendTarget && (

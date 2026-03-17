@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Bell, Check, X, Calendar, TestTube, AlertCircle, Pill } from "lucide-react";
+import { Bell, Check, X, Calendar, TestTube, AlertCircle, Pill, CheckCircle, XCircle } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getNotifications,
@@ -9,6 +9,8 @@ import {
   markAllAsRead,
   type Notification,
 } from "@/lib/api/notifications";
+import { actOnRecordAccessRequest } from "@/lib/api/record-access";
+import { useAuthStore } from "@/stores/auth-store";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 
@@ -30,6 +32,7 @@ import { Badge } from "@/components/ui/badge";
 export const NotificationCenter: React.FC = () => {
   const [isOpen, setIsOpen] = React.useState(false);
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
   const dropdownRef = React.useRef<HTMLDivElement>(null);
 
   // Fetch notifications
@@ -55,6 +58,16 @@ export const NotificationCenter: React.FC = () => {
     mutationFn: () => markAllAsRead(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
+
+  // Inline consent action (patient only)
+  const consentActionMutation = useMutation({
+    mutationFn: ({ consentId, action }: { consentId: string; action: "approved" | "rejected" }) =>
+      actOnRecordAccessRequest(consentId, action),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["record-access-requests"] });
     },
   });
 
@@ -186,6 +199,38 @@ export const NotificationCenter: React.FC = () => {
                       <p className="text-xs text-dreams-textSecondary">
                         {formatTimestamp(notification.created_at)}
                       </p>
+
+                      {/* Inline consent actions for patients */}
+                      {user?.role === "patient" && notification.metadata?.consent_id && !notification.read && (
+                        <div className="mt-2 flex gap-2" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            disabled={consentActionMutation.isPending}
+                            onClick={() =>
+                              consentActionMutation.mutate({
+                                consentId: notification.metadata!.consent_id,
+                                action: "approved",
+                              })
+                            }
+                            className="flex items-center gap-1 rounded-lg bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 hover:bg-green-100 disabled:opacity-50"
+                          >
+                            <CheckCircle className="h-3 w-3" />
+                            Approve
+                          </button>
+                          <button
+                            disabled={consentActionMutation.isPending}
+                            onClick={() =>
+                              consentActionMutation.mutate({
+                                consentId: notification.metadata!.consent_id,
+                                action: "rejected",
+                              })
+                            }
+                            className="flex items-center gap-1 rounded-lg bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+                          >
+                            <XCircle className="h-3 w-3" />
+                            Reject
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     {/* Mark as read button */}

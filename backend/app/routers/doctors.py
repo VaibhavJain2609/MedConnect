@@ -261,6 +261,27 @@ async def _check_doctor_patient_relationship(
     return shared_clinic.scalar_one_or_none() is not None
 
 
+async def _get_active_record_access_consent(
+    db: AsyncSession, doctor_id: UUID, patient_id: UUID
+) -> bool:
+    """Returns True if doctor has an approved, non-expired RecordAccessConsent."""
+    from datetime import datetime, timezone
+    from sqlalchemy import select as _select
+    from app.models.record_access import RecordAccessConsent
+
+    now = datetime.now(timezone.utc)
+    result = await db.execute(
+        _select(RecordAccessConsent.id).where(
+            RecordAccessConsent.doctor_id == doctor_id,
+            RecordAccessConsent.patient_id == patient_id,
+            RecordAccessConsent.status == "approved",
+            RecordAccessConsent.expires_at > now,
+            RecordAccessConsent.deleted_at.is_(None),
+        ).limit(1)
+    )
+    return result.scalar_one_or_none() is not None
+
+
 @router.get("/patients/{patient_id}/prescriptions")
 async def get_patient_prescriptions(
     patient_id: UUID,
@@ -270,15 +291,12 @@ async def get_patient_prescriptions(
     clinic_context: tuple | None = Depends(get_active_clinic),
 ):
     """
-    Get prescriptions for a patient scoped to the active clinic.
-    Respects record_sharing_mode:
-      - per_clinic: see all clinic doctors' prescriptions
-      - per_doctor: see only own prescriptions
-    Falls back to own-only if no clinic context.
-    Requires approved PatientClinicLink consent when clinic context is active.
+    Get prescriptions for a patient.
+    With clinic context + active RecordAccessConsent: returns all prescriptions for the patient.
+    Otherwise: returns only prescriptions created by this doctor.
+    Requires approved PatientClinicLink when clinic context is active.
     """
     from sqlalchemy import select, or_
-    from app.models.clinic import Clinic
     from app.models.medical_record import MedicalRecord
     from app.models.prescription import Prescription
 
@@ -294,32 +312,14 @@ async def get_patient_prescriptions(
                 detail={"error": {"code": "FORBIDDEN", "message": "No relationship with this patient"}},
             )
 
+    # Default: own prescriptions only
     filter_conditions = [MedicalRecord.doctor_id == doctor.id]
 
     if clinic_context:
         clinic_id, _ = clinic_context
-        # Get clinic sharing mode
-        clinic_result = await db.execute(
-            select(Clinic).where(Clinic.id == clinic_id, Clinic.deleted_at.is_(None))
-        )
-        clinic = clinic_result.scalar_one_or_none()
-
-        if clinic and clinic.record_sharing_mode == "per_clinic":
-            # Include all doctors who are members of this clinic
-            clinic_doctor_ids_stmt = (
-                select(Doctor.id)
-                .join(ClinicMembership, ClinicMembership.user_id == Doctor.user_id)
-                .where(
-                    ClinicMembership.clinic_id == clinic_id,
-                    ClinicMembership.is_active.is_(True),
-                    ClinicMembership.deleted_at.is_(None),
-                    Doctor.deleted_at.is_(None),
-                )
-            )
-            clinic_doctor_ids = await db.execute(clinic_doctor_ids_stmt)
-            ids = [row[0] for row in clinic_doctor_ids]
-            if ids:
-                filter_conditions = [MedicalRecord.doctor_id.in_(ids)]
+        has_full_access = await _get_active_record_access_consent(db, doctor.id, patient_id)
+        if has_full_access:
+            filter_conditions = []  # no doctor filter → all prescriptions for patient
 
     stmt = (
         select(MedicalRecord, Prescription, User.full_name.label("doctor_name"))
@@ -331,11 +331,12 @@ async def get_patient_prescriptions(
             MedicalRecord.record_type == "prescription",
             MedicalRecord.deleted_at.is_(None),
             Prescription.deleted_at.is_(None),
-            or_(*filter_conditions),
         )
         .order_by(MedicalRecord.created_at.desc())
         .limit(limit)
     )
+    if filter_conditions:
+        stmt = stmt.where(or_(*filter_conditions))
 
     result = await db.execute(stmt)
     rows = result.all()
@@ -379,9 +380,30 @@ async def patient_records(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={"error": {"code": "FORBIDDEN", "message": "No relationship with this patient"}},
             )
+
+    has_full_access = False
+    if clinic_context:
+        has_full_access = await _get_active_record_access_consent(db, doctor.id, patient_id)
+
+    doctor_id_filter = None if has_full_access else doctor.id
     records, next_cursor, has_more = await get_patient_timeline(
-        db=db, patient_id=patient_id, record_type=type, cursor=cursor, limit=limit
+        db=db, patient_id=patient_id, record_type=type, cursor=cursor, limit=limit,
+        doctor_id=doctor_id_filter,
     )
+
+    # Annotate each record with whether this doctor can amend it
+    from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone.utc)
+    for record in records:
+        is_own = record.get("doctor_id") == str(doctor.id)
+        if not is_own:
+            record["is_amendable"] = False
+        elif record["record_type"] == "prescription":
+            age = now - datetime.fromisoformat(record["created_at"])
+            record["is_amendable"] = age <= timedelta(minutes=2)
+        else:
+            record["is_amendable"] = True
+
     return PaginatedResponse(
         data=records,
         pagination=PaginationMeta(next_cursor=next_cursor, has_more=has_more, limit=limit),
@@ -505,6 +527,23 @@ async def amend_record(
 
     _, doctor = doctor_info
     clinic_id = clinic_context[0] if clinic_context else None
+
+    # Only the original author can amend
+    if original.doctor_id != doctor.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": {"code": "NOT_AUTHOR", "message": "You can only amend your own records"}},
+        )
+
+    # Prescriptions lock after 2 minutes
+    if original.record_type == "prescription":
+        from datetime import datetime, timedelta, timezone
+        age = datetime.now(timezone.utc) - original.created_at.replace(tzinfo=timezone.utc)
+        if age > timedelta(minutes=2):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "AMENDMENT_WINDOW_EXPIRED", "message": "Prescriptions cannot be amended after 2 minutes"}},
+            )
 
     if clinic_id:
         await _check_patient_consent(db, original.patient_id, clinic_id)
