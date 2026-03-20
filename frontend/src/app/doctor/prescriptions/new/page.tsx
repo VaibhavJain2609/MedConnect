@@ -6,7 +6,7 @@ import api from "@/lib/api";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import MedicineAutocomplete from "@/components/medicine/MedicineAutocomplete";
 import { AlertTriangle, X, ChevronDown, BookOpen, Save } from "lucide-react";
-import { getMyClinicss, getClinicBranches, type ClinicBranch } from "@/lib/api/clinics";
+import { getMyClinics, getClinicBranches, type ClinicBranch } from "@/lib/api/clinics";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -429,7 +429,7 @@ export default function NewPrescriptionPage() {
       .get("/api/v1/doctors/prescription-templates")
       .then((res) => setTemplates(res.data.data || []))
       .catch(() => {});
-    getMyClinicss()
+    getMyClinics()
       .then((res) => setClinics(res.data || []))
       .catch(() => {});
 

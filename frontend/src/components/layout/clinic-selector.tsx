@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Building2, ChevronDown, Check } from "lucide-react";
-import { getMyClinicss } from "@/lib/api/clinics";
+import { getMyClinics } from "@/lib/api/clinics";
 import { useClinicStore } from "@/stores/clinic-store";
 
 export function ClinicSelector() {
@@ -13,7 +13,7 @@ export function ClinicSelector() {
 
   const { data } = useQuery({
     queryKey: ["my-clinics"],
-    queryFn: getMyClinicss,
+    queryFn: getMyClinics,
   });
 
   useEffect(() => {

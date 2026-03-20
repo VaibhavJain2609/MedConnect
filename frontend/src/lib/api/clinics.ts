@@ -91,7 +91,7 @@ export async function createClinic(data: {
   return res.data
 }
 
-export async function getMyClinicss(): Promise<ClinicListResponse> {
+export async function getMyClinics(): Promise<ClinicListResponse> {
   const res = await api.get('/api/v1/clinics/my')
   return res.data
 }
