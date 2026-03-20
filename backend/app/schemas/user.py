@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class DoctorProfileCreate(BaseModel):
@@ -25,10 +25,10 @@ class DoctorProfileResponse(BaseModel):
 
 
 class PatientProfileUpdate(BaseModel):
-    phone: str | None = None
+    phone: str | None = Field(None, max_length=20)
     language_pref: str | None = None
-    emergency_contact_name: str | None = None
-    emergency_contact_phone: str | None = None
+    emergency_contact_name: str | None = Field(None, max_length=255)
+    emergency_contact_phone: str | None = Field(None, max_length=20)
 
 
 class PatientProfileResponse(BaseModel):
@@ -103,9 +103,9 @@ class AdminUserDetailResponse(BaseModel):
 
 
 class AdminCreatePatientRequest(BaseModel):
-    full_name: str
-    phone: str | None = None
-    email: str | None = None
+    full_name: str = Field(max_length=255)
+    phone: str | None = Field(None, max_length=20)
+    email: str | None = Field(None, max_length=255)
 
 
 class AdminCreatePatientResponse(BaseModel):
@@ -122,9 +122,9 @@ class AdminCreatePatientResponse(BaseModel):
 
 
 class AdminUserUpdateRequest(BaseModel):
-    full_name: str | None = None
-    email: str | None = None
-    phone: str | None = None
+    full_name: str | None = Field(None, max_length=255)
+    email: str | None = Field(None, max_length=255)
+    phone: str | None = Field(None, max_length=20)
     role: str | None = None
     is_active: bool | None = None
     language_pref: str | None = None

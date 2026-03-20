@@ -1,16 +1,16 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 # ── Branch schemas ─────────────────────────────────────────────────────────
 
 class ClinicBranchCreate(BaseModel):
-    name: str
-    address: Optional[str] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
-    phone: Optional[str] = None
+    name: str = Field(max_length=255)
+    address: Optional[str] = Field(None, max_length=500)
+    city: Optional[str] = Field(None, max_length=255)
+    state: Optional[str] = Field(None, max_length=255)
+    phone: Optional[str] = Field(None, max_length=20)
 
 
 class ClinicBranchResponse(BaseModel):
@@ -65,21 +65,21 @@ class ClinicMemberListResponse(BaseModel):
 # ── Clinic schemas ─────────────────────────────────────────────────────────
 
 class ClinicCreate(BaseModel):
-    name: str
-    address: Optional[str] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
-    phone: Optional[str] = None
-    email: Optional[str] = None
+    name: str = Field(max_length=255)
+    address: Optional[str] = Field(None, max_length=500)
+    city: Optional[str] = Field(None, max_length=255)
+    state: Optional[str] = Field(None, max_length=255)
+    phone: Optional[str] = Field(None, max_length=20)
+    email: Optional[str] = Field(None, max_length=255)
 
 
 class ClinicUpdate(BaseModel):
-    name: Optional[str] = None
-    address: Optional[str] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
-    phone: Optional[str] = None
-    email: Optional[str] = None
+    name: Optional[str] = Field(None, max_length=255)
+    address: Optional[str] = Field(None, max_length=500)
+    city: Optional[str] = Field(None, max_length=255)
+    state: Optional[str] = Field(None, max_length=255)
+    phone: Optional[str] = Field(None, max_length=20)
+    email: Optional[str] = Field(None, max_length=255)
     logo_url: Optional[str] = None
     is_active: Optional[bool] = None
 
