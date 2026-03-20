@@ -85,8 +85,8 @@ async def _check_limit(
             return False, retry_after
         return True, 0
     except Exception as exc:
-        _logger.error("Redis rate-limit unavailable (%s: %s); failing open", type(exc).__name__, exc)
-        return True, 0
+        _logger.error("Redis rate-limit error (%s: %s); failing closed", type(exc).__name__, exc)
+        return False, 1
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
