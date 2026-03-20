@@ -20,7 +20,7 @@ from app.models.doctor import Doctor
 from app.models.user import User
 from app.models.vital import VITAL_TYPES, PatientVital
 
-router = APIRouter(tags=["vitals"])
+router = APIRouter(prefix="/api/v1", tags=["vitals"])
 
 # ── Critical vital thresholds [MD-270] ──────────────────────────────────────
 # Maps vital_type (DB names) to threshold config.
@@ -112,7 +112,7 @@ def _is_abnormal(vital_type: str, value: float) -> bool:
 
 # ── Patient: record a vital ─────────────────────────────────────────────────
 
-@router.post("/api/v1/patients/vitals", status_code=status.HTTP_201_CREATED)
+@router.post("/patients/vitals", status_code=status.HTTP_201_CREATED)
 async def create_vital(
     data: VitalCreate,
     user: User = Depends(require_patient),
@@ -254,7 +254,7 @@ async def _fire_critical_vital_notifications(
 
 # ── Patient: list own vitals ────────────────────────────────────────────────
 
-@router.get("/api/v1/patients/vitals")
+@router.get("/patients/vitals")
 async def list_vitals(
     type: Optional[str] = Query(None, description="Filter by vital_type"),
     days: int = Query(30, ge=1, le=365, description="Number of days of history"),
@@ -301,7 +301,7 @@ async def list_vitals(
 
 # ── Doctor: read patient vitals ─────────────────────────────────────────────
 
-@router.get("/api/v1/doctors/patients/{patient_id}/vitals")
+@router.get("/doctors/patients/{patient_id}/vitals")
 async def get_patient_vitals(
     patient_id: uuid.UUID,
     type: Optional[str] = Query(None, description="Filter by vital_type"),
