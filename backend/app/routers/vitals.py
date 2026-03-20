@@ -310,9 +310,10 @@ async def get_patient_vitals(
 
     _, doctor = doctor_info
 
+    revoked_link = None
     if clinic_context:
         clinic_id, _ = clinic_context
-        await _check_patient_consent(db, patient_id, clinic_id)
+        revoked_link = await _check_patient_consent(db, patient_id, clinic_id)
     else:
         if not await _check_doctor_patient_relationship(db, doctor, patient_id):
             raise HTTPException(
@@ -327,6 +328,9 @@ async def get_patient_vitals(
         PatientVital.deleted_at.is_(None),
         PatientVital.recorded_at >= since,
     ]
+    # If clinic access was revoked, only show vitals recorded before revocation
+    if revoked_link is not None and revoked_link.revoked_at is not None:
+        conditions.append(PatientVital.recorded_at <= revoked_link.revoked_at)
 
     if type:
         if type not in VITAL_TYPES:

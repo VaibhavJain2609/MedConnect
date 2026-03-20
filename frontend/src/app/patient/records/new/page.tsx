@@ -137,7 +137,7 @@ export default function PatientNewRecordPage() {
 
       <form
         onSubmit={handleSubmit}
-        className="max-w-2xl rounded-lg bg-white p-6 shadow-card"
+        className="max-w-2xl rounded-lg bg-white p-4 sm:p-6 shadow-card"
       >
         {error && (
           <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">

@@ -12,6 +12,8 @@ import {
   updateAppointment,
   cancelAppointment,
   createAppointment,
+  createGuestAppointment,
+  linkProvisionalPatient,
   type Appointment,
   type UpdateAppointmentData,
 } from "@/lib/api/appointments";
@@ -147,6 +149,98 @@ function PatientSearchInput({
 }
 
 // ---------------------------------------------------------------------------
+// LinkAccountModal
+// ---------------------------------------------------------------------------
+
+function LinkAccountModal({
+  provisionalPatientId,
+  patientName,
+  clinicId,
+  onClose,
+  onSuccess,
+}: {
+  provisionalPatientId: string;
+  patientName: string;
+  clinicId: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [code, setCode] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (!code.trim()) { setError("Please enter the link code"); return; }
+    setSubmitting(true);
+    try {
+      await linkProvisionalPatient(clinicId, {
+        provisional_patient_id: provisionalPatientId,
+        link_code: code.trim().toUpperCase(),
+      });
+      onSuccess();
+      onClose();
+    } catch (err: any) {
+      const msg = err.response?.data?.detail?.error?.message || err.response?.data?.detail || "Failed to link account";
+      setError(typeof msg === "string" ? msg : JSON.stringify(msg));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-[calc(100%-2rem)] sm:w-full sm:max-w-md rounded-xl bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-dreams-border px-6 py-4">
+          <h2 className="text-lg font-semibold text-dreams-textPrimary">Link patient account</h2>
+          <button type="button" onClick={onClose} className="text-dreams-textSecondary hover:text-dreams-textPrimary">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
+          <p className="text-sm text-dreams-textSecondary">
+            Linking walk-in record for{" "}
+            <span className="font-medium text-dreams-textPrimary">{patientName}</span>. Ask the
+            patient to open MedConnect, go to{" "}
+            <span className="font-medium">My Clinics</span>, and share their link code.
+          </p>
+          {error && (
+            <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">{error}</div>
+          )}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+              Patient&apos;s link code
+            </label>
+            <input
+              type="text"
+              value={code}
+              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              placeholder="e.g., ABC1234567"
+              maxLength={10}
+              className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm font-mono tracking-widest focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+            />
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button
+              type="submit"
+              disabled={submitting}
+              className="flex-1 rounded-lg bg-dreams-blue px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+            >
+              {submitting ? "Linking..." : "Link Account"}
+            </button>
+            <button type="button" onClick={onClose}
+              className="rounded-lg border border-dreams-border px-4 py-2.5 text-sm font-medium text-dreams-textPrimary hover:bg-dreams-lightBg transition-colors">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // BookAppointmentModal
 // ---------------------------------------------------------------------------
 
@@ -162,7 +256,13 @@ interface BookAppointmentModalProps {
 }
 
 function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentModalProps) {
+  const [tab, setTab] = useState<"existing" | "walkin">("existing");
+  // Existing patient state
   const [selectedPatient, setSelectedPatient] = useState<PatientSuggestion | null>(null);
+  // Walk-in state
+  const [walkinName, setWalkinName] = useState("");
+  const [walkinPhone, setWalkinPhone] = useState("");
+  // Shared state
   const [date, setDate] = useState(formatDateInput(new Date()));
   const [time, setTime] = useState("09:00");
   const [duration, setDuration] = useState(30);
@@ -186,7 +286,6 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
       .catch(() => {});
   }, []);
 
-  // Fetch branches when a clinic is selected
   useEffect(() => {
     setBranchId("");
     setBranches([]);
@@ -201,13 +300,38 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!selectedPatient) {
-      setError("Please select a patient");
+    const scheduledAt = new Date(`${date}T${time}:00`).toISOString();
+
+    if (tab === "walkin") {
+      if (!walkinName.trim()) { setError("Patient name is required"); return; }
+      if (!walkinPhone.trim()) { setError("Phone number is required"); return; }
+      if (!clinicId) { setError("A clinic must be selected for walk-in bookings"); return; }
+      setSubmitting(true);
+      try {
+        await createGuestAppointment(clinicId, {
+          patient_name: walkinName.trim(),
+          patient_phone: walkinPhone.trim(),
+          doctor_id: doctorId ?? undefined,
+          branch_id: branchId || undefined,
+          scheduled_at: scheduledAt,
+          duration_minutes: duration,
+          type,
+          chief_complaint: chiefComplaint || undefined,
+        });
+        onSuccess();
+        onClose();
+      } catch (err: any) {
+        const msg = err.response?.data?.detail?.error?.message || err.response?.data?.detail || "Failed to create appointment";
+        setError(typeof msg === "string" ? msg : JSON.stringify(msg));
+      } finally {
+        setSubmitting(false);
+      }
       return;
     }
+
+    if (!selectedPatient) { setError("Please select a patient"); return; }
     setSubmitting(true);
     try {
-      const scheduledAt = new Date(`${date}T${time}:00`).toISOString();
       await createAppointment({
         patient_id: selectedPatient.id,
         doctor_id: doctorId ?? undefined,
@@ -231,181 +355,219 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
     }
   };
 
+  const sharedFields = (
+    <>
+      {/* Date + Time */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Date *</label>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            min={formatDateInput(new Date())}
+            required
+            className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Time *</label>
+          <input
+            type="time"
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+            required
+            className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+          />
+        </div>
+      </div>
+
+      {/* Duration + Type */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Duration</label>
+          <select
+            value={duration}
+            onChange={(e) => setDuration(Number(e.target.value))}
+            className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+          >
+            <option value={15}>15 min</option>
+            <option value={30}>30 min</option>
+            <option value={45}>45 min</option>
+            <option value={60}>60 min</option>
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Type *</label>
+          <select
+            value={type}
+            onChange={(e) => setType(e.target.value as typeof type)}
+            className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+          >
+            <option value="in-person">In Person</option>
+            <option value="teleconsult">Teleconsult</option>
+            <option value="follow-up">Follow-up</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Chief Complaint */}
+      <div>
+        <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Chief Complaint</label>
+        <input
+          type="text"
+          value={chiefComplaint}
+          onChange={(e) => setChiefComplaint(e.target.value)}
+          placeholder="e.g., Fever, headache for 2 days"
+          className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+        />
+      </div>
+
+      {/* Clinic */}
+      {clinics.length > 0 && (
+        <div>
+          <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+            Clinic{tab === "walkin" ? " *" : ""}
+          </label>
+          <select
+            value={clinicId}
+            onChange={(e) => setClinicId(e.target.value)}
+            className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+          >
+            <option value="">{tab === "walkin" ? "Select clinic" : "No clinic (private)"}</option>
+            {clinics.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Branch */}
+      {clinicId && (branchesLoading || branches.length > 0) && (
+        <div>
+          <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Branch</label>
+          {branchesLoading ? (
+            <div className="h-10 rounded-lg border border-dreams-border bg-gray-50 flex items-center px-3">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-dreams-blue border-t-transparent" />
+              <span className="ml-2 text-sm text-dreams-textSecondary">Loading branches...</span>
+            </div>
+          ) : (
+            <select
+              value={branchId}
+              onChange={(e) => setBranchId(e.target.value)}
+              className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+            >
+              <option value="">Any branch</option>
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>{b.name}{b.city ? ` — ${b.city}` : ""}</option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
+    </>
+  );
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg rounded-xl bg-white shadow-xl">
+      <div className="w-[calc(100%-2rem)] sm:w-full sm:max-w-lg rounded-xl bg-white shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-dreams-border px-6 py-4">
           <h2 className="text-lg font-semibold text-dreams-textPrimary">New Appointment</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-dreams-textSecondary hover:text-dreams-textPrimary"
-          >
+          <button type="button" onClick={onClose} className="text-dreams-textSecondary hover:text-dreams-textPrimary">
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
+        {/* Tab toggle */}
+        <div className="flex border-b border-dreams-border px-6">
+          <button
+            type="button"
+            onClick={() => { setTab("existing"); setError(""); }}
+            className={`py-3 px-4 text-sm font-medium border-b-2 transition-colors ${
+              tab === "existing"
+                ? "border-dreams-blue text-dreams-blue"
+                : "border-transparent text-dreams-textSecondary hover:text-dreams-textPrimary"
+            }`}
+          >
+            Existing Patient
+          </button>
+          <button
+            type="button"
+            onClick={() => { setTab("walkin"); setError(""); }}
+            className={`py-3 px-4 text-sm font-medium border-b-2 transition-colors ${
+              tab === "walkin"
+                ? "border-dreams-blue text-dreams-blue"
+                : "border-transparent text-dreams-textSecondary hover:text-dreams-textPrimary"
+            }`}
+          >
+            Walk-in / Call-in
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
           {error && (
-            <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">
-              {error}
-            </div>
+            <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">{error}</div>
           )}
 
-          {/* Patient */}
-          <div>
-            <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
-              Patient *
-            </label>
-            {selectedPatient ? (
-              <div className="flex items-center gap-3 rounded-lg border border-dreams-blue bg-dreams-blue/5 px-4 py-2.5">
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-dreams-textPrimary">{selectedPatient.full_name}</p>
-                  {selectedPatient.phone && (
-                    <p className="text-xs text-dreams-textSecondary">{selectedPatient.phone}</p>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedPatient(null)}
-                  className="text-dreams-textSecondary hover:text-red-500 transition-colors"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            ) : (
-              <PatientSearchInput onSelect={setSelectedPatient} />
-            )}
-          </div>
-
-          {/* Date + Time */}
-          <div className="grid grid-cols-2 gap-3">
+          {tab === "existing" ? (
             <div>
-              <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Date *</label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                min={formatDateInput(new Date())}
-                required
-                className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Time *</label>
-              <input
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                required
-                className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
-              />
-            </div>
-          </div>
-
-          {/* Duration + Type */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Duration</label>
-              <select
-                value={duration}
-                onChange={(e) => setDuration(Number(e.target.value))}
-                className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
-              >
-                <option value={15}>15 min</option>
-                <option value={30}>30 min</option>
-                <option value={45}>45 min</option>
-                <option value={60}>60 min</option>
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Type *</label>
-              <select
-                value={type}
-                onChange={(e) => setType(e.target.value as typeof type)}
-                className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
-              >
-                <option value="in-person">In Person</option>
-                <option value="teleconsult">Teleconsult</option>
-                <option value="follow-up">Follow-up</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Chief Complaint */}
-          <div>
-            <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
-              Chief Complaint
-            </label>
-            <input
-              type="text"
-              value={chiefComplaint}
-              onChange={(e) => setChiefComplaint(e.target.value)}
-              placeholder="e.g., Fever, headache for 2 days"
-              className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
-            />
-          </div>
-
-          {/* Clinic (if any) */}
-          {clinics.length > 0 && (
-            <div>
-              <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Clinic</label>
-              <select
-                value={clinicId}
-                onChange={(e) => setClinicId(e.target.value)}
-                className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
-              >
-                <option value="">No clinic (private)</option>
-                {clinics.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* Branch selector (shown when a clinic with branches is selected) */}
-          {clinicId && (branchesLoading || branches.length > 0) && (
-            <div>
-              <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Branch</label>
-              {branchesLoading ? (
-                <div className="h-10 rounded-lg border border-dreams-border bg-gray-50 flex items-center px-3">
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-dreams-blue border-t-transparent" />
-                  <span className="ml-2 text-sm text-dreams-textSecondary">Loading branches...</span>
+              <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Patient *</label>
+              {selectedPatient ? (
+                <div className="flex items-center gap-3 rounded-lg border border-dreams-blue bg-dreams-blue/5 px-4 py-2.5">
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-dreams-textPrimary">{selectedPatient.full_name}</p>
+                    {selectedPatient.phone && (
+                      <p className="text-xs text-dreams-textSecondary">{selectedPatient.phone}</p>
+                    )}
+                  </div>
+                  <button type="button" onClick={() => setSelectedPatient(null)}
+                    className="text-dreams-textSecondary hover:text-red-500 transition-colors">
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
               ) : (
-                <select
-                  value={branchId}
-                  onChange={(e) => setBranchId(e.target.value)}
-                  className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
-                >
-                  <option value="">Any branch</option>
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}{b.city ? ` — ${b.city}` : ""}
-                    </option>
-                  ))}
-                </select>
+                <PatientSearchInput onSelect={setSelectedPatient} />
               )}
             </div>
+          ) : (
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Patient Name *</label>
+                <input
+                  type="text"
+                  value={walkinName}
+                  onChange={(e) => setWalkinName(e.target.value)}
+                  placeholder="Full name"
+                  className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Phone Number *</label>
+                <input
+                  type="tel"
+                  value={walkinPhone}
+                  onChange={(e) => setWalkinPhone(e.target.value)}
+                  placeholder="+91 98765 43210"
+                  className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+                />
+              </div>
+            </div>
           )}
+
+          {sharedFields}
 
           {/* Actions */}
           <div className="flex gap-3 pt-2">
             <button
               type="submit"
-              disabled={submitting || !selectedPatient}
+              disabled={submitting || (tab === "existing" && !selectedPatient)}
               className="flex-1 rounded-lg bg-dreams-blue px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
               {submitting ? "Booking..." : "Book Appointment"}
             </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-dreams-border px-4 py-2.5 text-sm font-medium text-dreams-textPrimary hover:bg-dreams-lightBg transition-colors"
-            >
+            <button type="button" onClick={onClose}
+              className="rounded-lg border border-dreams-border px-4 py-2.5 text-sm font-medium text-dreams-textPrimary hover:bg-dreams-lightBg transition-colors">
               Cancel
             </button>
           </div>
@@ -486,7 +648,7 @@ function EditAppointmentModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg rounded-xl bg-white shadow-xl">
+      <div className="w-[calc(100%-2rem)] sm:w-full sm:max-w-lg rounded-xl bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-dreams-border px-6 py-4">
           <h2 className="text-lg font-semibold text-dreams-textPrimary">Edit Appointment</h2>
           <button type="button" onClick={onClose} className="text-dreams-textSecondary hover:text-dreams-textPrimary">
@@ -508,7 +670,7 @@ function EditAppointmentModal({
           </div>
 
           {/* Date + Time */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Date *</label>
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required
@@ -522,7 +684,7 @@ function EditAppointmentModal({
           </div>
 
           {/* Duration + Type */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Duration</label>
               <select value={duration} onChange={(e) => setDuration(Number(e.target.value))}
@@ -634,7 +796,7 @@ function CancelAppointmentModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+      <div className="w-[calc(100%-2rem)] sm:w-full sm:max-w-md rounded-xl bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-dreams-border px-6 py-4">
           <h2 className="text-lg font-semibold text-dreams-textPrimary">Cancel Appointment</h2>
           <button type="button" onClick={onClose} className="text-dreams-textSecondary hover:text-dreams-textPrimary">
@@ -748,13 +910,20 @@ interface DoctorProfile {
   id: string;
 }
 
+interface LinkingAppt {
+  provisionalPatientId: string;
+  patientName: string;
+}
+
 export default function DoctorAppointmentsPage() {
   const today = formatDateInput(new Date());
   const [selectedDate, setSelectedDate] = useState(today);
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [cancellingAppointment, setCancellingAppointment] = useState<Appointment | null>(null);
+  const [linkingAppt, setLinkingAppt] = useState<LinkingAppt | null>(null);
   const [doctorId, setDoctorId] = useState<string | null>(null);
+  const [activeClinics, setActiveClinics] = useState<{ id: string; name: string }[]>([]);
   const queryClient = useQueryClient();
 
   // Fetch doctor profile to get doctor ID for appointment creation
@@ -762,6 +931,13 @@ export default function DoctorAppointmentsPage() {
     api
       .get("/api/v1/doctors/profile")
       .then((res) => setDoctorId(res.data?.id || null))
+      .catch(() => {});
+    api
+      .get("/api/v1/clinics/my")
+      .then((res) => {
+        const data = res.data?.data || res.data || [];
+        setActiveClinics(Array.isArray(data) ? data : []);
+      })
       .catch(() => {});
   }, []);
 
@@ -790,6 +966,9 @@ export default function DoctorAppointmentsPage() {
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["doctor-appointments", selectedDate] });
 
+  // Use the first clinic as the active context for guest/link actions, if available
+  const primaryClinicId = activeClinics[0]?.id ?? "";
+
   return (
     <div className="space-y-6">
       {showBookingModal && (
@@ -811,6 +990,15 @@ export default function DoctorAppointmentsPage() {
           appointment={cancellingAppointment}
           onClose={() => setCancellingAppointment(null)}
           onSuccess={() => { invalidate(); setCancellingAppointment(null); }}
+        />
+      )}
+      {linkingAppt && primaryClinicId && (
+        <LinkAccountModal
+          provisionalPatientId={linkingAppt.provisionalPatientId}
+          patientName={linkingAppt.patientName}
+          clinicId={primaryClinicId}
+          onClose={() => setLinkingAppt(null)}
+          onSuccess={() => { invalidate(); setLinkingAppt(null); }}
         />
       )}
 
@@ -903,15 +1091,23 @@ export default function DoctorAppointmentsPage() {
 
                   {/* Patient & complaint */}
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <User className="h-4 w-4 text-dreams-textSecondary flex-shrink-0" />
                       <span className="font-semibold text-dreams-textPrimary">
                         {appt.patient_name ?? "Unknown Patient"}
                       </span>
+                      {appt.is_provisional && (
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                          Walk-in
+                        </span>
+                      )}
                       <Badge variant={TYPE_LABELS[appt.type] ? "upcoming" : "pending"} className="text-xs">
                         {TYPE_LABELS[appt.type] ?? appt.type}
                       </Badge>
                     </div>
+                    {appt.is_provisional && appt.patient_phone && (
+                      <p className="mt-0.5 text-xs text-dreams-textSecondary">{appt.patient_phone}</p>
+                    )}
 
                     {appt.chief_complaint && (
                       <p className="mt-1 text-sm text-dreams-textSecondary">
@@ -960,24 +1156,35 @@ export default function DoctorAppointmentsPage() {
                   <Badge variant={STATUS_VARIANT_MAP[appt.status] as any}>
                     {STATUS_LABELS[appt.status] ?? appt.status}
                   </Badge>
-                  {appt.status === "scheduled" && (
-                    <div className="flex items-center gap-1.5">
+                  <div className="flex flex-wrap items-center justify-end gap-1.5">
+                    {appt.is_provisional && (
                       <button
-                        onClick={() => setEditingAppointment(appt)}
-                        className="flex items-center gap-1 rounded-md border border-dreams-border px-2 py-1 text-xs text-dreams-textSecondary hover:bg-dreams-lightBg transition-colors"
+                        onClick={() => setLinkingAppt({ provisionalPatientId: appt.patient_id, patientName: appt.patient_name ?? "Patient" })}
+                        className="flex items-center gap-1 rounded-md border border-dreams-blue px-2 py-1 text-xs text-dreams-blue hover:bg-dreams-blue/10 transition-colors"
                       >
-                        <Pencil className="h-3 w-3" />
-                        Edit
+                        <UserCheck className="h-3 w-3" />
+                        Link Account
                       </button>
-                      <button
-                        onClick={() => setCancellingAppointment(appt)}
-                        className="flex items-center gap-1 rounded-md border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50 transition-colors"
-                      >
-                        <XCircle className="h-3 w-3" />
-                        Cancel
-                      </button>
-                    </div>
-                  )}
+                    )}
+                    {appt.status === "scheduled" && (
+                      <>
+                        <button
+                          onClick={() => setEditingAppointment(appt)}
+                          className="flex items-center gap-1 rounded-md border border-dreams-border px-2 py-1 text-xs text-dreams-textSecondary hover:bg-dreams-lightBg transition-colors"
+                        >
+                          <Pencil className="h-3 w-3" />
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => setCancellingAppointment(appt)}
+                          className="flex items-center gap-1 rounded-md border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50 transition-colors"
+                        >
+                          <XCircle className="h-3 w-3" />
+                          Cancel
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

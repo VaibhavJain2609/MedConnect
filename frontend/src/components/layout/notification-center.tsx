@@ -135,7 +135,7 @@ export const NotificationCenter: React.FC = () => {
 
       {/* Dropdown Panel */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-lg border border-dreams-border z-50">
+        <div className="absolute right-0 mt-2 w-[calc(100vw-1rem)] sm:w-96 bg-white rounded-lg shadow-lg border border-dreams-border z-50">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-dreams-border">
             <div className="flex items-center gap-2">
@@ -263,7 +263,13 @@ export const NotificationCenter: React.FC = () => {
           {notifications && notifications.length > 0 && (
             <div className="p-3 text-center border-t border-dreams-border">
               <a
-                href="/notifications"
+                href={
+                  user?.role === "admin"
+                    ? "/admin/notifications"
+                    : user?.role === "doctor"
+                    ? "/doctor/notifications"
+                    : "/patient/notifications"
+                }
                 className="text-sm text-dreams-blue hover:underline"
               >
                 View all notifications

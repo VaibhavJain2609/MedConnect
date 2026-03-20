@@ -26,6 +26,8 @@ export interface Appointment {
   created_by: string;
   created_at: string;
   updated_at: string;
+  is_provisional?: boolean;
+  patient_phone?: string | null;
   // Legacy fields kept for admin table compatibility
   department?: string;
   appointment_date?: string;
@@ -157,4 +159,49 @@ export async function cancelAppointment(id: string, reason?: string): Promise<vo
     status: "cancelled",
     cancelled_reason: reason || null,
   });
+}
+
+export interface CreateGuestAppointmentData {
+  patient_name: string;
+  patient_phone: string;
+  doctor_id?: string | null;
+  branch_id?: string | null;
+  scheduled_at: string;
+  duration_minutes?: number;
+  type: "in-person" | "teleconsult" | "follow-up";
+  chief_complaint?: string | null;
+  notes?: string | null;
+}
+
+/**
+ * Book an appointment for a walk-in / call-in patient (provisional user).
+ * Requires X-Clinic-Id header — caller must ensure api instance has it set.
+ */
+export async function createGuestAppointment(
+  clinicId: string,
+  data: CreateGuestAppointmentData
+): Promise<Appointment> {
+  const response = await api.post("/api/v1/appointments/guest", data, {
+    headers: { "X-Clinic-Id": clinicId },
+  });
+  return response.data;
+}
+
+export interface LinkProvisionalData {
+  provisional_patient_id: string;
+  link_code: string;
+}
+
+/**
+ * Link a provisional patient to a real patient account.
+ * Requires X-Clinic-Id header.
+ */
+export async function linkProvisionalPatient(
+  clinicId: string,
+  data: LinkProvisionalData
+): Promise<{ real_patient_id: string; full_name: string; phone: string | null; linked_count: number }> {
+  const response = await api.post("/api/v1/appointments/link-provisional", data, {
+    headers: { "X-Clinic-Id": clinicId },
+  });
+  return response.data;
 }

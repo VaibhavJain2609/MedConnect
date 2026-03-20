@@ -124,7 +124,7 @@ function AddVitalForm({ selectedType, onClose, onSuccess }: AddVitalFormProps) {
             type="text"
             value={unit}
             onChange={(e) => setUnit(e.target.value)}
-            className="w-24 border border-dreams-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
+            className="w-16 sm:w-24 border border-dreams-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
           />
         </div>
         <p className="text-xs text-dreams-textSecondary mt-1">
@@ -236,7 +236,7 @@ export default function VitalsPage() {
       {/* Add Reading Modal */}
       {showAddForm && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-4 sm:p-6">
             <h2 className="text-lg font-bold text-dreams-textPrimary mb-4">
               Add {meta.label} Reading
             </h2>
@@ -302,7 +302,7 @@ export default function VitalsPage() {
             No readings recorded for this period.
           </div>
         ) : (
-          <div className="h-64">
+          <div className="h-48 sm:h-64">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />

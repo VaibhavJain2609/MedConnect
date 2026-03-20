@@ -228,7 +228,7 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg rounded-xl bg-white shadow-xl">
+      <div className="w-[calc(100%-2rem)] sm:w-full sm:max-w-lg rounded-xl bg-white shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-dreams-border px-6 py-4">
           <h2 className="text-lg font-semibold text-dreams-textPrimary">Book Appointment</h2>
@@ -320,7 +320,7 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
           </div>
 
           {/* Date + Time */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Date *</label>
               <input
@@ -345,7 +345,7 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
           </div>
 
           {/* Duration + Type */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Duration</label>
               <select

@@ -235,8 +235,12 @@ async def update_consent(
         raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND"}})
 
     link.consent_status = data.action
+    now = datetime.now(timezone.utc)
     if data.action == "approved":
-        link.consented_at = datetime.now(timezone.utc)
+        link.consented_at = now
+        link.revoked_at = None
+    elif data.action == "revoked":
+        link.revoked_at = now
     await db.flush()
 
     # Notify the doctor who created the link

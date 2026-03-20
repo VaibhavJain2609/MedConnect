@@ -3,18 +3,22 @@ from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
-from sqlalchemy import cast, func, select
+from pydantic import BaseModel, Field
+from sqlalchemy import cast, func, select, update
 from sqlalchemy.dialects.postgresql import INTERVAL
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.database import get_db
-from app.dependencies import get_current_doctor, get_current_user, require_admin
+from app.dependencies import get_active_clinic, get_current_doctor, get_current_user, require_active_clinic, require_admin
 from app.models.appointment import Appointment
 from app.models.clinic import Clinic, ClinicBranch
 from app.models.doctor import Doctor
+from app.models.medical_record import MedicalRecord
+from app.models.patient_link import PatientClinicLink, PatientLinkCode
+from app.models.prescription import Prescription
 from app.models.user import User
+from app.services.notification_service import create_notification
 
 router = APIRouter(prefix="/api/v1/appointments", tags=["appointments"])
 
@@ -62,6 +66,23 @@ class AppointmentUpdate(BaseModel):
     notes: str | None = None
 
 
+class GuestAppointmentCreate(BaseModel):
+    patient_name: str
+    patient_phone: str
+    doctor_id: UUID | None = None
+    scheduled_at: datetime
+    duration_minutes: int = Field(default=30, ge=5, le=480)
+    type: str
+    chief_complaint: str | None = None
+    notes: str | None = None
+    branch_id: UUID | None = None
+
+
+class LinkProvisionalRequest(BaseModel):
+    provisional_patient_id: UUID
+    link_code: str
+
+
 class AppointmentResponse(BaseModel):
     id: UUID
     patient_id: UUID
@@ -79,6 +100,8 @@ class AppointmentResponse(BaseModel):
     chief_complaint: str | None = None
     notes: str | None = None
     cancelled_reason: str | None = None
+    is_provisional: bool = False
+    patient_phone: str | None = None
     created_by: UUID
     created_at: datetime
     updated_at: datetime
@@ -95,6 +118,8 @@ def _serialize_appointment(
     doctor_name: str | None = None,
     clinic_name: str | None = None,
     branch_name: str | None = None,
+    is_provisional: bool = False,
+    patient_phone: str | None = None,
 ) -> dict:
     return {
         "id": str(appt.id),
@@ -113,6 +138,8 @@ def _serialize_appointment(
         "chief_complaint": appt.chief_complaint,
         "notes": appt.notes,
         "cancelled_reason": appt.cancelled_reason,
+        "is_provisional": is_provisional,
+        "patient_phone": patient_phone,
         "created_by": str(appt.created_by),
         "created_at": appt.created_at.isoformat(),
         "updated_at": appt.updated_at.isoformat(),
@@ -125,11 +152,17 @@ async def _load_appointment_with_names(db: AsyncSession, appt: Appointment) -> d
     doctor_name: str | None = None
     clinic_name: str | None = None
     branch_name: str | None = None
+    is_provisional: bool = False
+    patient_phone: str | None = None
 
     patient_res = await db.execute(
-        select(User.full_name).where(User.id == appt.patient_id)
+        select(User.full_name, User.is_provisional, User.phone).where(User.id == appt.patient_id)
     )
-    patient_name = patient_res.scalar_one_or_none()
+    patient_row = patient_res.one_or_none()
+    if patient_row:
+        patient_name = patient_row.full_name
+        is_provisional = patient_row.is_provisional
+        patient_phone = patient_row.phone if patient_row.is_provisional else None
 
     doctor_res = await db.execute(
         select(User.full_name)
@@ -150,7 +183,10 @@ async def _load_appointment_with_names(db: AsyncSession, appt: Appointment) -> d
         )
         branch_name = branch_res.scalar_one_or_none()
 
-    return _serialize_appointment(appt, patient_name, doctor_name, clinic_name, branch_name)
+    return _serialize_appointment(
+        appt, patient_name, doctor_name, clinic_name, branch_name,
+        is_provisional=is_provisional, patient_phone=patient_phone,
+    )
 
 
 # ─── Conflict helpers ─────────────────────────────────────────────────────────
@@ -396,9 +432,16 @@ async def list_appointments(
     branch_ids = list({a.branch_id for a in appointments if a.branch_id})
 
     patient_names: dict[uuid.UUID, str] = {}
+    patient_provisional: dict[uuid.UUID, bool] = {}
+    patient_phones: dict[uuid.UUID, str | None] = {}
     if patient_ids:
-        pr = await db.execute(select(User.id, User.full_name).where(User.id.in_(patient_ids)))
-        patient_names = {row.id: row.full_name for row in pr.all()}
+        pr = await db.execute(
+            select(User.id, User.full_name, User.is_provisional, User.phone).where(User.id.in_(patient_ids))
+        )
+        for row in pr.all():
+            patient_names[row.id] = row.full_name
+            patient_provisional[row.id] = row.is_provisional
+            patient_phones[row.id] = row.phone if row.is_provisional else None
 
     doctor_names: dict[uuid.UUID, str] = {}
     if doctor_ids:
@@ -426,6 +469,8 @@ async def list_appointments(
             doctor_name=doctor_names.get(a.doctor_id),
             clinic_name=clinic_names.get(a.clinic_id) if a.clinic_id else None,
             branch_name=branch_names.get(a.branch_id) if a.branch_id else None,
+            is_provisional=patient_provisional.get(a.patient_id, False),
+            patient_phone=patient_phones.get(a.patient_id),
         )
         for a in appointments
     ]
@@ -691,3 +736,215 @@ async def delete_appointment(
     appt.deleted_at = now
     appt.status = "cancelled"
     await db.flush()
+
+
+@router.post("/guest", status_code=status.HTTP_201_CREATED)
+async def create_guest_appointment(
+    body: GuestAppointmentCreate,
+    current_user: User = Depends(get_current_user),
+    clinic_ctx: tuple = Depends(require_active_clinic),
+    db: AsyncSession = Depends(get_db),
+):
+    """Book an appointment for a walk-in / call-in patient (creates a provisional user)."""
+    clinic_id, _clinic_role = clinic_ctx
+
+    if body.type not in VALID_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": {"code": "INVALID_TYPE", "message": f"type must be one of: {', '.join(sorted(VALID_TYPES))}"}},
+        )
+
+    # Resolve doctor_id
+    doctor_id = body.doctor_id
+    if doctor_id is None:
+        doc_res = await db.execute(
+            select(Doctor.id).where(Doctor.user_id == current_user.id, Doctor.deleted_at.is_(None))
+        )
+        doctor_id = doc_res.scalar_one_or_none()
+        if doctor_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": {"code": "MISSING_DOCTOR", "message": "doctor_id is required"}},
+            )
+    else:
+        doc_check = await db.execute(
+            select(Doctor).where(Doctor.id == doctor_id, Doctor.deleted_at.is_(None))
+        )
+        if not doc_check.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"error": {"code": "NOT_FOUND", "message": "Doctor not found"}},
+            )
+
+    await _check_doctor_conflict(db, doctor_id, body.scheduled_at, body.duration_minutes)
+
+    # Create provisional patient user
+    provisional_user = User(
+        id=uuid.uuid4(),
+        full_name=body.patient_name,
+        phone=body.patient_phone,
+        role="patient",
+        is_provisional=True,
+        keycloak_sub=None,
+        is_active=True,
+    )
+    db.add(provisional_user)
+    await db.flush()
+
+    # Auto-approve clinic link (clinic created the patient)
+    link = PatientClinicLink(
+        id=uuid.uuid4(),
+        patient_id=provisional_user.id,
+        clinic_id=clinic_id,
+        linked_by=current_user.id,
+        consent_status="approved",
+        consented_at=datetime.now(tz=timezone.utc),
+    )
+    db.add(link)
+
+    appt = Appointment(
+        id=uuid.uuid4(),
+        patient_id=provisional_user.id,
+        doctor_id=doctor_id,
+        clinic_id=clinic_id,
+        branch_id=body.branch_id,
+        scheduled_at=body.scheduled_at,
+        duration_minutes=body.duration_minutes,
+        type=body.type,
+        status="scheduled",
+        chief_complaint=body.chief_complaint,
+        notes=body.notes,
+        created_by=current_user.id,
+    )
+    db.add(appt)
+    await db.flush()
+    await db.refresh(appt)
+    return await _load_appointment_with_names(db, appt)
+
+
+@router.post("/link-provisional", status_code=status.HTTP_200_OK)
+async def link_provisional_patient(
+    body: LinkProvisionalRequest,
+    current_user: User = Depends(get_current_user),
+    clinic_ctx: tuple = Depends(require_active_clinic),
+    db: AsyncSession = Depends(get_db),
+):
+    """Link a provisional (walk-in) patient to a real patient account using a link code."""
+    clinic_id, _clinic_role = clinic_ctx
+    now = datetime.now(tz=timezone.utc)
+
+    # Fetch provisional user
+    prov_res = await db.execute(
+        select(User).where(User.id == body.provisional_patient_id, User.deleted_at.is_(None))
+    )
+    provisional_user = prov_res.scalar_one_or_none()
+    if not provisional_user or not provisional_user.is_provisional:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "NOT_FOUND", "message": "Provisional patient not found"}},
+        )
+
+    # Look up link code
+    code_res = await db.execute(
+        select(PatientLinkCode).where(
+            PatientLinkCode.code == body.link_code.upper(),
+            PatientLinkCode.deleted_at.is_(None),
+        )
+    )
+    link_code = code_res.scalar_one_or_none()
+    if not link_code:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "INVALID_CODE", "message": "Link code not found or already used"}},
+        )
+    if link_code.expires_at < now:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": {"code": "CODE_EXPIRED", "message": "Link code has expired"}},
+        )
+
+    # Fetch real patient
+    real_res = await db.execute(
+        select(User).where(User.id == link_code.patient_id, User.deleted_at.is_(None), User.is_active.is_(True))
+    )
+    real_patient = real_res.scalar_one_or_none()
+    if not real_patient or real_patient.is_provisional:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": {"code": "INVALID_PATIENT", "message": "Real patient account not found"}},
+        )
+
+    provisional_id = provisional_user.id
+    real_id = real_patient.id
+
+    if provisional_id == real_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": {"code": "SAME_PATIENT", "message": "Provisional and real patient cannot be the same"}},
+        )
+
+    # Bulk-transfer ownership
+    appt_update = await db.execute(
+        update(Appointment)
+        .where(Appointment.patient_id == provisional_id, Appointment.deleted_at.is_(None))
+        .values(patient_id=real_id)
+    )
+    await db.execute(
+        update(MedicalRecord)
+        .where(MedicalRecord.patient_id == provisional_id, MedicalRecord.deleted_at.is_(None))
+        .values(patient_id=real_id)
+    )
+    await db.execute(
+        update(Prescription)
+        .where(Prescription.patient_id == provisional_id, Prescription.deleted_at.is_(None))
+        .values(patient_id=real_id)
+    )
+    linked_count = appt_update.rowcount
+
+    # Upsert PatientClinicLink for real patient + this clinic
+    existing_link_res = await db.execute(
+        select(PatientClinicLink).where(
+            PatientClinicLink.patient_id == real_id,
+            PatientClinicLink.clinic_id == clinic_id,
+        )
+    )
+    existing_link = existing_link_res.scalar_one_or_none()
+    if existing_link is None:
+        db.add(PatientClinicLink(
+            id=uuid.uuid4(),
+            patient_id=real_id,
+            clinic_id=clinic_id,
+            linked_by=current_user.id,
+            consent_status="approved",
+            consented_at=now,
+        ))
+    elif existing_link.consent_status == "revoked":
+        existing_link.consent_status = "approved"
+        existing_link.consented_at = now
+        existing_link.deleted_at = None
+
+    # Soft-delete provisional user
+    provisional_user.deleted_at = now
+
+    # Fetch clinic name for notification
+    clinic_res = await db.execute(select(Clinic.name).where(Clinic.id == clinic_id))
+    clinic_name = clinic_res.scalar_one_or_none() or "the clinic"
+
+    await db.flush()
+
+    # Notify real patient
+    await create_notification(
+        db=db,
+        user_id=real_id,
+        notif_type="info",
+        title="Appointments linked to your account",
+        body=f"Appointments booked under your name at {clinic_name} have been linked to your account.",
+        action_url="/patient/appointments",
+    )
+
+    return {
+        "real_patient_id": str(real_id),
+        "full_name": real_patient.full_name,
+        "phone": real_patient.phone,
+        "linked_count": linked_count,
+    }

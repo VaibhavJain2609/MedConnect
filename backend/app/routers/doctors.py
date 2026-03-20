@@ -192,6 +192,23 @@ async def get_patient_profile(
             detail={"error": {"code": "FORBIDDEN", "message": "No relationship with this patient"}},
         )
 
+    # Determine whether clinic access has been revoked (for UI indication)
+    from sqlalchemy import select as _select
+    from datetime import datetime, timezone
+    access_status = "active"
+    revoked_at = None
+    clinic_link = await db.execute(
+        _select(PatientClinicLink).where(
+            PatientClinicLink.patient_id == patient_id,
+            PatientClinicLink.consent_status == "revoked",
+            PatientClinicLink.deleted_at.is_(None),
+        ).limit(1)
+    )
+    revoked_link = clinic_link.scalar_one_or_none()
+    if revoked_link:
+        access_status = "revoked"
+        revoked_at = revoked_link.revoked_at.isoformat() if revoked_link.revoked_at else None
+
     return {
         "id": str(patient.id),
         "full_name": patient.full_name,
@@ -202,32 +219,51 @@ async def get_patient_profile(
         "chronic_conditions": patient.chronic_conditions or [],
         "height_cm": patient.height_cm,
         "weight_kg": patient.weight_kg,
+        "access_status": access_status,
+        "revoked_at": revoked_at,
     }
 
 
-async def _check_patient_consent(db: AsyncSession, patient_id: UUID, clinic_id: UUID) -> None:
-    """Raise 403 if patient has not approved consent for this clinic."""
+async def _check_patient_consent(
+    db: AsyncSession, patient_id: UUID, clinic_id: UUID
+) -> "PatientClinicLink | None":
+    """
+    Enforce clinic-scoped patient access.
+
+    - approved link  → returns None (full live access, no cutoff)
+    - revoked link   → returns the link so callers can apply revoked_at as a date cutoff
+    - no link / pending → raises 403
+
+    Callers that receive a non-None return value must restrict data to
+    records created at or before link.revoked_at.
+    """
     from sqlalchemy import select as _select
 
     result = await db.execute(
         _select(PatientClinicLink).where(
             PatientClinicLink.patient_id == patient_id,
             PatientClinicLink.clinic_id == clinic_id,
-            PatientClinicLink.consent_status == "approved",
             PatientClinicLink.deleted_at.is_(None),
         )
     )
-    if not result.scalar_one_or_none():
+    link = result.scalar_one_or_none()
+
+    if link is None or link.consent_status == "pending":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"error": {"code": "CONSENT_REQUIRED", "message": "Patient has not approved access for this clinic"}},
         )
 
+    if link.consent_status == "revoked":
+        return link  # caller must apply revoked_at cutoff
+
+    return None  # approved — full live access
+
 
 async def _check_doctor_patient_relationship(
     db: AsyncSession, doctor: "Doctor", patient_id: UUID
 ) -> bool:
-    """Returns True if doctor has created a record for patient, or shares an approved clinic."""
+    """Returns True if doctor has created a record for patient, or shares an approved/revoked clinic link."""
     from sqlalchemy import select as _select
 
     # Check 1: doctor has created at least one medical record for this patient
@@ -243,7 +279,8 @@ async def _check_doctor_patient_relationship(
     if record_exists.scalar_one_or_none():
         return True
 
-    # Check 2: doctor is a member of a clinic that has an approved PatientClinicLink
+    # Check 2: doctor is a member of a clinic that has an approved *or revoked* PatientClinicLink.
+    # Revoked links still grant read-only access to pre-revocation data.
     # Note: ClinicMembership links doctor's User (doctor.user_id), not Doctor.id
     shared_clinic = await db.execute(
         _select(ClinicMembership.id)
@@ -253,7 +290,7 @@ async def _check_doctor_patient_relationship(
             ClinicMembership.is_active.is_(True),
             ClinicMembership.deleted_at.is_(None),
             PatientClinicLink.patient_id == patient_id,
-            PatientClinicLink.consent_status == "approved",
+            PatientClinicLink.consent_status.in_(["approved", "revoked"]),
             PatientClinicLink.deleted_at.is_(None),
         )
         .limit(1)
@@ -302,9 +339,10 @@ async def get_patient_prescriptions(
 
     _, doctor = doctor_info
 
+    revoked_link = None
     if clinic_context:
         clinic_id, _ = clinic_context
-        await _check_patient_consent(db, patient_id, clinic_id)
+        revoked_link = await _check_patient_consent(db, patient_id, clinic_id)
     else:
         if not await _check_doctor_patient_relationship(db, doctor, patient_id):
             raise HTTPException(
@@ -317,9 +355,14 @@ async def get_patient_prescriptions(
 
     if clinic_context:
         clinic_id, _ = clinic_context
-        has_full_access = await _get_active_record_access_consent(db, doctor.id, patient_id)
-        if has_full_access:
-            filter_conditions = []  # no doctor filter → all prescriptions for patient
+        if revoked_link is None:
+            # approved — check for full record-access consent
+            has_full_access = await _get_active_record_access_consent(db, doctor.id, patient_id)
+            if has_full_access:
+                filter_conditions = []  # no doctor filter → all prescriptions for patient
+        else:
+            # revoked — show all prescriptions created before revocation
+            filter_conditions = []
 
     stmt = (
         select(MedicalRecord, Prescription, User.full_name.label("doctor_name"))
@@ -337,6 +380,9 @@ async def get_patient_prescriptions(
     )
     if filter_conditions:
         stmt = stmt.where(or_(*filter_conditions))
+    # Apply revocation cutoff — only show prescriptions created before access was revoked
+    if revoked_link is not None and revoked_link.revoked_at is not None:
+        stmt = stmt.where(MedicalRecord.created_at <= revoked_link.revoked_at)
 
     result = await db.execute(stmt)
     rows = result.all()
@@ -371,9 +417,10 @@ async def patient_records(
     clinic_context: tuple | None = Depends(get_active_clinic),
 ):
     _, doctor = doctor_info
+    revoked_link = None
     if clinic_context:
         clinic_id, _ = clinic_context
-        await _check_patient_consent(db, patient_id, clinic_id)
+        revoked_link = await _check_patient_consent(db, patient_id, clinic_id)
     else:
         if not await _check_doctor_patient_relationship(db, doctor, patient_id):
             raise HTTPException(
@@ -383,12 +430,18 @@ async def patient_records(
 
     has_full_access = False
     if clinic_context:
-        has_full_access = await _get_active_record_access_consent(db, doctor.id, patient_id)
+        if revoked_link is None:
+            # approved link — check for full record-access consent
+            has_full_access = await _get_active_record_access_consent(db, doctor.id, patient_id)
+        else:
+            # revoked link — treat as full access but with date cutoff applied below
+            has_full_access = True
 
+    cutoff_date = revoked_link.revoked_at if revoked_link is not None else None
     doctor_id_filter = None if has_full_access else doctor.id
     records, next_cursor, has_more = await get_patient_timeline(
         db=db, patient_id=patient_id, record_type=type, cursor=cursor, limit=limit,
-        doctor_id=doctor_id_filter,
+        doctor_id=doctor_id_filter, created_before=cutoff_date,
     )
 
     # Annotate each record with whether this doctor can amend it
@@ -425,7 +478,12 @@ async def create_medical_record(
     _, doctor = doctor_info
     clinic_id = clinic_context[0] if clinic_context else None
     if clinic_id:
-        await _check_patient_consent(db, req.patient_id, clinic_id)
+        revoked_link = await _check_patient_consent(db, req.patient_id, clinic_id)
+        if revoked_link is not None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "ACCESS_REVOKED", "message": "Patient has revoked clinic access. Cannot create new records."}},
+            )
     else:
         if not await _check_doctor_patient_relationship(db, doctor, req.patient_id):
             raise HTTPException(
@@ -546,7 +604,12 @@ async def amend_record(
             )
 
     if clinic_id:
-        await _check_patient_consent(db, original.patient_id, clinic_id)
+        revoked_link = await _check_patient_consent(db, original.patient_id, clinic_id)
+        if revoked_link is not None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "ACCESS_REVOKED", "message": "Patient has revoked clinic access. Cannot amend records."}},
+            )
     else:
         if not await _check_doctor_patient_relationship(db, doctor, original.patient_id):
             raise HTTPException(
@@ -609,7 +672,12 @@ async def create_rx(
     clinic_id = (clinic_context[0] if clinic_context else None) or req.clinic_id
     branch_id = req.branch_id
     if clinic_id:
-        await _check_patient_consent(db, req.patient_id, clinic_id)
+        revoked_link = await _check_patient_consent(db, req.patient_id, clinic_id)
+        if revoked_link is not None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "ACCESS_REVOKED", "message": "Patient has revoked clinic access. Cannot create new prescriptions."}},
+            )
     else:
         if not await _check_doctor_patient_relationship(db, doctor, req.patient_id):
             raise HTTPException(

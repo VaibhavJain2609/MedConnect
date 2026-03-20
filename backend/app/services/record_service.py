@@ -76,6 +76,7 @@ async def get_patient_timeline(
     cursor: UUID | None = None,
     limit: int = 20,
     doctor_id: UUID | None = None,
+    created_before=None,  # datetime | None — only return records created at or before this timestamp
 ) -> tuple[list[dict], str | None, bool]:
     from app.models.prescription import Prescription
 
@@ -95,6 +96,9 @@ async def get_patient_timeline(
 
     if doctor_id:
         stmt = stmt.where(MedicalRecord.doctor_id == doctor_id)
+
+    if created_before is not None:
+        stmt = stmt.where(MedicalRecord.created_at <= created_before)
 
     if record_type:
         stmt = stmt.where(MedicalRecord.record_type == record_type)
