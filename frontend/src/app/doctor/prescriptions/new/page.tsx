@@ -13,6 +13,7 @@ import { getMyClinicss, getClinicBranches, type ClinicBranch } from "@/lib/api/c
 // ---------------------------------------------------------------------------
 
 interface Medicine {
+  _uid: string;
   brand_name: string;
   brand_id: string | null;
   salt_id: string | null;
@@ -57,16 +58,19 @@ interface PrescriptionTemplate {
 // Constants
 // ---------------------------------------------------------------------------
 
-const EMPTY_MEDICINE: Medicine = {
-  brand_name: "",
-  brand_id: null,
-  salt_id: null,
-  dose: "",
-  frequency: "OD",
-  duration: "7 days",
-  route: "oral",
-  instructions: "",
-};
+function newEmptyMedicine(): Medicine {
+  return {
+    _uid: Math.random().toString(36).slice(2),
+    brand_name: "",
+    brand_id: null,
+    salt_id: null,
+    dose: "",
+    frequency: "OD",
+    duration: "7 days",
+    route: "oral",
+    instructions: "",
+  };
+}
 
 const FREQUENCY_OPTIONS = ["OD", "BD", "TDS", "QID", "1-0-1", "SOS", "HS"];
 const DURATION_OPTIONS = [
@@ -406,7 +410,7 @@ export default function NewPrescriptionPage() {
   // Form fields
   const [diagnosis, setDiagnosis] = useState("");
   const [notes, setNotes] = useState("");
-  const [medicines, setMedicines] = useState<Medicine[]>([{ ...EMPTY_MEDICINE }]);
+  const [medicines, setMedicines] = useState<Medicine[]>([newEmptyMedicine()]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -492,7 +496,7 @@ export default function NewPrescriptionPage() {
   };
 
   const addMedicine = () => {
-    setMedicines([...medicines, { ...EMPTY_MEDICINE }]);
+    setMedicines([...medicines, newEmptyMedicine()]);
   };
 
   const removeMedicine = (index: number) => {
@@ -528,6 +532,7 @@ export default function NewPrescriptionPage() {
   const handleLoadTemplate = (t: PrescriptionTemplate) => {
     setMedicines(
       t.medicines.map((m) => ({
+        _uid: Math.random().toString(36).slice(2),
         brand_name: m.brand_name || "",
         brand_id: m.brand_id || null,
         salt_id: m.salt_id || null,
@@ -839,7 +844,7 @@ export default function NewPrescriptionPage() {
           <InteractionBanner interactions={interactions} />
 
           {medicines.map((med, idx) => (
-            <div key={idx} className="mb-4 bg-white rounded-lg shadow-card p-6">
+            <div key={med._uid} className="mb-4 bg-white rounded-lg shadow-card p-6">
               <div className="mb-4 flex items-center justify-between">
                 <span className="text-sm font-medium text-dreams-textSecondary">
                   Medicine {idx + 1}

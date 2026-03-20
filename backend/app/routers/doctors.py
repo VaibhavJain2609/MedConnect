@@ -513,7 +513,7 @@ async def create_medical_record(
 @router.get("/records/{record_id}/amendments")
 async def list_record_amendments(
     record_id: UUID,
-    doctor_info=Depends(get_current_doctor),
+    doctor_info: tuple = Depends(get_current_doctor),
     db: AsyncSession = Depends(get_db),
 ):
     """

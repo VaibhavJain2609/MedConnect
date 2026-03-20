@@ -118,7 +118,6 @@ export default function MedicineAutocomplete({
       if (value) {
         const medicine = medicineData.get(value);
         if (medicine) {
-          console.log('Calling onSelect with:', medicine.brand_name);
           onSelect({
             brandId: medicine.brand_id,
             brandName: medicine.brand_name,

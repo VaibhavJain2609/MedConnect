@@ -136,7 +136,10 @@ async def list_lab_results(
             filter_date = datetime.strptime(date, "%Y-%m-%d").date()
             query = query.where(func.date(LabResult.appointment_date) == filter_date)
         except ValueError:
-            pass  # Silently ignore malformed date filters
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": {"code": "INVALID_DATE", "message": "Invalid date format. Use YYYY-MM-DD"}},
+            )
 
     total = await db.scalar(select(func.count()).select_from(query.subquery())) or 0
 

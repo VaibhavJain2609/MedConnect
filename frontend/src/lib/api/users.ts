@@ -50,11 +50,7 @@ export async function uploadPhoto(file: File): Promise<UserProfile> {
   const formData = new FormData();
   formData.append("photo", file);
 
-  const response = await api.post("/api/v1/users/photo", formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
+  const response = await api.post("/api/v1/users/photo", formData);
 
   return response.data;
 }

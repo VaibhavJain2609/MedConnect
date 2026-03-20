@@ -229,7 +229,7 @@ export default function PatientNotificationsPage() {
                       <button
                         disabled={consentMutation.isPending}
                         onClick={() =>
-                          consentMutation.mutate({ consentId: n.metadata!.consent_id, action: "approved" })
+                          consentMutation.mutate({ consentId: n.metadata?.consent_id, action: "approved" })
                         }
                         className="flex items-center gap-1 rounded-lg bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 hover:bg-green-100 disabled:opacity-50"
                       >
@@ -239,7 +239,7 @@ export default function PatientNotificationsPage() {
                       <button
                         disabled={consentMutation.isPending}
                         onClick={() =>
-                          consentMutation.mutate({ consentId: n.metadata!.consent_id, action: "rejected" })
+                          consentMutation.mutate({ consentId: n.metadata?.consent_id, action: "rejected" })
                         }
                         className="flex items-center gap-1 rounded-lg bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
                       >

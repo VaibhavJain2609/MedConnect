@@ -186,7 +186,7 @@ export async function updatePatient(
   id: string,
   data: Partial<Patient>
 ): Promise<Patient> {
-  const response = await api.put(`/api/v1/admin/patients/${id}`, data);
+  const response = await api.put(`/api/v1/admin/users/${id}`, data);
   return response.data;
 }
 
@@ -194,5 +194,5 @@ export async function updatePatient(
  * Delete patient (soft delete)
  */
 export async function deletePatient(id: string): Promise<void> {
-  await api.delete(`/api/v1/admin/patients/${id}`);
+  await api.delete(`/api/v1/admin/users/${id}`);
 }
