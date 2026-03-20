@@ -146,6 +146,11 @@ async def create_vital(
     await db.flush()
     await db.refresh(vital)
 
+    # Commit vital before firing notifications so the record is persisted
+    # even if notification creation encounters an error
+    await db.commit()
+    await db.refresh(vital)
+
     # MD-270: critical vitals alerting — fire notifications if threshold crossed
     if _is_abnormal(data.vital_type, float(data.value)):
         await _fire_critical_vital_notifications(
@@ -154,6 +159,7 @@ async def create_vital(
             vital_type=data.vital_type,
             value=float(data.value),
         )
+        await db.commit()
 
     return VitalResponse.from_orm(vital)
 

@@ -7,7 +7,7 @@
  * with interactive prescription cards.
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
@@ -18,14 +18,26 @@ import { FilePlus, Search } from "lucide-react";
 export default function DoctorPrescriptionsPage() {
   const [search, setSearch] = useState("");
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["doctor-prescriptions", search],
+  const [page, setPage] = useState(1);
+  const [allRecords, setAllRecords] = useState<any[]>([]);
+
+  // Reset to page 1 when search changes
+  useEffect(() => { setPage(1); setAllRecords([]); }, [search]);
+
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ["doctor-prescriptions", search, page],
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set("limit", "50");
+      params.set("offset", String((page - 1) * 50));
       if (search) params.set("q", search);
 
       const res = await api.get(`/api/v1/doctors/prescriptions?${params}`);
+      if (page === 1) {
+        setAllRecords(res.data.data || []);
+      } else {
+        setAllRecords((prev) => [...prev, ...(res.data.data || [])]);
+      }
       return res.data;
     },
   });
@@ -67,9 +79,11 @@ export default function DoctorPrescriptionsPage() {
       ) : isError ? (
         <div className="bg-white rounded-lg shadow-card p-12 text-center">
           <p className="text-red-500 font-medium">Failed to load prescriptions.</p>
-          <p className="mt-1 text-sm text-dreams-textSecondary">Please try again later.</p>
+          <p className="mt-1 text-sm text-dreams-textSecondary">
+            {error instanceof Error ? error.message : "Please try again later."}
+          </p>
         </div>
-      ) : data?.data?.length === 0 ? (
+      ) : allRecords.length === 0 ? (
         <div className="bg-white rounded-lg shadow-card p-12 text-center">
           <FilePlus className="h-12 w-12 text-dreams-textSecondary mx-auto mb-4" />
           <p className="text-dreams-textSecondary">No prescriptions found.</p>
@@ -79,7 +93,7 @@ export default function DoctorPrescriptionsPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {data?.data?.map((record: any) => {
+          {allRecords.map((record: any) => {
             // Map Prescription.medicines JSONB → PrescriptionCard shape
             const rawMeds: any[] = record.medicines ?? [];
             const medicines = rawMeds.length > 0
@@ -125,7 +139,13 @@ export default function DoctorPrescriptionsPage() {
 
       {data?.pagination?.has_more && (
         <div className="text-center">
-          <button className="text-sm text-dreams-blue hover:underline">Load more</button>
+          <button
+            onClick={() => setPage((p) => p + 1)}
+            disabled={isLoading}
+            className="text-sm text-dreams-blue hover:underline disabled:opacity-50"
+          >
+            {isLoading ? "Loading..." : "Load more"}
+          </button>
         </div>
       )}
     </div>

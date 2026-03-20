@@ -37,8 +37,28 @@ export default function AdminDoctorsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center py-12">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
+      <div className="space-y-6">
+        <Breadcrumb items={[{ label: "Doctors" }]} />
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="h-8 w-48 bg-gray-200 rounded animate-pulse" />
+            <div className="h-4 w-64 bg-gray-100 rounded animate-pulse mt-2" />
+          </div>
+          <div className="h-10 w-32 bg-gray-200 rounded-lg animate-pulse" />
+        </div>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="bg-white rounded-lg shadow-card p-6 animate-pulse">
+              <div className="flex flex-col items-center mb-4">
+                <div className="h-16 w-16 rounded-full bg-gray-200 mb-3" />
+                <div className="h-4 w-24 bg-gray-200 rounded mb-1" />
+                <div className="h-5 w-32 bg-gray-200 rounded" />
+              </div>
+              <div className="h-4 w-full bg-gray-100 rounded mt-2" />
+              <div className="h-4 w-3/4 bg-gray-100 rounded mt-2" />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -70,9 +90,12 @@ export default function AdminDoctorsPage() {
           </p>
         </div>
 
-        <button className="flex items-center gap-2 px-4 py-2 bg-dreams-blue text-white rounded-lg hover:opacity-90 transition-opacity">
+        <button
+          onClick={() => window.location.href = "/admin/doctors/pending"}
+          className="flex items-center gap-2 px-4 py-2 bg-dreams-blue text-white rounded-lg hover:opacity-90 transition-opacity"
+        >
           <Plus className="h-5 w-5" />
-          <span>New Doctor</span>
+          <span>Pending Doctors</span>
         </button>
       </div>
 

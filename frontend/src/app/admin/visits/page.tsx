@@ -154,7 +154,11 @@ export default function AdminVisitsPage() {
           </p>
         </div>
 
-        <button className="flex items-center gap-2 px-4 py-2 bg-dreams-blue text-white rounded-lg hover:opacity-90 transition-opacity">
+        <button
+          disabled
+          title="Coming soon"
+          className="flex items-center gap-2 px-4 py-2 bg-dreams-blue text-white rounded-lg opacity-50 cursor-not-allowed"
+        >
           <Plus className="h-5 w-5" />
           <span>New Visit</span>
         </button>

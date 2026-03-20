@@ -732,6 +732,18 @@ async def delete_appointment(
                 detail={"error": {"code": "FORBIDDEN", "message": "Access denied"}},
             )
 
+    # Enforce status transitions — cannot cancel terminal appointments
+    if appt.status in {"completed", "cancelled", "no-show"}:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "error": {
+                    "code": "INVALID_TRANSITION",
+                    "message": f"Cannot cancel an appointment with status '{appt.status}'",
+                }
+            },
+        )
+
     now = datetime.now(tz=timezone.utc)
     appt.deleted_at = now
     appt.status = "cancelled"

@@ -10,6 +10,7 @@ POST /api/v1/onboarding/verify-nhr  — trigger NHR verification (stubbed)
 from typing import Optional
 
 import uuid as _uuid_mod
+from datetime import timezone as _tz
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -186,18 +187,18 @@ async def onboarding_clinic(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail={"error": {"code": "INVALID_CODE", "message": "Invite code not found"}},
             )
-        if invite.expires_at and invite.expires_at < _dt.utcnow():
+        if invite.expires_at and invite.expires_at < _dt.now(_tz.utc):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={"error": {"code": "EXPIRED_CODE", "message": "Invite code expired"}},
             )
         membership = ClinicMembership(
-            id=uuid.uuid4(),
+            id=_uuid_mod.uuid4(),
             clinic_id=invite.clinic_id,
             user_id=user.id,
             role=invite.role,
             is_active=True,
-            joined_at=_dt.utcnow(),
+            joined_at=_dt.now(_tz.utc),
         )
         db.add(membership)
         invite.use_count += 1
@@ -214,8 +215,8 @@ async def onboarding_clinic(
                 detail={"error": {"code": "MISSING_DATA", "message": "clinic_id required"}},
             )
         req = ClinicJoinRequest(
-            id=uuid.uuid4(),
-            clinic_id=uuid.UUID(data.clinic_id),
+            id=_uuid_mod.uuid4(),
+            clinic_id=_uuid_mod.UUID(data.clinic_id),
             user_id=user.id,
             message="Requesting to join from onboarding",
             status="pending",

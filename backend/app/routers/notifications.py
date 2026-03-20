@@ -286,7 +286,10 @@ async def get_notification_preferences(
     db: AsyncSession = Depends(get_db),
 ):
     """Get user's notification preferences."""
-    query = select(NotificationPreferences).where(NotificationPreferences.user_id == user.id)
+    query = select(NotificationPreferences).where(
+        NotificationPreferences.user_id == user.id,
+        NotificationPreferences.deleted_at.is_(None),
+    )
     result = await db.execute(query)
     preferences = result.scalar_one_or_none()
 
@@ -312,7 +315,10 @@ async def update_notification_preferences(
 ):
     """Create or update user's notification preferences."""
     # Check if preferences exist
-    query = select(NotificationPreferences).where(NotificationPreferences.user_id == user.id)
+    query = select(NotificationPreferences).where(
+        NotificationPreferences.user_id == user.id,
+        NotificationPreferences.deleted_at.is_(None),
+    )
     result = await db.execute(query)
     existing_prefs = result.scalar_one_or_none()
 

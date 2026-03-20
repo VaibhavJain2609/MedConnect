@@ -91,12 +91,28 @@ async def link_patient(
     db: AsyncSession = Depends(get_db),
 ):
     if user.role != "doctor":
-        raise HTTPException(status_code=403, detail={"error": {"code": "FORBIDDEN"}})
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": {"code": "FORBIDDEN", "message": "Doctor access required"}},
+        )
 
     try:
         cid = uuid.UUID(clinic_id)
     except ValueError:
-        raise HTTPException(status_code=422, detail={"error": {"code": "INVALID_ID"}})
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"error": {"code": "INVALID_ID", "message": "Invalid clinic ID format"}},
+        )
+
+    # Verify the user has an active Doctor profile
+    doctor_result = await db.execute(
+        select(Doctor).where(Doctor.user_id == user.id, Doctor.deleted_at.is_(None))
+    )
+    if not doctor_result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": {"code": "NO_DOCTOR_PROFILE", "message": "No active doctor profile found"}},
+        )
 
     # Verify doctor is a member of this clinic
     membership = await db.execute(
@@ -108,7 +124,10 @@ async def link_patient(
         )
     )
     if not membership.scalar_one_or_none():
-        raise HTTPException(status_code=403, detail={"error": {"code": "NOT_CLINIC_MEMBER"}})
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": {"code": "NOT_CLINIC_MEMBER", "message": "Not a member of this clinic"}},
+        )
 
     # Look up the code
     code_result = await db.execute(
@@ -120,12 +139,12 @@ async def link_patient(
     link_code = code_result.scalar_one_or_none()
     if not link_code:
         raise HTTPException(
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail={"error": {"code": "INVALID_CODE", "message": "Patient link code not found"}},
         )
     if link_code.expires_at < datetime.now(timezone.utc):
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail={"error": {"code": "EXPIRED_CODE", "message": "Patient link code has expired"}},
         )
 
@@ -139,7 +158,7 @@ async def link_patient(
     )
     if existing.scalar_one_or_none():
         raise HTTPException(
-            status_code=409,
+            status_code=status.HTTP_409_CONFLICT,
             detail={"error": {"code": "ALREADY_LINKED", "message": "Patient already linked to this clinic"}},
         )
 
@@ -215,11 +234,14 @@ async def update_consent(
     try:
         lid = uuid.UUID(link_id)
     except ValueError:
-        raise HTTPException(status_code=422, detail={"error": {"code": "INVALID_ID"}})
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"error": {"code": "INVALID_ID", "message": "Invalid link ID format"}},
+        )
 
     if data.action not in ("approved", "revoked"):
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail={"error": {"code": "INVALID_ACTION", "message": "action must be approved or revoked"}},
         )
 
@@ -232,7 +254,10 @@ async def update_consent(
     )
     link = result.scalar_one_or_none()
     if not link:
-        raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND"}})
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "NOT_FOUND", "message": "Clinic link not found"}},
+        )
 
     link.consent_status = data.action
     now = datetime.now(timezone.utc)
@@ -272,7 +297,10 @@ async def list_clinic_doctors(
     try:
         cid = uuid.UUID(clinic_id)
     except ValueError:
-        raise HTTPException(status_code=422, detail={"error": {"code": "INVALID_ID"}})
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"error": {"code": "INVALID_ID", "message": "Invalid clinic ID format"}},
+        )
 
     # Ensure patient has an approved link to this clinic
     link_result = await db.execute(
@@ -284,7 +312,10 @@ async def list_clinic_doctors(
         )
     )
     if not link_result.scalar_one_or_none():
-        raise HTTPException(status_code=403, detail={"error": {"code": "NOT_LINKED", "message": "No approved link to this clinic"}})
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": {"code": "NOT_LINKED", "message": "No approved link to this clinic"}},
+        )
 
     stmt = (
         select(Doctor, User)

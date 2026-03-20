@@ -1,4 +1,5 @@
 import math
+import uuid as _uuid_mod
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -46,6 +47,13 @@ async def list_users(
     db: AsyncSession = Depends(get_db),
 ):
     if clinic_id:
+        try:
+            _uuid_mod.UUID(clinic_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": {"code": "INVALID_CLINIC_ID", "message": "clinic_id must be a valid UUID"}},
+            )
         # When filtering by clinic, force role=patient and join PatientClinicLink
         query = (
             select(User, PatientClinicLink.consent_status)

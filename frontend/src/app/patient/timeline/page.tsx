@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
@@ -23,15 +23,26 @@ const RECORD_TYPES = [
 export default function TimelinePage() {
   const [type, setType] = useState("");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [allRecords, setAllRecords] = useState<any[]>([]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => { setPage(1); setAllRecords([]); }, [type, search]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["timeline", type, search],
+    queryKey: ["timeline", type, search, page],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (type) params.set("type", type);
       if (search) params.set("q", search);
       params.set("limit", "50");
+      params.set("offset", String((page - 1) * 50));
       const res = await api.get(`/api/v1/patients/timeline?${params}`);
+      if (page === 1) {
+        setAllRecords(res.data.data || []);
+      } else {
+        setAllRecords((prev) => [...prev, ...(res.data.data || [])]);
+      }
       return res.data;
     },
   });
@@ -92,7 +103,7 @@ export default function TimelinePage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {data?.data?.map((record: any) => {
+          {allRecords.map((record: any) => {
             if (record.record_type === "prescription") {
               const prescriptionData = extractPrescriptionFromRecord(record);
               if (prescriptionData) {
@@ -177,8 +188,12 @@ export default function TimelinePage() {
 
       {data?.pagination?.has_more && (
         <div className="text-center">
-          <button className="text-sm text-dreams-blue hover:underline">
-            Load more
+          <button
+            onClick={() => setPage((p) => p + 1)}
+            disabled={isLoading}
+            className="text-sm text-dreams-blue hover:underline disabled:opacity-50"
+          >
+            {isLoading ? "Loading..." : "Load more"}
           </button>
         </div>
       )}

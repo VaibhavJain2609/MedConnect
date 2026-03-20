@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Calendar, Clock, Stethoscope, Building2, XCircle, Plus, X } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
@@ -90,6 +90,13 @@ function DoctorSearchInput({
       })
       .catch(() => setResults([]))
       .finally(() => setLoading(false));
+  }, []);
+
+  // Cleanup pending debounce on unmount to prevent state updates on unmounted component
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
