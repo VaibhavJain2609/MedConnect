@@ -15,7 +15,9 @@ const TYPE_LABELS: Record<string, string> = {
   "follow-up": "Follow-up",
 };
 
-const STATUS_VARIANT_MAP: Record<string, string> = {
+type BadgeVariant = "upcoming" | "inProgress" | "completed" | "overdue" | "pending";
+
+const STATUS_VARIANT_MAP: Record<string, BadgeVariant> = {
   scheduled: "upcoming",
   arrived: "inProgress",
   "in-progress": "inProgress",
@@ -492,7 +494,7 @@ function AppointmentCard({
 
         {/* Status badge */}
         <div className="flex-shrink-0">
-          <Badge variant={STATUS_VARIANT_MAP[appt.status] as any}>
+          <Badge variant={STATUS_VARIANT_MAP[appt.status] ?? "pending"}>
             {STATUS_LABELS[appt.status] ?? appt.status}
           </Badge>
         </div>
