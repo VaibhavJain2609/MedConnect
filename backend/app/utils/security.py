@@ -1,13 +1,17 @@
 import logging
+import threading
 
 import jwt
+import requests
 from jwt import PyJWKClient
+from jwt.exceptions import PyJWKClientError, PyJWKClientConnectionError
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
 _jwks_client: PyJWKClient | None = None
+_jwks_lock = threading.Lock()
 
 
 def get_jwks_client() -> PyJWKClient:
@@ -24,10 +28,12 @@ def decode_keycloak_token(token: str) -> dict | None:
         client = get_jwks_client()
         try:
             signing_key = client.get_signing_key_from_jwt(token)
-        except Exception:
-            # Force JWKS cache refresh (handles Keycloak key rotation)
-            global _jwks_client
-            _jwks_client = None
+        except (PyJWKClientError, PyJWKClientConnectionError, requests.exceptions.RequestException) as e:
+            # Force JWKS cache refresh (handles Keycloak key rotation or transient network errors)
+            logger.warning("JWKS key fetch failed (%s: %s); refreshing client", type(e).__name__, e)
+            with _jwks_lock:
+                global _jwks_client
+                _jwks_client = None
             client = get_jwks_client()
             signing_key = client.get_signing_key_from_jwt(token)
         expected_issuer = f"{settings.KEYCLOAK_PUBLIC_URL}/realms/{settings.KEYCLOAK_REALM}"
@@ -46,6 +52,6 @@ def decode_keycloak_token(token: str) -> dict | None:
     except jwt.PyJWTError as e:
         logger.error("JWT validation failed: %s: %s", type(e).__name__, e)
         return None
-    except Exception as e:
-        logger.error("Unexpected error validating token: %s: %s", type(e).__name__, e)
+    except (PyJWKClientError, PyJWKClientConnectionError, requests.exceptions.RequestException) as e:
+        logger.error("JWKS/network error validating token: %s: %s", type(e).__name__, e)
         return None
