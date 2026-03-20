@@ -67,32 +67,32 @@ export default function AdminDashboardPage() {
     queryFn: () => getDashboardStats(dateParams),
   });
 
-  const { data: patientTrend } = useQuery({
+  const { data: patientTrend, error: patientTrendError } = useQuery({
     queryKey: ["patient-trend", dateParams],
     queryFn: () => getPatientTrend(dateParams),
   });
 
-  const { data: recordTrend } = useQuery({
+  const { data: recordTrend, error: recordTrendError } = useQuery({
     queryKey: ["record-trend", dateParams],
     queryFn: () => getRecordTrend(dateParams),
   });
 
-  const { data: doctorTrend } = useQuery({
+  const { data: doctorTrend, error: doctorTrendError } = useQuery({
     queryKey: ["doctor-trend", dateParams],
     queryFn: () => getDoctorTrend(dateParams),
   });
 
-  const { data: prescriptionTrend } = useQuery({
+  const { data: prescriptionTrend, error: prescriptionTrendError } = useQuery({
     queryKey: ["prescription-trend", dateParams],
     queryFn: () => getPrescriptionTrend(dateParams),
   });
 
-  const { data: recentActivity } = useQuery({
+  const { data: recentActivity, error: recentActivityError } = useQuery({
     queryKey: ["appointment-requests"],
     queryFn: () => getAppointmentRequests(5),
   });
 
-  const { data: patientStatsData } = useQuery({
+  const { data: patientStatsData, error: patientStatsError } = useQuery({
     queryKey: ["patient-stats", dateParams],
     queryFn: () => getPatientStatistics(dateParams),
   });
@@ -107,20 +107,20 @@ export default function AdminDashboardPage() {
   }, [patientStatsData]);
 
   const patientSparkline = useMemo(
-    () => patientTrend?.map((d) => d.value) || [],
-    [patientTrend]
+    () => patientTrendError ? [] : patientTrend?.map((d) => d.value) || [],
+    [patientTrend, patientTrendError]
   );
   const recordSparkline = useMemo(
-    () => recordTrend?.map((d) => d.value) || [],
-    [recordTrend]
+    () => recordTrendError ? [] : recordTrend?.map((d) => d.value) || [],
+    [recordTrend, recordTrendError]
   );
   const doctorSparkline = useMemo(
-    () => doctorTrend?.map((d) => d.value) || [],
-    [doctorTrend]
+    () => doctorTrendError ? [] : doctorTrend?.map((d) => d.value) || [],
+    [doctorTrend, doctorTrendError]
   );
   const prescriptionSparkline = useMemo(
-    () => prescriptionTrend?.map((d) => d.value) || [],
-    [prescriptionTrend]
+    () => prescriptionTrendError ? [] : prescriptionTrend?.map((d) => d.value) || [],
+    [prescriptionTrend, prescriptionTrendError]
   );
 
   if (isLoading) {
@@ -236,39 +236,45 @@ export default function AdminDashboardPage() {
             </Badge>
           </div>
 
-          <div className="space-y-4">
-            {recentActivity && recentActivity.length > 0 ? (
-              recentActivity.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center gap-4 p-4 rounded-lg border border-dreams-border hover:bg-dreams-lightBg/50 transition-colors"
-                >
-                  <Avatar
-                    src={item.patient_photo}
-                    fallback={item.patient_name}
-                    size="md"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-dreams-textPrimary truncate">
-                      {item.patient_name}
-                    </p>
-                    <p className="text-sm text-dreams-textSecondary">
-                      {item.department}
-                    </p>
-                    <p className="text-xs text-dreams-textSecondary mt-1">
-                      <Clock className="inline h-3 w-3 mr-1" />
-                      {item.requested_date} at {item.requested_time}
-                    </p>
+          {recentActivityError ? (
+            <p className="text-sm text-red-500 py-8 text-center">
+              Failed to load recent activity
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {recentActivity && recentActivity.length > 0 ? (
+                recentActivity.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center gap-4 p-4 rounded-lg border border-dreams-border hover:bg-dreams-lightBg/50 transition-colors"
+                  >
+                    <Avatar
+                      src={item.patient_photo}
+                      fallback={item.patient_name}
+                      size="md"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-dreams-textPrimary truncate">
+                        {item.patient_name}
+                      </p>
+                      <p className="text-sm text-dreams-textSecondary">
+                        {item.department}
+                      </p>
+                      <p className="text-xs text-dreams-textSecondary mt-1">
+                        <Clock className="inline h-3 w-3 mr-1" />
+                        {item.requested_date} at {item.requested_time}
+                      </p>
+                    </div>
+                    <CheckCircle className="h-5 w-5 text-status-completed flex-shrink-0" />
                   </div>
-                  <CheckCircle className="h-5 w-5 text-status-completed flex-shrink-0" />
-                </div>
-              ))
-            ) : (
-              <p className="text-sm text-dreams-textSecondary py-8 text-center">
-                No recent activity
-              </p>
-            )}
-          </div>
+                ))
+              ) : (
+                <p className="text-sm text-dreams-textSecondary py-8 text-center">
+                  No recent activity
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Patient Activity Chart */}
@@ -277,36 +283,42 @@ export default function AdminDashboardPage() {
             Patient Activity
           </h2>
 
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={patientStats}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-              <XAxis
-                dataKey="date"
-                tick={{ fill: "#6B7280", fontSize: 12 }}
-              />
-              <YAxis tick={{ fill: "#6B7280", fontSize: 12 }} />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "white",
-                  border: "1px solid #E5E7EB",
-                  borderRadius: "8px",
-                }}
-              />
-              <Legend />
-              <Bar
-                dataKey="new"
-                fill="#4169E1"
-                name="New Patients"
-                radius={[4, 4, 0, 0]}
-              />
-              <Bar
-                dataKey="active"
-                fill="#10B981"
-                name="Active Patients"
-                radius={[4, 4, 0, 0]}
-              />
-            </BarChart>
-          </ResponsiveContainer>
+          {patientStatsError ? (
+            <div className="flex items-center justify-center h-[300px]">
+              <p className="text-sm text-red-500">Failed to load patient activity data</p>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={patientStats}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fill: "#6B7280", fontSize: 12 }}
+                />
+                <YAxis tick={{ fill: "#6B7280", fontSize: 12 }} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "white",
+                    border: "1px solid #E5E7EB",
+                    borderRadius: "8px",
+                  }}
+                />
+                <Legend />
+                <Bar
+                  dataKey="new"
+                  fill="#4169E1"
+                  name="New Patients"
+                  radius={[4, 4, 0, 0]}
+                />
+                <Bar
+                  dataKey="active"
+                  fill="#10B981"
+                  name="Active Patients"
+                  radius={[4, 4, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </div>
 
