@@ -650,8 +650,18 @@ async def get_admin_visits(
 
 
 @router.get("/visits/departments")
-async def get_visit_departments(admin: User = Depends(require_admin)):
-    return []
+async def get_visit_departments(
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get distinct record types from prescriptions (used as visit departments)."""
+    result = await db.execute(
+        select(MedicalRecord.record_type)
+        .where(MedicalRecord.deleted_at.is_(None))
+        .distinct()
+        .order_by(MedicalRecord.record_type)
+    )
+    return [row[0] for row in result.all() if row[0]]
 
 
 @router.get("/lab-results")
