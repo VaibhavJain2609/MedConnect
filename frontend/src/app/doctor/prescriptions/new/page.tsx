@@ -560,8 +560,9 @@ export default function NewPrescriptionPage() {
       });
       setTemplates((prev) => [res.data, ...prev]);
       setShowSaveModal(false);
-    } catch {
-      // silently fail — template save is non-critical
+    } catch (err) {
+      console.error("Template save failed:", err);
+      // non-critical — prescription can still be created without saving template
     }
   };
 

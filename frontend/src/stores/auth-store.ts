@@ -27,7 +27,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           set({ user, loading: false, initialized: true });
         } catch (error) {
           console.error("initAuth - getMe failed:", error);
-          set({ user: null, loading: false, initialized: true, error: "Failed to load user" });
+          const msg = error instanceof Error ? error.message : "Failed to load user profile";
+          set({ user: null, loading: false, initialized: true, error: msg });
         }
       } else {
         set({ user: null, loading: false, initialized: true });

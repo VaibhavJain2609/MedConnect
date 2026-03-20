@@ -11,7 +11,7 @@ const api = axios.create({
 api.interceptors.request.use(async (config) => {
   if (typeof window === "undefined") return config;
 
-  if (keycloak.authenticated && keycloak.token) {
+  if (keycloak && keycloak.authenticated && keycloak.token) {
     try {
       await keycloak.updateToken(30);
     } catch (error) {
@@ -54,7 +54,7 @@ api.interceptors.response.use(
             path.startsWith("/auth/") ||
             path.startsWith("/login") ||
             path === "/";
-          if (!isAuthPage) {
+          if (!isAuthPage && keycloak) {
             keycloak.login({ redirectUri: window.location.origin + "/auth/callback" });
           }
         }
