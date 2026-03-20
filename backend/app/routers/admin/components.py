@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_medicine_db
+from app.dependencies import require_admin
 from app.schemas.component import (
     ComponentCreate,
     ComponentResponse,
@@ -13,11 +14,7 @@ from app.schemas.component import (
 )
 from app.services import component_service
 
-router = APIRouter(prefix="/admin/components", tags=["admin-components"])
-
-# TODO: Add admin authentication dependency
-# from app.dependencies import require_admin
-# router = APIRouter(prefix="/admin/components", tags=["admin-components"], dependencies=[Depends(require_admin)])
+router = APIRouter(prefix="/admin/components", tags=["admin-components"], dependencies=[Depends(require_admin)])
 
 
 @router.get("", response_model=ComponentSearchResponse)

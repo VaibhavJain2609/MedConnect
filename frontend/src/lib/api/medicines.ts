@@ -3,7 +3,7 @@
  * Connects to backend medicine endpoints
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+import api from '@/lib/api';
 
 export interface MedicineComponent {
   component_id: string;
@@ -87,57 +87,21 @@ export async function searchMedicines(
   if (params.limit) queryParams.append('limit', String(params.limit));
   if (params.page) queryParams.append('page', String(params.page));
 
-  const response = await fetch(
-    `${API_BASE_URL}/api/v1/medicines/search?${queryParams}`,
-    {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch medicines: ${response.statusText}`);
-  }
-
-  return response.json();
+  return (await api.get(`/api/v1/medicines/search?${queryParams}`)).data;
 }
 
 /**
  * Get medicine by ID
  */
 export async function getMedicine(id: string): Promise<Medicine> {
-  const response = await fetch(`${API_BASE_URL}/api/v1/medicines/${id}`, {
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch medicine: ${response.statusText}`);
-  }
-
-  return response.json();
+  return (await api.get(`/api/v1/medicines/${id}`)).data;
 }
 
 /**
  * Get medicine alternatives
  */
 export async function getMedicineAlternatives(id: string): Promise<any> {
-  const response = await fetch(
-    `${API_BASE_URL}/api/v1/medicines/${id}/alternatives`,
-    {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch alternatives: ${response.statusText}`);
-  }
-
-  return response.json();
+  return (await api.get(`/api/v1/medicines/${id}/alternatives`)).data;
 }
 
 /**
@@ -154,20 +118,7 @@ export async function searchComponents(
   queryParams.append('limit', String(limit));
   queryParams.append('offset', String(offset));
 
-  const response = await fetch(
-    `${API_BASE_URL}/api/v1/admin/components?${queryParams}`,
-    {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch components: ${response.statusText}`);
-  }
-
-  return response.json();
+  return (await api.get(`/api/v1/admin/components?${queryParams}`)).data;
 }
 
 /**
@@ -190,20 +141,7 @@ export async function createMedicine(data: {
   alternatives?: any;
   interactions?: any;
 }): Promise<Medicine> {
-  const response = await fetch(`${API_BASE_URL}/api/v1/admin/medicines`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Failed to create medicine');
-  }
-
-  return response.json();
+  return (await api.post('/api/v1/admin/medicines', data)).data;
 }
 
 /**
@@ -229,37 +167,14 @@ export async function updateMedicine(
     interactions: any;
   }>
 ): Promise<Medicine> {
-  const response = await fetch(`${API_BASE_URL}/api/v1/admin/medicines/${id}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Failed to update medicine');
-  }
-
-  return response.json();
+  return (await api.put(`/api/v1/admin/medicines/${id}`, data)).data;
 }
 
 /**
  * Delete medicine (Admin)
  */
 export async function deleteMedicine(id: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/api/v1/admin/medicines/${id}`, {
-    method: 'DELETE',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Failed to delete medicine');
-  }
+  await api.delete(`/api/v1/admin/medicines/${id}`);
 }
 
 /**
@@ -276,9 +191,8 @@ export async function getMedicineStats(): Promise<{
     searchMedicines({ include_discontinued: true, limit: 1 }),
     searchMedicines({ include_discontinued: true, limit: 1 }).then(async () => {
       // Count discontinued separately
-      const resp = await fetch(`${API_BASE_URL}/api/v1/medicines/search?include_discontinued=true&limit=1000`);
-      const data = await resp.json();
-      return data.medicines.filter((m: Medicine) => m.is_discontinued).length;
+      const resp = await api.get('/api/v1/medicines/search?include_discontinued=true&limit=1000');
+      return resp.data.medicines.filter((m: Medicine) => m.is_discontinued).length;
     }),
     searchComponents('', 1, 0),
   ]);

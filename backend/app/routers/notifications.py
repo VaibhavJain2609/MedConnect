@@ -226,37 +226,6 @@ async def mark_all_as_read(
     return {"message": "All notifications marked as read"}
 
 
-@router.delete("/{notification_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_notification(
-    notification_id: UUID,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """Soft delete a notification."""
-    # Get notification (ensure it belongs to current user)
-    query = select(Notification).where(
-        and_(
-            Notification.id == notification_id,
-            Notification.user_id == user.id,
-            Notification.deleted_at.is_(None),
-        )
-    )
-    result = await db.execute(query)
-    notification = result.scalar_one_or_none()
-
-    if not notification:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"error": {"code": "NOT_FOUND", "message": "Notification not found"}},
-        )
-
-    # Soft delete
-    notification.deleted_at = datetime.now()
-    await db.commit()
-
-    return None
-
-
 @router.delete("/read")
 async def delete_all_read(
     user: User = Depends(get_current_user),
@@ -280,6 +249,35 @@ async def delete_all_read(
     deleted_count = result.rowcount
 
     return {"deleted_count": deleted_count}
+
+
+@router.delete("/{notification_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_notification(
+    notification_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Soft delete a notification."""
+    query = select(Notification).where(
+        and_(
+            Notification.id == notification_id,
+            Notification.user_id == user.id,
+            Notification.deleted_at.is_(None),
+        )
+    )
+    result = await db.execute(query)
+    notification = result.scalar_one_or_none()
+
+    if not notification:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "NOT_FOUND", "message": "Notification not found"}},
+        )
+
+    notification.deleted_at = datetime.now()
+    await db.commit()
+
+    return None
 
 
 @router.get("/preferences")

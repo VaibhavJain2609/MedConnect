@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
@@ -38,16 +38,16 @@ export default function PatientProfilePage() {
   });
 
   // Sync form when profile loads
-  const [initialized, setInitialized] = useState(false);
-  if (profile && !initialized) {
-    setForm({
-      phone: profile.phone ?? "",
-      language_pref: profile.language_pref ?? "en",
-      emergency_contact_name: profile.emergency_contact_name ?? "",
-      emergency_contact_phone: profile.emergency_contact_phone ?? "",
-    });
-    setInitialized(true);
-  }
+  useEffect(() => {
+    if (profile) {
+      setForm({
+        phone: profile.phone ?? "",
+        language_pref: profile.language_pref ?? "en",
+        emergency_contact_name: profile.emergency_contact_name ?? "",
+        emergency_contact_phone: profile.emergency_contact_phone ?? "",
+      });
+    }
+  }, [profile]);
 
   const mutation = useMutation({
     mutationFn: async (data: typeof form) => {

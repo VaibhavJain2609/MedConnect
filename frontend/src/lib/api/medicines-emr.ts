@@ -3,7 +3,7 @@
  * Connects to new normalized pharmaceutical database
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+import api from '@/lib/api';
 
 // ============================================================================
 // TYPES
@@ -144,18 +144,7 @@ export async function searchMedicines(
     limit: String(limit),
   });
 
-  const response = await fetch(
-    `${API_BASE_URL}/api/v1/medicines/search?${params}`,
-    {
-      headers: { 'Content-Type': 'application/json' },
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(`Failed to search medicines: ${response.statusText}`);
-  }
-
-  return response.json();
+  return (await api.get(`/api/v1/medicines/search?${params}`)).data;
 }
 
 /**
@@ -176,54 +165,21 @@ export async function listSalts(params: {
   if (params.page) queryParams.append('page', String(params.page));
   if (params.limit) queryParams.append('limit', String(params.limit));
 
-  const response = await fetch(
-    `${API_BASE_URL}/api/v1/salts?${queryParams}`,
-    {
-      headers: { 'Content-Type': 'application/json' },
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(`Failed to list salts: ${response.statusText}`);
-  }
-
-  return response.json();
+  return (await api.get(`/api/v1/salts?${queryParams}`)).data;
 }
 
 /**
  * Get salt details by ID
  */
 export async function getSalt(saltId: string): Promise<Salt> {
-  const response = await fetch(
-    `${API_BASE_URL}/api/v1/salts/${saltId}`,
-    {
-      headers: { 'Content-Type': 'application/json' },
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(`Failed to get salt: ${response.statusText}`);
-  }
-
-  return response.json();
+  return (await api.get(`/api/v1/salts/${saltId}`)).data;
 }
 
 /**
  * Get all strengths for a salt
  */
 export async function getSaltStrengths(saltId: string): Promise<SaltStrength[]> {
-  const response = await fetch(
-    `${API_BASE_URL}/api/v1/salts/${saltId}/strengths`,
-    {
-      headers: { 'Content-Type': 'application/json' },
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(`Failed to get salt strengths: ${response.statusText}`);
-  }
-
-  return response.json();
+  return (await api.get(`/api/v1/salts/${saltId}/strengths`)).data;
 }
 
 /**
@@ -240,18 +196,7 @@ export async function getBrandsForSalt(
   if (strengthValue) params.append('strength_value', String(strengthValue));
   if (strengthUnit) params.append('strength_unit', strengthUnit);
 
-  const response = await fetch(
-    `${API_BASE_URL}/api/v1/salts/${saltId}/brands?${params}`,
-    {
-      headers: { 'Content-Type': 'application/json' },
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(`Failed to get brands for salt: ${response.statusText}`);
-  }
-
-  return response.json();
+  return (await api.get(`/api/v1/salts/${saltId}/brands?${params}`)).data;
 }
 
 /**
@@ -276,54 +221,21 @@ export async function listBrands(params: {
   if (params.page) queryParams.append('page', String(params.page));
   if (params.limit) queryParams.append('limit', String(params.limit));
 
-  const response = await fetch(
-    `${API_BASE_URL}/api/v1/brands?${queryParams}`,
-    {
-      headers: { 'Content-Type': 'application/json' },
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(`Failed to list brands: ${response.statusText}`);
-  }
-
-  return response.json();
+  return (await api.get(`/api/v1/brands?${queryParams}`)).data;
 }
 
 /**
  * Get brand details by ID
  */
 export async function getBrand(brandId: string): Promise<Brand> {
-  const response = await fetch(
-    `${API_BASE_URL}/api/v1/brands/${brandId}`,
-    {
-      headers: { 'Content-Type': 'application/json' },
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(`Failed to get brand: ${response.statusText}`);
-  }
-
-  return response.json();
+  return (await api.get(`/api/v1/brands/${brandId}`)).data;
 }
 
 /**
  * Get alternative brands with same composition
  */
 export async function getBrandAlternatives(brandId: string): Promise<Brand[]> {
-  const response = await fetch(
-    `${API_BASE_URL}/api/v1/brands/${brandId}/alternatives`,
-    {
-      headers: { 'Content-Type': 'application/json' },
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(`Failed to get brand alternatives: ${response.statusText}`);
-  }
-
-  return response.json();
+  return (await api.get(`/api/v1/brands/${brandId}/alternatives`)).data;
 }
 
 /**
@@ -343,36 +255,14 @@ export async function listManufacturers(
   if (search) params.append('search', search);
   if (isActive !== undefined) params.append('is_active', String(isActive));
 
-  const response = await fetch(
-    `${API_BASE_URL}/api/v1/manufacturers?${params}`,
-    {
-      headers: { 'Content-Type': 'application/json' },
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(`Failed to list manufacturers: ${response.statusText}`);
-  }
-
-  return response.json();
+  return (await api.get(`/api/v1/manufacturers?${params}`)).data;
 }
 
 /**
  * Get manufacturer by ID
  */
 export async function getManufacturer(manufacturerId: string): Promise<Manufacturer> {
-  const response = await fetch(
-    `${API_BASE_URL}/api/v1/manufacturers/${manufacturerId}`,
-    {
-      headers: { 'Content-Type': 'application/json' },
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(`Failed to get manufacturer: ${response.statusText}`);
-  }
-
-  return response.json();
+  return (await api.get(`/api/v1/manufacturers/${manufacturerId}`)).data;
 }
 
 /**
@@ -453,23 +343,9 @@ export interface BrandResponse {
  */
 export async function createBrand(
   data: CreateBrandRequest,
-  token: string
+  _token?: string
 ): Promise<BrandResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/v1/admin/brands`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(data),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || `Failed to create brand: ${response.statusText}`);
-  }
-
-  return response.json();
+  return (await api.post('/api/v1/admin/brands', data)).data;
 }
 
 /**
@@ -478,40 +354,16 @@ export async function createBrand(
 export async function updateBrand(
   brandId: string,
   data: UpdateBrandRequest,
-  token: string
+  _token?: string
 ): Promise<BrandResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/v1/admin/brands/${brandId}`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(data),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || `Failed to update brand: ${response.statusText}`);
-  }
-
-  return response.json();
+  return (await api.put(`/api/v1/admin/brands/${brandId}`, data)).data;
 }
 
 /**
  * Delete a brand (Admin only)
  */
-export async function deleteBrand(brandId: string, token: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/api/v1/admin/brands/${brandId}`, {
-    method: "DELETE",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || `Failed to delete brand: ${response.statusText}`);
-  }
+export async function deleteBrand(brandId: string, _token?: string): Promise<void> {
+  await api.delete(`/api/v1/admin/brands/${brandId}`);
 }
 
 // ============================================================================
@@ -546,17 +398,7 @@ export interface CheckInteractionsRequest {
 export async function checkDrugInteractions(
   saltIds: string[]
 ): Promise<DrugInteraction[]> {
-  const response = await fetch(`${API_BASE_URL}/api/v1/interactions/check`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ salt_ids: saltIds }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to check interactions: ${response.statusText}`);
-  }
-
-  return response.json();
+  return (await api.post('/api/v1/interactions/check', { salt_ids: saltIds })).data;
 }
 
 /**
@@ -570,18 +412,7 @@ export async function getSaltInteractions(
   const params = new URLSearchParams();
   if (severity) params.append('severity', severity);
 
-  const response = await fetch(
-    `${API_BASE_URL}/api/v1/interactions/salts/${saltId}${params.toString() ? '?' + params.toString() : ''}`,
-    {
-      headers: { 'Content-Type': 'application/json' },
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(`Failed to get salt interactions: ${response.statusText}`);
-  }
-
-  return response.json();
+  return (await api.get(`/api/v1/interactions/salts/${saltId}${params.toString() ? '?' + params.toString() : ''}`)).data;
 }
 
 /**
@@ -597,23 +428,9 @@ export async function createInteraction(
     management?: string;
     evidence_level?: 'theoretical' | 'case-report' | 'study-based';
   },
-  token: string
+  _token?: string
 ): Promise<DrugInteraction> {
-  const response = await fetch(`${API_BASE_URL}/api/v1/interactions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(data),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || `Failed to create interaction: ${response.statusText}`);
-  }
-
-  return response.json();
+  return (await api.post('/api/v1/interactions', data)).data;
 }
 
 /**
@@ -621,19 +438,9 @@ export async function createInteraction(
  */
 export async function deleteInteraction(
   interactionId: string,
-  token: string
+  _token?: string
 ): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/api/v1/interactions/${interactionId}`, {
-    method: 'DELETE',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || `Failed to delete interaction: ${response.statusText}`);
-  }
+  await api.delete(`/api/v1/interactions/${interactionId}`);
 }
 
 // ============================================================================
@@ -672,16 +479,5 @@ export async function autocompleteMedicines(
 
   const params = new URLSearchParams({ q: query });
 
-  const response = await fetch(
-    `${API_BASE_URL}/api/v1/medicines/autocomplete?${params}`,
-    {
-      headers: { 'Content-Type': 'application/json' },
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(`Failed to autocomplete medicines: ${response.statusText}`);
-  }
-
-  return response.json();
+  return (await api.get(`/api/v1/medicines/autocomplete?${params}`)).data;
 }

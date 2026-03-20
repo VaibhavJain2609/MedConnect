@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -45,7 +45,7 @@ def _generate_test_id(counter: int) -> str:
 
 async def _next_test_id(db: AsyncSession) -> str:
     """Return the next sequential test_id string."""
-    count = await db.scalar(select(func.count()).select_from(LabResult)) or 0
+    count = await db.scalar(select(func.count()).select_from(LabResult).where(LabResult.deleted_at.is_(None))) or 0
     return _generate_test_id(count + 1)
 
 
@@ -86,8 +86,8 @@ def _list_query():
             PatientUser.full_name.label("patient_name"),
             DoctorUser.full_name.label("doctor_name"),
         )
-        .join(PatientUser, LabResult.patient_id == PatientUser.id)
-        .outerjoin(DoctorUser, LabResult.doctor_id == DoctorUser.id)
+        .join(PatientUser, and_(LabResult.patient_id == PatientUser.id, PatientUser.deleted_at.is_(None)))
+        .outerjoin(DoctorUser, and_(LabResult.doctor_id == DoctorUser.id, DoctorUser.deleted_at.is_(None)))
         .where(LabResult.deleted_at.is_(None))
     )
 

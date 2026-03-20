@@ -48,11 +48,15 @@ api.interceptors.response.use(
       // Handle 401 Unauthorized
       if (status === 401) {
         console.warn("Unauthorized access - redirecting to login");
-        if (
-          typeof window !== "undefined" &&
-          !window.location.pathname.startsWith("/auth/callback")
-        ) {
-          keycloak.login({ redirectUri: window.location.origin + "/auth/callback" });
+        if (typeof window !== "undefined") {
+          const path = window.location.pathname;
+          const isAuthPage =
+            path.startsWith("/auth/") ||
+            path.startsWith("/login") ||
+            path === "/";
+          if (!isAuthPage) {
+            keycloak.login({ redirectUri: window.location.origin + "/auth/callback" });
+          }
         }
       }
 
