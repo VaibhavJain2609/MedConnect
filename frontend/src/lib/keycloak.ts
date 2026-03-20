@@ -11,4 +11,4 @@ if (typeof window !== "undefined") {
   });
 }
 
-export default keycloak as Keycloak;
+export default keycloak as Keycloak | null;
