@@ -140,6 +140,24 @@ export default function PatientDetailsPage() {
     },
   });
 
+  // Fetch lab results (records of type lab_report)
+  const { data: labResultsData, isLoading: isLoadingLabResults } = useQuery({
+    queryKey: ["patient-lab-results"],
+    queryFn: async () => {
+      const res = await api.get("/api/v1/patients/records?type=lab_report&limit=50");
+      return res.data as { data: Array<{ id: string; title: string; doctor_name: string | null; document_url: string | null; created_at: string }> };
+    },
+  });
+
+  // Fetch documents (records with a document_url)
+  const { data: recordsData, isLoading: isLoadingDocuments } = useQuery({
+    queryKey: ["patient-all-records"],
+    queryFn: async () => {
+      const res = await api.get("/api/v1/patients/records?limit=100");
+      return res.data as { data: Array<{ id: string; title: string; record_type: string; doctor_name: string | null; document_url: string | null; created_at: string }> };
+    },
+  });
+
   // Fetch medical history
   const { data: medicalHistory, isLoading: isLoadingMedHistory } = useQuery({
     queryKey: ["patient-medical-history"],
@@ -543,11 +561,34 @@ export default function PatientDetailsPage() {
             )}
 
             {activeTab === "lab-results" && (
-              <div className="text-center py-12">
-                <TestTube className="h-12 w-12 text-dreams-textSecondary mx-auto mb-4" />
-                <p className="text-dreams-textSecondary">
-                  Lab results will be available here once ordered by your doctor
-                </p>
+              <div className="space-y-4">
+                <h3 className="text-xl font-bold text-dreams-textPrimary">Lab Results</h3>
+                {isLoadingLabResults ? (
+                  <div className="flex justify-center py-8"><div className="h-6 w-6 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" /></div>
+                ) : (labResultsData?.data?.length ?? 0) === 0 ? (
+                  <div className="text-center py-12">
+                    <TestTube className="h-12 w-12 text-dreams-textSecondary mx-auto mb-4" />
+                    <p className="text-dreams-textSecondary">No lab results yet</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {labResultsData?.data?.map((r) => (
+                      <a
+                        key={r.id}
+                        href={r.document_url ?? `/api/v1/patients/records/${r.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between p-4 rounded-lg border border-dreams-border hover:border-dreams-blue/50 transition-colors"
+                      >
+                        <div>
+                          <p className="font-medium text-dreams-textPrimary">{r.title}</p>
+                          {r.doctor_name && <p className="text-sm text-dreams-textSecondary">Dr. {r.doctor_name}</p>}
+                        </div>
+                        <span className="text-xs text-dreams-textSecondary">{new Date(r.created_at).toLocaleDateString()}</span>
+                      </a>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -689,11 +730,41 @@ export default function PatientDetailsPage() {
             )}
 
             {activeTab === "documents" && (
-              <div className="text-center py-12">
-                <File className="h-12 w-12 text-dreams-textSecondary mx-auto mb-4" />
-                <p className="text-dreams-textSecondary">
-                  Documents will appear here once shared by your healthcare provider
-                </p>
+              <div className="space-y-4">
+                <h3 className="text-xl font-bold text-dreams-textPrimary">Documents</h3>
+                {isLoadingDocuments ? (
+                  <div className="flex justify-center py-8"><div className="h-6 w-6 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" /></div>
+                ) : (() => {
+                    const docs = (recordsData?.data ?? []).filter((r) => !!r.document_url);
+                    return docs.length === 0 ? (
+                      <div className="text-center py-12">
+                        <File className="h-12 w-12 text-dreams-textSecondary mx-auto mb-4" />
+                        <p className="text-dreams-textSecondary">No documents available yet</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {docs.map((doc) => (
+                          <a
+                            key={doc.id}
+                            href={doc.document_url!}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-between p-4 rounded-lg border border-dreams-border hover:border-dreams-blue/50 transition-colors"
+                          >
+                            <div className="flex items-center gap-3">
+                              <File className="h-5 w-5 text-dreams-blue flex-shrink-0" />
+                              <div>
+                                <p className="font-medium text-dreams-textPrimary">{doc.title}</p>
+                                {doc.doctor_name && <p className="text-sm text-dreams-textSecondary">Dr. {doc.doctor_name}</p>}
+                              </div>
+                            </div>
+                            <span className="text-xs text-dreams-textSecondary">{new Date(doc.created_at).toLocaleDateString()}</span>
+                          </a>
+                        ))}
+                      </div>
+                    );
+                  })()
+                }
               </div>
             )}
           </div>
