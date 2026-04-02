@@ -171,12 +171,9 @@ async def health():
 
     redis_ok = False
     try:
-        import redis.asyncio as aioredis
-
-        r = aioredis.from_url(settings.REDIS_URL)
-        await r.ping()
+        from app.middleware.rate_limit import _get_redis
+        await _get_redis().ping()
         redis_ok = True
-        await r.aclose()
     except Exception:
         pass
 

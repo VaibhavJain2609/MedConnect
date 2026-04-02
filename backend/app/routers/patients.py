@@ -36,6 +36,24 @@ async def timeline(
     )
 
 
+@router.get("/records")
+async def list_records(
+    type: str | None = Query(None, description="Filter by record type"),
+    q: str | None = Query(None, description="Search query"),
+    cursor: UUID | None = Query(None, description="Pagination cursor"),
+    limit: int = Query(20, ge=1, le=100),
+    user: User = Depends(require_patient),
+    db: AsyncSession = Depends(get_db),
+):
+    records, next_cursor, has_more = await get_patient_timeline(
+        db=db, patient_id=user.id, record_type=type, query=q, cursor=cursor, limit=limit
+    )
+    return PaginatedResponse(
+        data=records,
+        pagination=PaginationMeta(next_cursor=next_cursor, has_more=has_more, limit=limit),
+    )
+
+
 @router.get("/records/{record_id}", response_model=RecordResponse)
 async def get_record(
     record_id: UUID,
