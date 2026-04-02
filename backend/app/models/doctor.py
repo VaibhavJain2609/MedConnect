@@ -30,6 +30,7 @@ class Doctor(Base):
     user: Mapped["User"] = relationship(back_populates="doctor_profile")
     records: Mapped[list["MedicalRecord"]] = relationship(back_populates="doctor")
     prescriptions: Mapped[list["Prescription"]] = relationship(back_populates="doctor")
+    prescription_templates: Mapped[list["PrescriptionTemplate"]] = relationship(back_populates="doctor")
 
     __table_args__ = (
         Index("idx_doctors_user_id", "user_id", unique=True, postgresql_where=(deleted_at.is_(None))),
