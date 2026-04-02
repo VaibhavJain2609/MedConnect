@@ -13,7 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { PrescriptionCard } from "@/components/prescription/PrescriptionCard";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
-import { FilePlus, Search } from "lucide-react";
+import { FilePlus, Printer, Search } from "lucide-react";
 
 export default function DoctorPrescriptionsPage() {
   const [search, setSearch] = useState("");
@@ -118,13 +118,22 @@ export default function DoctorPrescriptionsPage() {
 
             return (
               <div key={record.id} className="relative">
-                {record.patient_name && (
-                  <div className="mb-2 flex items-center gap-2">
+                <div className="mb-2 flex items-center justify-between">
+                  {record.patient_name && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
                       Patient: {record.patient_name}
                     </span>
-                  </div>
-                )}
+                  )}
+                  <Link
+                    href={`/doctor/prescriptions/${record.id}/print`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-dreams-blue px-3 py-1 text-xs font-medium text-white hover:opacity-90 transition-opacity"
+                  >
+                    <Printer className="h-3 w-3" />
+                    Print
+                  </Link>
+                </div>
                 <PrescriptionCard
                   prescription={prescriptionData}
                   variant="doctor"
