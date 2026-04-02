@@ -25,6 +25,8 @@ from app.routers import record_access
 from app.routers import appointments
 from app.routers import uploads
 from app.routers import vitals
+from app.routers import prescriptions_pdf
+from app.routers import billing, revenue, queue
 # TODO MD-264: These routers need missing service modules before enabling
 # from app.routers.admin import components as admin_components
 # from app.routers.admin import medicines as admin_medicines
@@ -40,12 +42,15 @@ structlog.configure(
 if settings.SENTRY_DSN:
     sentry_sdk.init(dsn=settings.SENTRY_DSN, traces_sample_rate=0.1)
 
+_api_docs_enabled = settings.APP_ENV != "production"
+
 app = FastAPI(
     title="MedConnect API",
     description="EMR + Patient Portal for India's Digital Health Ecosystem",
     version="0.1.0",
-    docs_url=None if settings.APP_ENV == "production" else "/docs",
-    redoc_url=None if settings.APP_ENV == "production" else "/redoc",
+    docs_url="/docs" if _api_docs_enabled else None,
+    redoc_url="/redoc" if _api_docs_enabled else None,
+    openapi_url="/openapi.json" if _api_docs_enabled else None,
 )
 
 # CORS Configuration - Allow frontend to access API
@@ -89,16 +94,19 @@ async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
-    response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    # API-level CSP: strict policy for JSON/REST responses.
+    # No unsafe-inline — the backend serves data, not HTML/JS/CSS.
+    # frame-ancestors supersedes X-Frame-Options in modern browsers.
     response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline'; "
-        "style-src 'self' 'unsafe-inline'; "
-        "img-src 'self' data: blob:; "
-        "font-src 'self'; "
-        f"connect-src 'self' {settings.FRONTEND_URL}"
+        "default-src 'none'; "
+        "script-src 'none'; "
+        "style-src 'none'; "
+        "img-src 'none'; "
+        "font-src 'none'; "
+        f"connect-src 'self' {settings.FRONTEND_URL}; "
+        "frame-ancestors 'none';"
     )
     if settings.APP_ENV == "production":
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
@@ -131,6 +139,10 @@ app.include_router(record_access.router)
 app.include_router(appointments.router)
 app.include_router(uploads.router)
 app.include_router(vitals.router)
+app.include_router(prescriptions_pdf.router)
+app.include_router(billing.router)
+app.include_router(revenue.router)
+app.include_router(queue.router)
 # app.include_router(admin_components.router, prefix="/api/v1")
 # app.include_router(admin_medicines.router, prefix="/api/v1")
 

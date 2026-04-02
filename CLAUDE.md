@@ -287,6 +287,8 @@ python3 .claude/jira_cli.py start MED-15
 python3 .claude/jira_cli.py complete MED-15
 ```
 
+> **Important:** The Jira CLI (`jira_cli.py`) does **not** support ticket creation. Always use the Jira REST API directly to create tickets.
+
 **Commit format:** `[MED-15] Description` (always reference ticket).
 **Branch format:** `med-15-slugified-summary`
 
@@ -305,8 +307,16 @@ Run `/workflow <feature>` to conduct in-depth research (docs, patterns, API accu
 ### 3. Implementation
 Run `/jira` to pull the TODO tickets, select one, create the branch, implement, link commits, and move the ticket to Done. Repeat per ticket until the feature is complete.
 
+### 4. Parallel Task Execution (Multiple Tasks)
+When implementing multiple independent tasks simultaneously, **always run them in parallel** using the Agent tool with multiple simultaneous subagent calls in a single message. Do not implement tasks sequentially when they can be parallelized.
+
+After all parallel tasks complete, **create a new verification task** to:
+- Check for compilation errors (`npm run build` for frontend, `python -m py_compile` or import checks for backend)
+- Validate that all changes are consistent and non-conflicting
+- Catch any type errors, missing imports, or broken references introduced across the parallel changes
+
 ```
-Planning Mode → /workflow (research + plan) → /jira (create tickets) → /jira (implement per ticket)
+Planning Mode → /workflow (research + plan) → /jira (create tickets) → implement all tasks in parallel → verification task (compile + error check)
 ```
 
 ## Environment Variables

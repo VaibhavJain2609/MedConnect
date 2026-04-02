@@ -21,6 +21,8 @@ import {
   Bell,
   Shield,
   Building2,
+  CreditCard,
+  TrendingUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/auth";
@@ -57,6 +59,8 @@ const navSections: NavSection[] = [
       { href: "/admin/patients", label: "Patients", icon: Users },
       { href: "/admin/doctors", label: "Doctors", icon: Stethoscope },
       { href: "/admin/appointments", label: "Appointments", icon: Calendar },
+      { href: "/admin/billing", label: "Billing", icon: CreditCard },
+      { href: "/admin/revenue", label: "Revenue", icon: TrendingUp },
       { href: "/admin/visits", label: "Visits", icon: Activity },
       { href: "/admin/lab-results", label: "Lab Results", icon: TestTube },
       { href: "/admin/medicines", label: "Pharmacy", icon: Pill },

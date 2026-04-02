@@ -14,6 +14,7 @@ import {
   ClipboardList,
   Building2,
   Calendar,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/auth";
@@ -143,9 +144,10 @@ export function PatientSidebar({
             variant="ghost"
             size="icon"
             onClick={onMobileClose}
-            className="text-gray-400 hover:text-white hover:bg-white/10"
+            className="text-gray-400 hover:text-white hover:bg-white/10 min-h-[44px] min-w-[44px]"
+            aria-label="Close menu"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <X className="h-5 w-5" />
           </Button>
         )}
       </div>

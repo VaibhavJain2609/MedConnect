@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
@@ -357,6 +358,16 @@ async def create_appointment(
     db.add(appt)
     await db.flush()
     await db.refresh(appt)
+
+    # Schedule reminders fire-and-forget (non-blocking)
+    try:
+        from app.workers.scheduler import schedule_appointment_reminders
+        asyncio.create_task(
+            schedule_appointment_reminders(str(appt.id), appt.scheduled_at)
+        )
+    except Exception:
+        pass  # reminder scheduling is non-critical
+
     return await _load_appointment_with_names(db, appt)
 
 

@@ -105,14 +105,42 @@ export default function PrescriptionPrintPage() {
         }
       `}</style>
 
-      {/* Print / Close buttons */}
-      <div className="no-print flex gap-3 p-4 border-b bg-gray-50">
+      {/* Action buttons */}
+      <div className="no-print flex flex-wrap gap-3 p-4 border-b bg-gray-50">
         <button
           onClick={() => window.print()}
           className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
         >
           Print
         </button>
+        <a
+          href={`/api/v1/prescriptions/${id}/pdf?download=true`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors"
+        >
+          Download PDF
+        </a>
+        <a
+          href={`/api/v1/prescriptions/${id}/pdf`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-4 py-2 border border-gray-300 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+        >
+          Preview PDF
+        </a>
+        {data && (
+          <a
+            href={`https://wa.me/?text=${encodeURIComponent(
+              `Here is your prescription from ${data.doctor?.name ? `Dr. ${data.doctor.name}` : "your doctor"}. Please keep this for your records. Prescription ID: ${id}`
+            )}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-4 py-2 bg-green-500 text-white text-sm font-medium rounded-lg hover:bg-green-600 transition-colors"
+          >
+            Share on WhatsApp
+          </a>
+        )}
         <Link
           href="/doctor/prescriptions"
           className="px-4 py-2 border border-gray-300 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"

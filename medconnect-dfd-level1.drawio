@@ -1,0 +1,464 @@
+<mxfile host="app.diagrams.net" modified="2026-03-25T00:00:00.000Z" agent="Claude Code" version="24.0.0" type="device">
+  <diagram id="medconnect-dfd-l1" name="DFD Level 1 - MedConnect">
+    <mxGraphModel dx="1800" dy="1200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="3000" pageHeight="4000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- ════════════════════════════════ -->
+        <!-- TITLE                            -->
+        <!-- ════════════════════════════════ -->
+        <mxCell id="title" value="MedConnect — DFD Level 1 (with Consent Flow)" style="text;html=1;fontSize=22;fontStyle=1;align=center;fontColor=#1A1D1F;fontFamily=Arial;" vertex="1" parent="1">
+          <mxGeometry x="600" y="20" width="600" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- ════════════════════════════════ -->
+        <!-- EXTERNAL ENTITIES               -->
+        <!-- ════════════════════════════════ -->
+        <mxCell id="patient" value="Patient" style="shape=actor;whiteSpace=wrap;html=1;fillColor=#4169E1;fontColor=#FFFFFF;strokeColor=#2850B8;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="400" width="80" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="doctor" value="Doctor" style="shape=actor;whiteSpace=wrap;html=1;fillColor=#4169E1;fontColor=#FFFFFF;strokeColor=#2850B8;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="1200" width="80" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="admin" value="Admin" style="shape=actor;whiteSpace=wrap;html=1;fillColor=#4169E1;fontColor=#FFFFFF;strokeColor=#2850B8;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="1900" width="80" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- ════════════════════════════════ -->
+        <!-- DATA STORES                     -->
+        <!-- ════════════════════════════════ -->
+        <mxCell id="d1" value="D1: Keycloak&#xa;(Identity Provider)" style="shape=partialRectangle;top=0;left=0;right=0;bottom=1;fillColor=#F5F7FA;strokeColor=#6B7280;fontColor=#1A1D1F;fontSize=12;fontStyle=1;align=center;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="1500" y="120" width="220" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="d2" value="D2: Main Database (PostgreSQL)&#xa;Users, Doctors, Patients, Records,&#xa;Prescriptions, Appointments, Clinics,&#xa;Vitals, Notifications, Audit Logs" style="shape=partialRectangle;top=0;left=0;right=0;bottom=1;fillColor=#F5F7FA;strokeColor=#6B7280;fontColor=#1A1D1F;fontSize=11;fontStyle=0;align=center;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="1500" y="350" width="280" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="d3" value="D3: Medicine Database (PostgreSQL)&#xa;Salts, Brands, Manufacturers,&#xa;DrugInteractions, SideEffects" style="shape=partialRectangle;top=0;left=0;right=0;bottom=1;fillColor=#F5F7FA;strokeColor=#6B7280;fontColor=#1A1D1F;fontSize=11;fontStyle=0;align=center;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="1500" y="1350" width="260" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="d4" value="D4: Redis&#xa;(Cache &amp; Sessions)" style="shape=partialRectangle;top=0;left=0;right=0;bottom=1;fillColor=#F5F7FA;strokeColor=#6B7280;fontColor=#1A1D1F;fontSize=12;fontStyle=1;align=center;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="1500" y="2200" width="220" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="d5" value="D5: PatientLinkCode&#xa;(Short-lived codes with expiry)" style="shape=partialRectangle;top=0;left=0;right=0;bottom=1;fillColor=#FFF7ED;strokeColor=#D97706;fontColor=#1A1D1F;fontSize=11;fontStyle=0;align=center;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="1500" y="620" width="250" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="d6" value="D6: PatientClinicLink&#xa;(consent_status: pending | approved | revoked)" style="shape=partialRectangle;top=0;left=0;right=0;bottom=1;fillColor=#FFF7ED;strokeColor=#D97706;fontColor=#1A1D1F;fontSize=11;fontStyle=0;align=center;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="1500" y="780" width="300" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- ════════════════════════════════ -->
+        <!-- PROCESS 1.0 - Authentication    -->
+        <!-- ════════════════════════════════ -->
+        <mxCell id="p1" value="1.0&#xa;Authentication&#xa;&amp; Authorization" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4169E1;fontColor=#1A1D1F;fontSize=13;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="500" y="100" width="200" height="120" as="geometry" />
+        </mxCell>
+        <!-- Patient -> P1 -->
+        <mxCell id="e_pat_p1" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#333333;" edge="1" source="patient" target="p1" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="credentials" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- Doctor -> P1 -->
+        <mxCell id="e_doc_p1" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#333333;" edge="1" source="doctor" target="p1" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="credentials" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- Admin -> P1 -->
+        <mxCell id="e_adm_p1" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#333333;" edge="1" source="admin" target="p1" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="credentials" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- P1 <-> D1 -->
+        <mxCell id="e_p1_d1" style="strokeColor=#333333;" edge="1" source="p1" target="d1" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="token validation, roles, JWKS" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- P1 -> D2 -->
+        <mxCell id="e_p1_d2" style="strokeColor=#333333;" edge="1" source="p1" target="d2" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="auto-provision user" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+
+        <!-- ════════════════════════════════ -->
+        <!-- PROCESS 2.0 - Patient Mgmt      -->
+        <!-- ════════════════════════════════ -->
+        <mxCell id="p2" value="2.0&#xa;Patient&#xa;Management" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4169E1;fontColor=#1A1D1F;fontSize=13;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="500" y="320" width="200" height="120" as="geometry" />
+        </mxCell>
+        <!-- Patient -> P2 -->
+        <mxCell id="e_pat_p2" style="strokeColor=#333333;" edge="1" source="patient" target="p2" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="vitals, records, history" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- P2 -> Patient -->
+        <mxCell id="e_p2_pat" style="strokeColor=#333333;dashed=1;" edge="1" source="p2" target="patient" parent="1">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="400" y="420" /></Array></mxGeometry>
+          <mxCell value="timeline, health data" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- P2 <-> D2 -->
+        <mxCell id="e_p2_d2" style="strokeColor=#333333;" edge="1" source="p2" target="d2" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="read/write patient data" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+
+        <!-- ════════════════════════════════════════════ -->
+        <!-- PROCESS 3.0 - Consent Flow (expanded)       -->
+        <!-- ════════════════════════════════════════════ -->
+        <mxCell id="p3_group" value="3.0 Clinic &amp; Patient Linking (Consent Flow)" style="swimlane;startSize=30;fillColor=#F0F4FF;strokeColor=#4169E1;fontColor=#1A1D1F;fontSize=14;fontStyle=1;rounded=1;arcSize=8;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="350" y="520" width="700" height="480" as="geometry" />
+        </mxCell>
+
+        <!-- 3.1 Generate Link Code -->
+        <mxCell id="p3_1" value="3.1&#xa;Generate&#xa;Link Code" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D97706;fontColor=#1A1D1F;fontSize=12;fontStyle=1;strokeWidth=2;" vertex="1" parent="p3_group">
+          <mxGeometry x="30" y="60" width="150" height="90" as="geometry" />
+        </mxCell>
+        <!-- 3.2 Submit Link Code -->
+        <mxCell id="p3_2" value="3.2&#xa;Submit&#xa;Link Code" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D97706;fontColor=#1A1D1F;fontSize=12;fontStyle=1;strokeWidth=2;" vertex="1" parent="p3_group">
+          <mxGeometry x="350" y="60" width="150" height="90" as="geometry" />
+        </mxCell>
+        <!-- 3.3 Review & Approve -->
+        <mxCell id="p3_3" value="3.3&#xa;Review &amp;&#xa;Approve/Reject" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D97706;fontColor=#1A1D1F;fontSize=12;fontStyle=1;strokeWidth=2;" vertex="1" parent="p3_group">
+          <mxGeometry x="30" y="210" width="150" height="90" as="geometry" />
+        </mxCell>
+        <!-- 3.4 Revoke Consent -->
+        <mxCell id="p3_4" value="3.4&#xa;Revoke&#xa;Consent" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#DC2626;fontColor=#1A1D1F;fontSize=12;fontStyle=1;strokeWidth=2;" vertex="1" parent="p3_group">
+          <mxGeometry x="30" y="360" width="150" height="90" as="geometry" />
+        </mxCell>
+        <!-- 3.5 Check Consent & Serve -->
+        <mxCell id="p3_5" value="3.5&#xa;Check Consent&#xa;&amp; Serve Data" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#16A34A;fontColor=#1A1D1F;fontSize=12;fontStyle=1;strokeWidth=2;" vertex="1" parent="p3_group">
+          <mxGeometry x="350" y="270" width="170" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- 3.1 -> 3.2 (code shared out-of-band) -->
+        <mxCell id="e_31_32" style="strokeColor=#D97706;dashed=1;" edge="1" source="p3_1" target="p3_2" parent="p3_group">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="code shared (out-of-band)" style="edgeLabel;fontSize=10;fontColor=#D97706;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- 3.2 -> 3.3 (link created, pending) -->
+        <mxCell id="e_32_33" style="strokeColor=#333333;" edge="1" source="p3_2" target="p3_3" parent="p3_group">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="link request (pending)" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- 3.3 -> 3.5 (approved) -->
+        <mxCell id="e_33_35" style="strokeColor=#16A34A;strokeWidth=2;" edge="1" source="p3_3" target="p3_5" parent="p3_group">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="consent approved" style="edgeLabel;fontSize=10;fontColor=#16A34A;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- 3.4 -> 3.5 (revoked) -->
+        <mxCell id="e_34_35" style="strokeColor=#DC2626;strokeWidth=2;" edge="1" source="p3_4" target="p3_5" parent="p3_group">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="consent revoked (access removed)" style="edgeLabel;fontSize=10;fontColor=#DC2626;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+
+        <!-- Patient -> 3.1 -->
+        <mxCell id="e_pat_31" style="strokeColor=#333333;" edge="1" source="patient" target="p3_1" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="request link code" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- 3.1 -> Patient (code) -->
+        <mxCell id="e_31_pat" style="strokeColor=#333333;dashed=1;" edge="1" source="p3_1" target="patient" parent="1">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="300" y="600" /></Array></mxGeometry>
+          <mxCell value="link code" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- 3.1 -> D5 -->
+        <mxCell id="e_31_d5" style="strokeColor=#D97706;" edge="1" source="p3_1" target="d5" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="store code (with expiry)" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- Doctor -> 3.2 -->
+        <mxCell id="e_doc_32" style="strokeColor=#333333;" edge="1" source="doctor" target="p3_2" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="submit patient link code" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- 3.2 -> D5 (validate) -->
+        <mxCell id="e_32_d5" style="strokeColor=#D97706;" edge="1" source="p3_2" target="d5" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="validate &amp; consume" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- 3.2 -> D6 (create link) -->
+        <mxCell id="e_32_d6" style="strokeColor=#D97706;" edge="1" source="p3_2" target="d6" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="create link (pending)" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- Patient -> 3.3 -->
+        <mxCell id="e_pat_33" style="strokeColor=#333333;" edge="1" source="patient" target="p3_3" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="approve / reject" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- 3.3 -> D6 (update status) -->
+        <mxCell id="e_33_d6" style="strokeColor=#D97706;" edge="1" source="p3_3" target="d6" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="update status" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- 3.3 -> Doctor (consent result) -->
+        <mxCell id="e_33_doc" style="strokeColor=#333333;dashed=1;" edge="1" source="p3_3" target="doctor" parent="1">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="280" y="800" /></Array></mxGeometry>
+          <mxCell value="consent result" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- Patient -> 3.4 -->
+        <mxCell id="e_pat_34" style="strokeColor=#DC2626;" edge="1" source="patient" target="p3_4" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="revoke consent" style="edgeLabel;fontSize=10;fontColor=#DC2626;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- 3.4 -> D6 -->
+        <mxCell id="e_34_d6" style="strokeColor=#DC2626;" edge="1" source="p3_4" target="d6" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="status → revoked" style="edgeLabel;fontSize=10;fontColor=#DC2626;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- 3.4 -> Doctor (revoked notification) -->
+        <mxCell id="e_34_doc" style="strokeColor=#DC2626;dashed=1;" edge="1" source="p3_4" target="doctor" parent="1">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="250" y="950" /></Array></mxGeometry>
+          <mxCell value="access revoked" style="edgeLabel;fontSize=10;fontColor=#DC2626;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- Doctor -> 3.5 -->
+        <mxCell id="e_doc_35" style="strokeColor=#333333;" edge="1" source="doctor" target="p3_5" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="request patient data&#xa;(X-Clinic-Id)" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- 3.5 -> D6 (check consent) -->
+        <mxCell id="e_35_d6" style="strokeColor=#D97706;" edge="1" source="p3_5" target="d6" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="check consent status" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- 3.5 <-> D2 (fetch patient data) -->
+        <mxCell id="e_35_d2" style="strokeColor=#333333;" edge="1" source="p3_5" target="d2" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="fetch patient data&#xa;(if approved)" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- 3.5 -> Doctor (data or denied) -->
+        <mxCell id="e_35_doc" style="strokeColor=#16A34A;dashed=1;" edge="1" source="p3_5" target="doctor" parent="1">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="300" y="870" /></Array></mxGeometry>
+          <mxCell value="patient data or access denied" style="edgeLabel;fontSize=10;fontColor=#16A34A;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+
+        <!-- ════════════════════════════════ -->
+        <!-- PROCESS 4.0 - Prescriptions     -->
+        <!-- ════════════════════════════════ -->
+        <mxCell id="p4" value="4.0&#xa;Prescription&#xa;Management" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4169E1;fontColor=#1A1D1F;fontSize=13;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="500" y="1100" width="200" height="120" as="geometry" />
+        </mxCell>
+        <!-- Doctor -> P4 -->
+        <mxCell id="e_doc_p4" style="strokeColor=#333333;" edge="1" source="doctor" target="p4" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="Rx details, medicine list (JSONB)" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- P4 -> Doctor -->
+        <mxCell id="e_p4_doc" style="strokeColor=#333333;dashed=1;" edge="1" source="p4" target="doctor" parent="1">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="350" y="1200" /></Array></mxGeometry>
+          <mxCell value="Rx history" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- P4 -> Patient -->
+        <mxCell id="e_p4_pat" style="strokeColor=#333333;dashed=1;" edge="1" source="p4" target="patient" parent="1">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="200" y="1100" /></Array></mxGeometry>
+          <mxCell value="prescriptions" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- P4 <-> D2 -->
+        <mxCell id="e_p4_d2" style="strokeColor=#333333;" edge="1" source="p4" target="d2" parent="1">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1400" y="1100" /></Array></mxGeometry>
+          <mxCell value="read/write prescriptions" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- 3.5 -> P4 (consent verified) -->
+        <mxCell id="e_35_p4" style="strokeColor=#16A34A;dashed=1;strokeWidth=2;" edge="1" source="p3_5" target="p4" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="consent verified → allow Rx" style="edgeLabel;fontSize=10;fontColor=#16A34A;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+
+        <!-- ════════════════════════════════ -->
+        <!-- PROCESS 5.0 - Medicine Lookup   -->
+        <!-- ════════════════════════════════ -->
+        <mxCell id="p5" value="5.0&#xa;Medicine &amp;&#xa;Interaction Lookup" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4169E1;fontColor=#1A1D1F;fontSize=13;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="500" y="1320" width="200" height="120" as="geometry" />
+        </mxCell>
+        <!-- P4 -> P5 (drug lookup) -->
+        <mxCell id="e_p4_p5" style="strokeColor=#333333;dashed=1;" edge="1" source="p4" target="p5" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="drug lookup" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- Doctor -> P5 -->
+        <mxCell id="e_doc_p5" style="strokeColor=#333333;" edge="1" source="doctor" target="p5" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="search query" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- P5 -> Doctor -->
+        <mxCell id="e_p5_doc" style="strokeColor=#333333;dashed=1;" edge="1" source="p5" target="doctor" parent="1">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="300" y="1400" /></Array></mxGeometry>
+          <mxCell value="results, interactions" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- P5 <-> D3 -->
+        <mxCell id="e_p5_d3" style="strokeColor=#333333;" edge="1" source="p5" target="d3" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="query salts, brands, interactions" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+
+        <!-- ════════════════════════════════ -->
+        <!-- PROCESS 6.0 - Appointments      -->
+        <!-- ════════════════════════════════ -->
+        <mxCell id="p6" value="6.0&#xa;Appointment&#xa;Scheduling" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4169E1;fontColor=#1A1D1F;fontSize=13;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="500" y="1540" width="200" height="120" as="geometry" />
+        </mxCell>
+        <!-- Patient -> P6 -->
+        <mxCell id="e_pat_p6" style="strokeColor=#333333;" edge="1" source="patient" target="p6" parent="1">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="200" y="1580" /></Array></mxGeometry>
+          <mxCell value="book / cancel" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- P6 -> Patient -->
+        <mxCell id="e_p6_pat" style="strokeColor=#333333;dashed=1;" edge="1" source="p6" target="patient" parent="1">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="250" y="1550" /></Array></mxGeometry>
+          <mxCell value="appointment status" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- Doctor -> P6 -->
+        <mxCell id="e_doc_p6" style="strokeColor=#333333;" edge="1" source="doctor" target="p6" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="status update&#xa;(scheduled → completed)" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- P6 <-> D2 -->
+        <mxCell id="e_p6_d2" style="strokeColor=#333333;" edge="1" source="p6" target="d2" parent="1">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1400" y="1600" /></Array></mxGeometry>
+          <mxCell value="read/write appointments" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+
+        <!-- ════════════════════════════════ -->
+        <!-- PROCESS 7.0 - Administration    -->
+        <!-- ════════════════════════════════ -->
+        <mxCell id="p7" value="7.0&#xa;Administration &amp;&#xa;Doctor Onboarding" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4169E1;fontColor=#1A1D1F;fontSize=13;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="500" y="1800" width="200" height="120" as="geometry" />
+        </mxCell>
+        <!-- Admin -> P7 -->
+        <mxCell id="e_adm_p7" style="strokeColor=#333333;" edge="1" source="admin" target="p7" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="verify doctors, manage users" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- P7 -> Admin -->
+        <mxCell id="e_p7_adm" style="strokeColor=#333333;dashed=1;" edge="1" source="p7" target="admin" parent="1">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="350" y="1900" /></Array></mxGeometry>
+          <mxCell value="reports, audit logs" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- P7 <-> D2 -->
+        <mxCell id="e_p7_d2" style="strokeColor=#333333;" edge="1" source="p7" target="d2" parent="1">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1400" y="1850" /></Array></mxGeometry>
+          <mxCell value="read/write users, doctors, logs" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+
+        <!-- ════════════════════════════════ -->
+        <!-- PROCESS 8.0 - Medicine Admin    -->
+        <!-- ════════════════════════════════ -->
+        <mxCell id="p8" value="8.0&#xa;Medicine&#xa;Catalog Admin" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4169E1;fontColor=#1A1D1F;fontSize=13;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="500" y="2000" width="200" height="120" as="geometry" />
+        </mxCell>
+        <!-- Admin -> P8 -->
+        <mxCell id="e_adm_p8" style="strokeColor=#333333;" edge="1" source="admin" target="p8" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="CRUD salts, brands, manufacturers" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- P8 -> Admin -->
+        <mxCell id="e_p8_adm" style="strokeColor=#333333;dashed=1;" edge="1" source="p8" target="admin" parent="1">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="300" y="2050" /></Array></mxGeometry>
+          <mxCell value="catalog data" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- P8 <-> D3 -->
+        <mxCell id="e_p8_d3" style="strokeColor=#333333;" edge="1" source="p8" target="d3" parent="1">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1400" y="2050" /></Array></mxGeometry>
+          <mxCell value="read/write medicine catalog" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+
+        <!-- ════════════════════════════════ -->
+        <!-- PROCESS 9.0 - Notifications     -->
+        <!-- ════════════════════════════════ -->
+        <mxCell id="p9" value="9.0&#xa;Notifications &amp;&#xa;Real-time Events" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4169E1;fontColor=#1A1D1F;fontSize=13;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="900" y="2150" width="200" height="120" as="geometry" />
+        </mxCell>
+        <!-- P2 -> P9 -->
+        <mxCell id="e_p2_p9" style="strokeColor=#6B7280;dashed=1;" edge="1" source="p2" target="p9" parent="1">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1100" y="380" /></Array></mxGeometry>
+          <mxCell value="event trigger" style="edgeLabel;fontSize=10;fontColor=#6B7280;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- P4 -> P9 -->
+        <mxCell id="e_p4_p9" style="strokeColor=#6B7280;dashed=1;" edge="1" source="p4" target="p9" parent="1">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1100" y="1160" /></Array></mxGeometry>
+          <mxCell value="event trigger" style="edgeLabel;fontSize=10;fontColor=#6B7280;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- P6 -> P9 -->
+        <mxCell id="e_p6_p9" style="strokeColor=#6B7280;dashed=1;" edge="1" source="p6" target="p9" parent="1">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1100" y="1600" /></Array></mxGeometry>
+          <mxCell value="event trigger" style="edgeLabel;fontSize=10;fontColor=#6B7280;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- 3.3 -> P9 (consent event) -->
+        <mxCell id="e_33_p9" style="strokeColor=#D97706;dashed=1;" edge="1" source="p3_3" target="p9" parent="1">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1100" y="780" /></Array></mxGeometry>
+          <mxCell value="consent event" style="edgeLabel;fontSize=10;fontColor=#D97706;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- 3.4 -> P9 (revoke event) -->
+        <mxCell id="e_34_p9" style="strokeColor=#DC2626;dashed=1;" edge="1" source="p3_4" target="p9" parent="1">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1100" y="920" /></Array></mxGeometry>
+          <mxCell value="revoke event" style="edgeLabel;fontSize=10;fontColor=#DC2626;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- P9 -> Patient -->
+        <mxCell id="e_p9_pat" style="strokeColor=#333333;dashed=1;" edge="1" source="p9" target="patient" parent="1">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="200" y="2200" /></Array></mxGeometry>
+          <mxCell value="alerts" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- P9 -> Doctor -->
+        <mxCell id="e_p9_doc" style="strokeColor=#333333;dashed=1;" edge="1" source="p9" target="doctor" parent="1">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="250" y="2180" /></Array></mxGeometry>
+          <mxCell value="alerts" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- P9 -> Admin -->
+        <mxCell id="e_p9_adm" style="strokeColor=#333333;dashed=1;" edge="1" source="p9" target="admin" parent="1">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="300" y="2220" /></Array></mxGeometry>
+          <mxCell value="alerts" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- P9 <-> D2 -->
+        <mxCell id="e_p9_d2" style="strokeColor=#333333;" edge="1" source="p9" target="d2" parent="1">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1500" y="2200" /></Array></mxGeometry>
+          <mxCell value="read/write notifications" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <!-- P9 <-> D4 -->
+        <mxCell id="e_p9_d4" style="strokeColor=#333333;" edge="1" source="p9" target="d4" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="cache, real-time state" style="edgeLabel;fontSize=10;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+
+        <!-- ════════════════════════════════ -->
+        <!-- CONSENT STATE MACHINE (Legend)  -->
+        <!-- ════════════════════════════════ -->
+        <mxCell id="legend_box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#D97706;strokeWidth=2;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1350" y="920" width="440" height="250" as="geometry" />
+        </mxCell>
+        <mxCell id="legend_title" value="Consent State Machine" style="text;html=1;fontSize=14;fontStyle=1;align=center;fontColor=#D97706;" vertex="1" parent="1">
+          <mxGeometry x="1440" y="930" width="250" height="30" as="geometry" />
+        </mxCell>
+        <!-- States -->
+        <mxCell id="s_none" value="(no link)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#E5E7EB;strokeColor=#6B7280;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1380" y="980" width="100" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="s_pending" value="pending" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#D97706;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1540" y="980" width="100" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="s_approved" value="approved" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DCFCE7;strokeColor=#16A34A;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1660" y="1060" width="100" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="s_revoked" value="revoked" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FEE2E2;strokeColor=#DC2626;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1540" y="1100" width="100" height="50" as="geometry" />
+        </mxCell>
+        <!-- State transitions -->
+        <mxCell id="st_1" style="strokeColor=#333333;" edge="1" source="s_none" target="s_pending" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="link code submitted" style="edgeLabel;fontSize=9;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <mxCell id="st_2" style="strokeColor=#16A34A;" edge="1" source="s_pending" target="s_approved" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="patient approves" style="edgeLabel;fontSize=9;fontColor=#16A34A;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <mxCell id="st_3" style="strokeColor=#6B7280;" edge="1" source="s_pending" target="s_none" parent="1">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1460" y="1060" /></Array></mxGeometry>
+          <mxCell value="patient rejects" style="edgeLabel;fontSize=9;fontColor=#6B7280;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+        <mxCell id="st_4" style="strokeColor=#DC2626;" edge="1" source="s_approved" target="s_revoked" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <mxCell value="patient revokes" style="edgeLabel;fontSize=9;fontColor=#DC2626;" vertex="1" connectable="0" as="label"><mxGeometry relative="1" as="geometry" /></mxCell>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

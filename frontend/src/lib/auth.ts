@@ -19,7 +19,7 @@ export async function initKeycloak(): Promise<boolean> {
 
   // Already initialized — just return current state
   if (initialized) {
-    return !!keycloak.authenticated;
+    return !!keycloak?.authenticated;
   }
 
   // In-flight — return the same promise to avoid double-init
@@ -27,9 +27,11 @@ export async function initKeycloak(): Promise<boolean> {
     return initPromise;
   }
 
+  if (!keycloak) return false;
+
   initPromise = (async () => {
   try {
-    const authenticated = await keycloak.init({
+    const authenticated = await keycloak!.init({
       onLoad: "check-sso",
       pkceMethod: "S256",
       checkLoginIframe: false,
@@ -38,10 +40,10 @@ export async function initKeycloak(): Promise<boolean> {
 
     initialized = true;
 
-    if (authenticated && keycloak.token) {
+    if (authenticated && keycloak!.token) {
       // Set up auto-refresh
-      keycloak.onTokenExpired = () => {
-        keycloak.updateToken(30).catch(() => {
+      keycloak!.onTokenExpired = () => {
+        keycloak!.updateToken(30).catch(() => {
           console.warn("Token refresh failed");
         });
       };

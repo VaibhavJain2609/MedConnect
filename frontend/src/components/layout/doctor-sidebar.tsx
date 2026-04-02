@@ -15,6 +15,7 @@ import {
   Building2,
   UserPlus,
   Calendar,
+  ListOrdered,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/auth";
@@ -50,6 +51,7 @@ const navSections: NavSection[] = [
     items: [
       { href: "/doctor/patients", label: "My Patients", icon: Users },
       { href: "/doctor/prescriptions", label: "My Prescriptions", icon: Pill },
+      { href: "/doctor/queue", label: "Queue", icon: ListOrdered },
       { href: "/doctor/clinic", label: "My Clinic", icon: Building2 },
       { href: "/doctor/patients/link", label: "Link Patient", icon: UserPlus },
     ],

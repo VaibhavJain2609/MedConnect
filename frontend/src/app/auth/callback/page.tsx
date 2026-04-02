@@ -29,7 +29,7 @@ export default function AuthCallbackPage() {
           await api.post("/api/v1/auth/set-role", { role: "doctor" });
           sessionStorage.removeItem("register_intent");
           // Force Keycloak to issue a new token with the doctor role
-          await keycloak.updateToken(-1);
+          await keycloak?.updateToken(-1);
           // Re-fetch user from backend with the refreshed token
           await fetchUser();
           router.replace("/doctor/onboarding");

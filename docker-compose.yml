@@ -98,11 +98,42 @@ services:
       sh -c "alembic upgrade head &&
              uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 
+  reminder-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: arq app.workers.reminder_worker.WorkerSettings
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/medconnect
+      DATABASE_URL_SYNC: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/medconnect
+      MEDICINE_DB_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/medconnect_medicines
+      MEDICINE_DB_URL_SYNC: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/medconnect_medicines
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: medconnect
+      KEYCLOAK_CLIENT_ID: medconnect-backend
+      APP_ENV: development
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import os; os.kill(1, 0)\" 2>/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    command: npm run dev
     environment:
+      NODE_ENV: development
       NEXT_PUBLIC_API_URL: http://localhost:8000
       NEXT_PUBLIC_KEYCLOAK_URL: http://localhost:8080
       NEXT_PUBLIC_KEYCLOAK_REALM: medconnect
