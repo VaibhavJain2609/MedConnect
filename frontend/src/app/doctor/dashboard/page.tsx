@@ -7,7 +7,7 @@ import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { FilePlus, FileText, Pill, Users } from "lucide-react";
 
 export default function DoctorDashboard() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["doctor-patients"],
     queryFn: async () => {
       const res = await api.get("/api/v1/doctors/patients?limit=50");
@@ -79,6 +79,11 @@ export default function DoctorDashboard() {
         {isLoading ? (
           <div className="flex justify-center py-12">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
+          </div>
+        ) : isError ? (
+          <div className="py-12 text-center">
+            <p className="text-red-500 font-medium">Failed to load patients.</p>
+            <p className="mt-1 text-sm text-dreams-textSecondary">Please refresh the page or try again later.</p>
           </div>
         ) : data?.data?.length === 0 ? (
           <div className="py-12 text-center">

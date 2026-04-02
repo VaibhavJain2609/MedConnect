@@ -44,10 +44,18 @@ async def download_prescription_pdf(
     # Authorization check
     is_patient = current_user.role == "patient" and prescription.patient_id == current_user.id
 
-    # For doctor authorization, check if doctor_profile exists and matches
+    # For doctor authorization, load Doctor profile explicitly (avoid lazy load in async context)
     is_doctor = False
-    if current_user.role == "doctor" and current_user.doctor_profile:
-        is_doctor = prescription.doctor_id == current_user.doctor_profile.id
+    if current_user.role == "doctor":
+        doctor_profile_result = await db.execute(
+            select(Doctor).where(
+                Doctor.user_id == current_user.id,
+                Doctor.deleted_at.is_(None),
+            )
+        )
+        doctor_profile = doctor_profile_result.scalar_one_or_none()
+        if doctor_profile:
+            is_doctor = prescription.doctor_id == doctor_profile.id
 
     if not (is_patient or is_doctor):
         raise HTTPException(
@@ -55,18 +63,36 @@ async def download_prescription_pdf(
             detail={"error": {"code": "FORBIDDEN", "message": "Not authorized"}},
         )
 
-    # Fetch doctor and patient
+    # Fetch doctor (who created the prescription)
     doctor_stmt = select(Doctor).where(Doctor.id == prescription.doctor_id)
     doctor_result = await db.execute(doctor_stmt)
-    doctor = doctor_result.scalar_one()
+    doctor = doctor_result.scalar_one_or_none()
+
+    if not doctor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "NOT_FOUND", "message": "Doctor not found"}},
+        )
 
     doctor_user_stmt = select(User).where(User.id == doctor.user_id)
     doctor_user_result = await db.execute(doctor_user_stmt)
-    doctor_user = doctor_user_result.scalar_one()
+    doctor_user = doctor_user_result.scalar_one_or_none()
+
+    if not doctor_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "NOT_FOUND", "message": "Doctor user not found"}},
+        )
 
     patient_stmt = select(User).where(User.id == prescription.patient_id)
     patient_result = await db.execute(patient_stmt)
-    patient = patient_result.scalar_one()
+    patient = patient_result.scalar_one_or_none()
+
+    if not patient:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "NOT_FOUND", "message": "Patient not found"}},
+        )
 
     # Generate PDF
     pdf_buffer = generate_prescription_pdf(

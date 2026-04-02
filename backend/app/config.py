@@ -45,6 +45,10 @@ class Settings(BaseSettings):
                 raise ValueError("REDIS_URL must be set to a real Redis URL in production")
             if "localhost" in self.FRONTEND_URL:
                 raise ValueError("FRONTEND_URL must be set to a real production URL in production")
+            if self.KEYCLOAK_ADMIN_USER == "admin" and self.KEYCLOAK_ADMIN_PASSWORD == "admin":
+                raise ValueError("KEYCLOAK_ADMIN_USER and KEYCLOAK_ADMIN_PASSWORD must be changed from defaults in production")
+            if self.STORAGE_BACKEND == "local" and self.UPLOADS_DIR.startswith("/tmp"):
+                raise ValueError("UPLOADS_DIR must not use /tmp in production; set STORAGE_BACKEND=s3 or use a persistent path")
         return self
 
     class Config:

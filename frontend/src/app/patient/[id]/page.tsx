@@ -576,12 +576,12 @@ export default function PatientDetailsPage() {
                           <div className="flex items-center gap-3 ml-4">
                             <span className="text-xs text-dreams-textSecondary">{new Date(rx.created_at).toLocaleDateString()}</span>
                             <a
-                              href={`/doctor/prescriptions/${rx.id}/print`}
+                              href={`/api/v1/prescriptions/${rx.id}/pdf`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="px-3 py-1 text-xs bg-dreams-blue text-white rounded-lg hover:opacity-90 transition-opacity"
                             >
-                              View / Print
+                              Download PDF
                             </a>
                           </div>
                         </div>
