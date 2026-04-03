@@ -174,14 +174,16 @@ async def get_record_detail(
     if user_role == "patient":
         stmt = stmt.where(MedicalRecord.patient_id == user_id)
     elif user_role == "doctor":
-        doctor_result = await db.execute(
-            select(Doctor.id).where(Doctor.user_id == user_id, Doctor.deleted_at.is_(None))
+        # MD-382: Correlated subquery avoids a separate Doctor-lookup round-trip.
+        # If no Doctor row exists for this user, the subquery returns NULL and no
+        # record is matched (SQL NULL comparison is always false).
+        doctor_id_subq = (
+            select(Doctor.id)
+            .where(Doctor.user_id == user_id, Doctor.deleted_at.is_(None))
+            .limit(1)
+            .scalar_subquery()
         )
-        doctor_id = doctor_result.scalar_one_or_none()
-        if doctor_id:
-            stmt = stmt.where(MedicalRecord.doctor_id == doctor_id)
-        else:
-            return None
+        stmt = stmt.where(MedicalRecord.doctor_id == doctor_id_subq)
 
     result = await db.execute(stmt)
     return result.scalar_one_or_none()

@@ -1,3 +1,5 @@
+import logging
+import time
 import uuid
 
 from fastapi import Depends, Header, HTTPException, status
@@ -14,10 +16,13 @@ from app.utils.security import decode_keycloak_token
 
 security = HTTPBearer(auto_error=False)
 
-
-import logging
-
 _logger = logging.getLogger(__name__)
+
+# MD-383: Short-lived in-process user cache keyed by Keycloak sub.
+# Avoids a DB round-trip on every request for already-provisioned users.
+# A role mismatch forces a cache miss so role changes propagate within TTL.
+_user_cache: dict[str, tuple[float, User]] = {}
+_USER_CACHE_TTL = 30.0  # seconds
 
 
 async def get_current_user(
@@ -45,12 +50,6 @@ async def get_current_user(
             detail={"error": {"code": "UNAUTHORIZED", "message": "Invalid token payload"}},
         )
 
-    # Lookup by keycloak_sub
-    result = await db.execute(
-        select(User).where(User.keycloak_sub == sub, User.deleted_at.is_(None), User.is_active.is_(True))
-    )
-    user = result.scalar_one_or_none()
-
     # Extract role from token claims
     realm_access = payload.get("realm_access", {})
     roles = realm_access.get("roles", [])
@@ -61,6 +60,21 @@ async def get_current_user(
         role = "doctor"
     else:
         role = "patient"
+
+    # MD-383: Fast path — return cached user when role matches (skips DB round-trip).
+    # A role change in Keycloak triggers a cache miss so sync still occurs within TTL.
+    _now = time.monotonic()
+    _cached = _user_cache.get(sub)
+    if _cached is not None and _cached[0] > _now and _cached[1].role == role:
+        from app.services.audit_service import set_audit_user
+        set_audit_user(_cached[1].id)
+        return _cached[1]
+
+    # Lookup by keycloak_sub
+    result = await db.execute(
+        select(User).where(User.keycloak_sub == sub, User.deleted_at.is_(None), User.is_active.is_(True))
+    )
+    user = result.scalar_one_or_none()
 
     if not user:
         # Auto-provision: use INSERT ... ON CONFLICT DO NOTHING to avoid race conditions
@@ -126,6 +140,8 @@ async def get_current_user(
 
     from app.services.audit_service import set_audit_user
     set_audit_user(user.id)
+    # Populate cache for subsequent requests from the same token subject
+    _user_cache[sub] = (time.monotonic() + _USER_CACHE_TTL, user)
     return user
 
 
