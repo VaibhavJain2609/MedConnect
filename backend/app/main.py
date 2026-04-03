@@ -55,13 +55,11 @@ app = FastAPI(
 # CORS Configuration - Allow frontend to access API
 allowed_origins = [settings.FRONTEND_URL]
 
-# In development, also allow localhost variations
+# In development, also allow localhost frontend variations (never add backend ports)
 if settings.APP_ENV == "development":
     allowed_origins.extend([
         "http://localhost:3000",
         "http://127.0.0.1:3000",
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
     ])
 
 app.add_middleware(RateLimitMiddleware)
@@ -191,13 +189,13 @@ async def health():
 
 @app.exception_handler(422)
 async def validation_exception_handler(request: Request, exc):
+    # MD-395: Do not expose Pydantic field names/types — they leak internal schema details
     return JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
         content={
             "error": {
                 "code": "VALIDATION_ERROR",
                 "message": "Invalid request data",
-                "details": exc.errors() if hasattr(exc, "errors") else [],
             }
         },
     )
