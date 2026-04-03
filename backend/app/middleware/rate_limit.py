@@ -36,7 +36,12 @@ _redis_client: aioredis.Redis | None = None
 def _get_redis() -> aioredis.Redis:
     global _redis_client
     if _redis_client is None:
-        _redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+        # MD-384: Explicit pool bound prevents unbounded connection growth under load
+        _redis_client = aioredis.from_url(
+            settings.REDIS_URL,
+            decode_responses=True,
+            max_connections=20,
+        )
     return _redis_client
 
 
@@ -85,8 +90,10 @@ async def _check_limit(
             return False, retry_after
         return True, 0
     except Exception as exc:
-        _logger.error("Redis rate-limit error (%s: %s); failing closed", type(exc).__name__, exc)
-        return False, 1
+        # MD-381: Fail open — allow the request rather than blocking all traffic when
+        # Redis is unavailable. Rate limiting degrades gracefully; availability takes priority.
+        _logger.error("Redis rate-limit error (%s: %s); failing open", type(exc).__name__, exc)
+        return True, 0
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
