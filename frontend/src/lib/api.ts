@@ -8,16 +8,24 @@ const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+// MD-394: Single shared promise so concurrent requests don't each trigger a token refresh
+let _tokenRefreshPromise: Promise<void> | null = null;
+
 api.interceptors.request.use(async (config) => {
   if (typeof window === "undefined") return config;
 
-  if (keycloak && keycloak.authenticated && keycloak.token) {
-    try {
-      await keycloak.updateToken(30);
-    } catch (error) {
-      console.warn("Token refresh failed:", error);
+  if (keycloak && keycloak.authenticated) {
+    if (!_tokenRefreshPromise) {
+      _tokenRefreshPromise = keycloak
+        .updateToken(30)
+        .then(() => {})
+        .catch((err) => { console.warn("Token refresh failed:", err); })
+        .finally(() => { _tokenRefreshPromise = null; });
     }
-    config.headers.Authorization = `Bearer ${keycloak.token}`;
+    await _tokenRefreshPromise;
+    if (keycloak.token) {
+      config.headers.Authorization = `Bearer ${keycloak.token}`;
+    }
   }
 
   // Attach active clinic ID for clinic-scoped endpoints
