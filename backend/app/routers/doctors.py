@@ -586,6 +586,13 @@ async def amend_record(
     _, doctor = doctor_info
     clinic_id = clinic_context[0] if clinic_context else None
 
+    # MD-392: Prevent chained amendments — only original records can be amended
+    if original.amended_from_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"error": {"code": "CANNOT_AMEND_AMENDMENT", "message": "Cannot amend an amendment. Please amend the original record."}},
+        )
+
     # Only the original author can amend
     if original.doctor_id != doctor.id:
         raise HTTPException(
@@ -667,10 +674,27 @@ async def create_rx(
     db: AsyncSession = Depends(get_db),
     clinic_context: tuple | None = Depends(get_active_clinic),
 ):
-    _, doctor = doctor_info
-    # clinic_id: prefer X-Clinic-Id header (existing context); fall back to body field
-    clinic_id = (clinic_context[0] if clinic_context else None) or req.clinic_id
+    user, doctor = doctor_info
+    # clinic_id: prefer X-Clinic-Id header (already validated); fall back to body field
+    clinic_id = clinic_context[0] if clinic_context else None
     branch_id = req.branch_id
+    # MD-391: validate membership when clinic_id comes from body (not header)
+    if not clinic_id and req.clinic_id:
+        from sqlalchemy import select as _select
+        membership_result = await db.execute(
+            _select(ClinicMembership).where(
+                ClinicMembership.clinic_id == req.clinic_id,
+                ClinicMembership.user_id == user.id,
+                ClinicMembership.is_active.is_(True),
+                ClinicMembership.deleted_at.is_(None),
+            )
+        )
+        if not membership_result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "NOT_CLINIC_MEMBER", "message": "Not a member of this clinic"}},
+            )
+        clinic_id = req.clinic_id
     if clinic_id:
         revoked_link = await _check_patient_consent(db, req.patient_id, clinic_id)
         if revoked_link is not None:
