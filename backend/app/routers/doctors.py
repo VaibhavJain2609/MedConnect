@@ -761,6 +761,7 @@ async def list_prescriptions(
     for record, prescription, patient_name in rows_list:
         data.append({
             "id": str(record.id),
+            "prescription_id": str(prescription.id) if prescription else None,
             "patient_id": str(record.patient_id),
             "patient_name": patient_name,
             "record_type": record.record_type,

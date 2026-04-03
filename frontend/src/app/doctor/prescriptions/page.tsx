@@ -19,20 +19,26 @@ export default function DoctorPrescriptionsPage() {
   const [search, setSearch] = useState("");
 
   const [page, setPage] = useState(1);
+  const [cursors, setCursors] = useState<Record<number, string | null>>({ 1: null });
   const [allRecords, setAllRecords] = useState<any[]>([]);
 
   // Reset to page 1 when search changes
-  useEffect(() => { setPage(1); setAllRecords([]); }, [search]);
+  useEffect(() => { setPage(1); setCursors({ 1: null }); setAllRecords([]); }, [search]);
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["doctor-prescriptions", search, page],
     queryFn: async () => {
       const params = new URLSearchParams();
-      params.set("limit", "50");
-      params.set("offset", String((page - 1) * 50));
+      params.set("limit", "20");
+      const cursor = cursors[page] ?? null;
+      if (cursor) params.set("cursor", cursor);
       if (search) params.set("q", search);
 
       const res = await api.get(`/api/v1/doctors/prescriptions?${params}`);
+      const nextCursor = res.data.pagination?.next_cursor ?? null;
+      if (nextCursor) {
+        setCursors((prev) => ({ ...prev, [page + 1]: nextCursor }));
+      }
       if (page === 1) {
         setAllRecords(res.data.data || []);
       } else {
@@ -125,7 +131,7 @@ export default function DoctorPrescriptionsPage() {
                     </span>
                   )}
                   <Link
-                    href={`/doctor/prescriptions/${record.id}/print`}
+                    href={`/doctor/prescriptions/${record.prescription_id || record.id}/print`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-dreams-blue px-3 py-1 text-xs font-medium text-white hover:opacity-90 transition-opacity"

@@ -24,10 +24,11 @@ export default function TimelinePage() {
   const [type, setType] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [cursors, setCursors] = useState<Record<number, string | null>>({ 1: null });
   const [allRecords, setAllRecords] = useState<any[]>([]);
 
   // Reset to page 1 when filters change
-  useEffect(() => { setPage(1); setAllRecords([]); }, [type, search]);
+  useEffect(() => { setPage(1); setCursors({ 1: null }); setAllRecords([]); }, [type, search]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["timeline", type, search, page],
@@ -35,9 +36,14 @@ export default function TimelinePage() {
       const params = new URLSearchParams();
       if (type) params.set("type", type);
       if (search) params.set("q", search);
-      params.set("limit", "50");
-      params.set("offset", String((page - 1) * 50));
+      params.set("limit", "20");
+      const cursor = cursors[page] ?? null;
+      if (cursor) params.set("cursor", cursor);
       const res = await api.get(`/api/v1/patients/timeline?${params}`);
+      const nextCursor = res.data.pagination?.next_cursor ?? null;
+      if (nextCursor) {
+        setCursors((prev) => ({ ...prev, [page + 1]: nextCursor }));
+      }
       if (page === 1) {
         setAllRecords(res.data.data || []);
       } else {
