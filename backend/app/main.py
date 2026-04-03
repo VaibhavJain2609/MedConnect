@@ -27,9 +27,8 @@ from app.routers import uploads
 from app.routers import vitals
 from app.routers import prescriptions_pdf
 from app.routers import billing, revenue, queue
-# TODO MD-264: These routers need missing service modules before enabling
-# from app.routers.admin import components as admin_components
-# from app.routers.admin import medicines as admin_medicines
+from app.routers.admin import components as admin_components
+from app.routers.admin import medicines as admin_medicines
 
 structlog.configure(
     processors=[
@@ -143,8 +142,8 @@ app.include_router(prescriptions_pdf.router)
 app.include_router(billing.router)
 app.include_router(revenue.router)
 app.include_router(queue.router)
-# app.include_router(admin_components.router, prefix="/api/v1")
-# app.include_router(admin_medicines.router, prefix="/api/v1")
+app.include_router(admin_components.router, prefix="/api/v1")
+app.include_router(admin_medicines.router, prefix="/api/v1")
 
 
 @app.get("/health")

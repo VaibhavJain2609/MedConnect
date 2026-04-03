@@ -84,14 +84,18 @@ async def get_current_user(
         )
         user = result.scalar_one()
 
-        # Create Doctor profile if needed (only if we just inserted this user)
+        # Create Doctor profile if needed — INSERT ON CONFLICT to avoid race conditions
         if role == "doctor":
-            doc_result = await db.execute(
-                select(Doctor).where(Doctor.user_id == user.id, Doctor.deleted_at.is_(None))
+            doc_stmt = (
+                pg_insert(Doctor)
+                .values(id=uuid.uuid4(), user_id=user.id)
+                .on_conflict_do_nothing(
+                    index_elements=["user_id"],
+                    index_where=Doctor.deleted_at.is_(None),
+                )
             )
-            if not doc_result.scalar_one_or_none():
-                db.add(Doctor(user_id=user.id))
-                await db.flush()
+            await db.execute(doc_stmt)
+            await db.flush()
     else:
         # Sync: update local user from token claims on every request
         changed = False
@@ -105,12 +109,16 @@ async def get_current_user(
         if user.role != role:
             # Role changed in Keycloak - update locally
             if role == "doctor" and user.role != "doctor":
-                # Became a doctor, create Doctor profile if missing
-                doc_result = await db.execute(
-                    select(Doctor).where(Doctor.user_id == user.id, Doctor.deleted_at.is_(None))
+                # Became a doctor — insert profile, ignore conflict (race-safe)
+                doc_stmt = (
+                    pg_insert(Doctor)
+                    .values(id=uuid.uuid4(), user_id=user.id)
+                    .on_conflict_do_nothing(
+                        index_elements=["user_id"],
+                        index_where=Doctor.deleted_at.is_(None),
+                    )
                 )
-                if not doc_result.scalar_one_or_none():
-                    db.add(Doctor(user_id=user.id))
+                await db.execute(doc_stmt)
             user.role = role
             changed = True
         if changed:

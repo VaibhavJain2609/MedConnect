@@ -597,15 +597,19 @@ export default function NewPrescriptionPage() {
     }
 
     try {
-      await api.post("/api/v1/doctors/prescriptions", {
-        patient_id: selectedPatient.id,
-        medicines: medicinesFormatted,
-        diagnosis: diagnosis || undefined,
-        notes: notes || undefined,
-        clinic_id: selectedClinicId || undefined,
-        branch_id: selectedBranchId || undefined,
-        appointment_id: appointmentId || undefined,
-      });
+      await api.post(
+        "/api/v1/doctors/prescriptions",
+        {
+          patient_id: selectedPatient.id,
+          medicines: medicinesFormatted,
+          diagnosis: diagnosis || undefined,
+          notes: notes || undefined,
+          clinic_id: selectedClinicId || undefined,
+          branch_id: selectedBranchId || undefined,
+          appointment_id: appointmentId || undefined,
+        },
+        selectedClinicId ? { headers: { "X-Clinic-Id": selectedClinicId } } : undefined
+      );
       setSuccess(true);
       setTimeout(() => router.push("/doctor/prescriptions"), 1500);
     } catch (err: any) {
