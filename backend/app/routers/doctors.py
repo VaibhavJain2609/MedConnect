@@ -908,7 +908,7 @@ async def create_prescription_template(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new prescription template for quick reuse."""
-    from app.models.prescription import PrescriptionTemplate
+    from app.models.prescription_template import PrescriptionTemplate
 
     _, doctor = doctor_info
 
@@ -940,7 +940,7 @@ async def list_prescription_templates(
 ):
     """List all prescription templates for the logged-in doctor."""
     from sqlalchemy import select
-    from app.models.prescription import PrescriptionTemplate
+    from app.models.prescription_template import PrescriptionTemplate
 
     _, doctor = doctor_info
 
@@ -981,7 +981,7 @@ async def delete_prescription_template(
     """Soft-delete a prescription template."""
     from sqlalchemy import select
     from datetime import datetime, timezone
-    from app.models.prescription import PrescriptionTemplate
+    from app.models.prescription_template import PrescriptionTemplate
 
     _, doctor = doctor_info
 

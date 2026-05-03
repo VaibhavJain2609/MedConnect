@@ -1,7 +1,8 @@
 from app.models.user import User
 from app.models.doctor import Doctor
 from app.models.medical_record import MedicalRecord
-from app.models.prescription import Prescription, PrescriptionTemplate
+from app.models.prescription import Prescription
+from app.models.prescription_template import PrescriptionTemplate
 from app.models.notification import Notification, NotificationPreferences, NotificationType
 from app.models.clinic import Clinic, ClinicBranch, ClinicMembership
 from app.models.clinic_invite import ClinicInvite, ClinicJoinRequest
