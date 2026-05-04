@@ -5,7 +5,14 @@ from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Brand, Manufacturer, BrandComposition, SaltStrength, Salt
+from app.models import (
+    Brand,
+    Manufacturer,
+    BrandComposition,
+    SaltStrength,
+    Salt,
+    SaltSideEffect,
+)
 
 
 class BrandService:
@@ -13,12 +20,16 @@ class BrandService:
 
     @staticmethod
     async def get_brand_by_id(db: AsyncSession, brand_id: UUID) -> Brand | None:
-        """Get brand by ID with compositions and manufacturer."""
+        """Get brand by ID with compositions, manufacturer, and per-salt side effects."""
         result = await db.execute(
             select(Brand)
             .options(
                 selectinload(Brand.manufacturer),
-                selectinload(Brand.compositions).selectinload(BrandComposition.salt_strength).selectinload(SaltStrength.salt),
+                selectinload(Brand.compositions)
+                .selectinload(BrandComposition.salt_strength)
+                .selectinload(SaltStrength.salt)
+                .selectinload(Salt.side_effects)
+                .joinedload(SaltSideEffect.side_effect),
                 selectinload(Brand.packaging),
             )
             .where(Brand.brand_id == brand_id)

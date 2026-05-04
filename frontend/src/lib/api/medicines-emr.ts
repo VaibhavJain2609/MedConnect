@@ -91,6 +91,7 @@ export interface Brand {
   manufacturer?: Manufacturer;
   compositions: BrandComposition[];
   salt_composition: string;
+  side_effects: SaltSideEffectItem[];
   is_discontinued: boolean;
   drug_type: string;
   launch_date?: string;

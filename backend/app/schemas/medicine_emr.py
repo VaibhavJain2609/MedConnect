@@ -167,6 +167,7 @@ class BrandResponse(BrandBase):
     manufacturer: ManufacturerResponse | None = None
     compositions: list[BrandCompositionResponse] = []
     salt_composition: str  # Computed property
+    side_effects: list[SaltSideEffectItem] = []
     launch_date: date | None = None
     discontinuation_date: date | None = None
     created_at: datetime

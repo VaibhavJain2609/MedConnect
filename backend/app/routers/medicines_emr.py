@@ -350,7 +350,7 @@ async def get_brand(
     brand_id: UUID,
     db: AsyncSession = Depends(get_medicine_db),
 ):
-    """Get brand details by ID."""
+    """Get brand details by ID, with side effects aggregated across composition salts."""
     brand = await BrandService.get_brand_by_id(db, brand_id)
     if not brand:
         raise HTTPException(status_code=404, detail="Brand not found")
@@ -367,12 +367,40 @@ async def get_brand(
         for bc in sorted(brand.compositions, key=lambda x: x.sequence)
     ]
 
+    # Aggregate side effects across every salt in the brand's composition,
+    # deduplicated by side_effect_id. Salt-level overrides for frequency/notes
+    # win over the catalog defaults; if multiple salts share the same effect,
+    # the first occurrence wins (deterministic via composition sequence).
+    seen_se_ids: set = set()
+    side_effects: list[SaltSideEffectItem] = []
+    for bc in sorted(brand.compositions, key=lambda x: x.sequence):
+        salt = bc.salt_strength.salt if bc.salt_strength else None
+        if not salt:
+            continue
+        for sse in salt.side_effects:
+            if sse.side_effect is None:
+                continue
+            if sse.side_effect.side_effect_id in seen_se_ids:
+                continue
+            seen_se_ids.add(sse.side_effect.side_effect_id)
+            side_effects.append(
+                SaltSideEffectItem(
+                    side_effect_id=sse.side_effect.side_effect_id,
+                    side_effect_name=sse.side_effect.side_effect_name,
+                    severity=sse.side_effect.severity,
+                    frequency=sse.frequency or sse.side_effect.frequency,
+                    description=sse.side_effect.description,
+                    notes=sse.notes,
+                )
+            )
+
     return BrandResponse(
         brand_id=brand.brand_id,
         brand_name=brand.brand_name,
         manufacturer=brand.manufacturer,
         compositions=compositions,
         salt_composition=brand.salt_composition,
+        side_effects=side_effects,
         is_discontinued=brand.is_discontinued,
         drug_type=brand.drug_type,
         launch_date=brand.launch_date,

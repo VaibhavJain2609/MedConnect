@@ -1229,6 +1229,27 @@ function SaltBrandsView({ brands }: { brands: BrandForSalt[] }) {
 
 // Brand Details View Component
 function BrandDetailsView({ brand }: { brand: Brand }) {
+  const severityVariant = (s?: string | null): "default" | "secondary" | "destructive" | "outline" => {
+    switch ((s || "").toLowerCase()) {
+      case "contraindicated":
+      case "severe":
+      case "life-threatening":
+      case "major":
+      case "absolute":
+        return "destructive";
+      case "moderate":
+        return "default";
+      case "minor":
+      case "mild":
+      case "relative":
+        return "secondary";
+      default:
+        return "outline";
+    }
+  };
+
+  const sideEffects = brand.side_effects ?? [];
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
@@ -1276,6 +1297,45 @@ function BrandDetailsView({ brand }: { brand: Brand }) {
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="border-t pt-4">
+        <p className="text-sm font-medium text-gray-500 mb-2">
+          Side Effects ({sideEffects.length})
+        </p>
+        {sideEffects.length === 0 ? (
+          <p className="text-sm text-gray-400">No side effects recorded for this brand's composition.</p>
+        ) : (
+          <ul className="space-y-2">
+            {sideEffects.map((se) => (
+              <li
+                key={se.side_effect_id}
+                className="flex items-start justify-between gap-3 rounded border bg-gray-50 p-2"
+              >
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{se.side_effect_name}</p>
+                  {(se.description || se.notes) && (
+                    <p className="text-xs text-gray-600 mt-0.5">
+                      {se.notes || se.description}
+                    </p>
+                  )}
+                </div>
+                <div className="flex shrink-0 flex-wrap gap-1 justify-end">
+                  {se.severity && (
+                    <Badge variant={severityVariant(se.severity)} className="text-xs capitalize">
+                      {se.severity}
+                    </Badge>
+                  )}
+                  {se.frequency && (
+                    <Badge variant="outline" className="text-xs capitalize">
+                      {se.frequency}
+                    </Badge>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div className="border-t pt-4">
