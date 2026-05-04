@@ -148,7 +148,9 @@ async def link_patient(
             detail={"error": {"code": "EXPIRED_CODE", "message": "Patient link code has expired"}},
         )
 
-    # Check not already linked
+    # Check existing link. A revoked link can be re-established (the unique
+    # constraint on (patient_id, clinic_id) prevents inserting a second row,
+    # so we reactivate the existing one and reset consent to pending).
     existing = await db.execute(
         select(PatientClinicLink).where(
             PatientClinicLink.patient_id == link_code.patient_id,
@@ -156,20 +158,28 @@ async def link_patient(
             PatientClinicLink.deleted_at.is_(None),
         )
     )
-    if existing.scalar_one_or_none():
+    existing_link = existing.scalar_one_or_none()
+    if existing_link and existing_link.consent_status != "revoked":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"error": {"code": "ALREADY_LINKED", "message": "Patient already linked to this clinic"}},
         )
 
-    link = PatientClinicLink(
-        id=uuid.uuid4(),
-        patient_id=link_code.patient_id,
-        clinic_id=cid,
-        linked_by=user.id,
-        consent_status="pending",
-    )
-    db.add(link)
+    if existing_link:
+        existing_link.consent_status = "pending"
+        existing_link.revoked_at = None
+        existing_link.consented_at = None
+        existing_link.linked_by = user.id
+        link = existing_link
+    else:
+        link = PatientClinicLink(
+            id=uuid.uuid4(),
+            patient_id=link_code.patient_id,
+            clinic_id=cid,
+            linked_by=user.id,
+            consent_status="pending",
+        )
+        db.add(link)
     await db.flush()
 
     # Fetch patient name for response
