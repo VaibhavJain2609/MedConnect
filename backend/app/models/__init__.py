@@ -28,6 +28,7 @@ from app.models.medicine import (
     DrugInteraction,
     SaltSideEffect,
     SaltContraindication,
+    BrandSideEffect,
     # Indications
     Use,
     SaltUse,
@@ -81,6 +82,7 @@ __all__ = [
     "DrugInteraction",
     "SaltSideEffect",
     "SaltContraindication",
+    "BrandSideEffect",
     "Use",
     "SaltUse",
     "SaltAlternative",

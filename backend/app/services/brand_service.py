@@ -11,7 +11,7 @@ from app.models import (
     BrandComposition,
     SaltStrength,
     Salt,
-    SaltSideEffect,
+    BrandSideEffect,
 )
 
 
@@ -20,17 +20,16 @@ class BrandService:
 
     @staticmethod
     async def get_brand_by_id(db: AsyncSession, brand_id: UUID) -> Brand | None:
-        """Get brand by ID with compositions, manufacturer, and per-salt side effects."""
+        """Get brand by ID with compositions, manufacturer, and per-brand side effects."""
         result = await db.execute(
             select(Brand)
             .options(
                 selectinload(Brand.manufacturer),
                 selectinload(Brand.compositions)
                 .selectinload(BrandComposition.salt_strength)
-                .selectinload(SaltStrength.salt)
-                .selectinload(Salt.side_effects)
-                .joinedload(SaltSideEffect.side_effect),
+                .selectinload(SaltStrength.salt),
                 selectinload(Brand.packaging),
+                selectinload(Brand.side_effects).joinedload(BrandSideEffect.side_effect),
             )
             .where(Brand.brand_id == brand_id)
         )

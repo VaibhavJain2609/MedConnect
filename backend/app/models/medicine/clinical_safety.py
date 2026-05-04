@@ -12,6 +12,7 @@ from app.database import MedicineBase
 
 if TYPE_CHECKING:
     from .salts import Salt
+    from .commercial import Brand
 
 
 class SideEffect(MedicineBase):
@@ -58,6 +59,33 @@ class SaltSideEffect(MedicineBase):
 
     def __repr__(self):
         return f"<SaltSideEffect(salt={self.salt_id}, effect={self.side_effect_id})>"
+
+
+class BrandSideEffect(MedicineBase):
+    """Per-brand side effects, sourced directly from the dataset row.
+
+    The salt-level side_effects relationship represents the union across
+    every brand of an active ingredient and is intentionally broader than
+    any single brand's reported effects.
+    """
+
+    __tablename__ = "brand_side_effects"
+    __table_args__ = (
+        PrimaryKeyConstraint("brand_id", "side_effect_id"),
+    )
+
+    brand_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("brands.brand_id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    side_effect_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("side_effects.side_effect_id", ondelete="CASCADE"), nullable=False, index=True
+    )
+
+    brand: Mapped["Brand"] = relationship("Brand", back_populates="side_effects")
+    side_effect: Mapped["SideEffect"] = relationship("SideEffect")
+
+    def __repr__(self):
+        return f"<BrandSideEffect(brand={self.brand_id}, effect={self.side_effect_id})>"
 
 
 class Contraindication(MedicineBase):

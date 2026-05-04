@@ -67,6 +67,9 @@ class Brand(MedicineBase):
     compositions: Mapped[list["BrandComposition"]] = relationship("BrandComposition", back_populates="brand", cascade="all, delete-orphan")
     packaging: Mapped[list["BrandPackaging"]] = relationship("BrandPackaging", back_populates="brand", cascade="all, delete-orphan")
     prescriptions: Mapped[list["PrescriptionAudit"]] = relationship("PrescriptionAudit", back_populates="brand")
+    side_effects: Mapped[list["BrandSideEffect"]] = relationship(
+        "BrandSideEffect", back_populates="brand", cascade="all, delete-orphan"
+    )
 
     @property
     def salt_composition(self) -> str:

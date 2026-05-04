@@ -367,32 +367,21 @@ async def get_brand(
         for bc in sorted(brand.compositions, key=lambda x: x.sequence)
     ]
 
-    # Aggregate side effects across every salt in the brand's composition,
-    # deduplicated by side_effect_id. Salt-level overrides for frequency/notes
-    # win over the catalog defaults; if multiple salts share the same effect,
-    # the first occurrence wins (deterministic via composition sequence).
-    seen_se_ids: set = set()
-    side_effects: list[SaltSideEffectItem] = []
-    for bc in sorted(brand.compositions, key=lambda x: x.sequence):
-        salt = bc.salt_strength.salt if bc.salt_strength else None
-        if not salt:
-            continue
-        for sse in salt.side_effects:
-            if sse.side_effect is None:
-                continue
-            if sse.side_effect.side_effect_id in seen_se_ids:
-                continue
-            seen_se_ids.add(sse.side_effect.side_effect_id)
-            side_effects.append(
-                SaltSideEffectItem(
-                    side_effect_id=sse.side_effect.side_effect_id,
-                    side_effect_name=sse.side_effect.side_effect_name,
-                    severity=sse.side_effect.severity,
-                    frequency=sse.frequency or sse.side_effect.frequency,
-                    description=sse.side_effect.description,
-                    notes=sse.notes,
-                )
-            )
+    # Side effects come straight from the brand_side_effects mapping —
+    # the per-row data shipped with the dataset. No salt-level aggregation.
+    side_effects: list[SaltSideEffectItem] = [
+        SaltSideEffectItem(
+            side_effect_id=bse.side_effect.side_effect_id,
+            side_effect_name=bse.side_effect.side_effect_name,
+            severity=bse.side_effect.severity,
+            frequency=bse.side_effect.frequency,
+            description=bse.side_effect.description,
+            notes=None,
+        )
+        for bse in brand.side_effects
+        if bse.side_effect is not None
+    ]
+    side_effects.sort(key=lambda s: s.side_effect_name.lower())
 
     return BrandResponse(
         brand_id=brand.brand_id,

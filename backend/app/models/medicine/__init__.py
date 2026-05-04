@@ -3,7 +3,7 @@
 from .catalog import Component, Medicine, MedicineComponent
 from .classifications import ChemicalClass, TherapeuticClass, ActionClass
 from .salts import Salt, SaltStrength
-from .clinical_safety import SideEffect, Contraindication, DrugInteraction, SaltSideEffect, SaltContraindication
+from .clinical_safety import SideEffect, Contraindication, DrugInteraction, SaltSideEffect, SaltContraindication, BrandSideEffect
 from .indications import Use, SaltUse
 from .alternatives import SaltAlternative
 from .commercial import Manufacturer, Brand, BrandComposition
@@ -29,6 +29,7 @@ __all__ = [
     "DrugInteraction",
     "SaltSideEffect",
     "SaltContraindication",
+    "BrandSideEffect",
     # Indications
     "Use",
     "SaltUse",
