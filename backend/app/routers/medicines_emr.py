@@ -17,6 +17,8 @@ from app.schemas.medicine_emr import (
     ManufacturerResponse,
     SaltStrengthResponse,
     BrandCompositionResponse,
+    SaltSideEffectItem,
+    SaltContraindicationItem,
 )
 
 router = APIRouter(tags=["medicines"])
@@ -149,8 +151,35 @@ async def list_salts(
 
     pages = (total + limit - 1) // limit
 
+    # The list view doesn't eagerly load side_effects/contraindications (those
+    # are detail-only). Construct each item explicitly with empty lists so
+    # Pydantic doesn't trigger an async lazy load through from_attributes.
+    salt_items = [
+        SaltResponse(
+            salt_id=s.salt_id,
+            salt_name=s.salt_name,
+            description=s.description,
+            chemical_formula=s.chemical_formula,
+            habit_forming=s.habit_forming,
+            prescription_required=s.prescription_required,
+            schedule=s.schedule,
+            pregnancy_category=s.pregnancy_category,
+            lactation_safe=s.lactation_safe,
+            lactation_notes=s.lactation_notes,
+            chemical_class=s.chemical_class,
+            therapeutic_class=s.therapeutic_class,
+            action_class=s.action_class,
+            strengths=s.strengths,
+            side_effects=[],
+            contraindications=[],
+            created_at=s.created_at,
+            updated_at=s.updated_at,
+        )
+        for s in salts
+    ]
+
     return SaltListResponse(
-        salts=salts,
+        salts=salt_items,
         total=total,
         page=page,
         pages=pages,
@@ -162,11 +191,59 @@ async def get_salt(
     salt_id: UUID,
     db: AsyncSession = Depends(get_medicine_db),
 ):
-    """Get salt details by ID."""
+    """Get salt details by ID, including side effects and contraindications."""
     salt = await SaltService.get_salt_by_id(db, salt_id)
     if not salt:
         raise HTTPException(status_code=404, detail="Salt not found")
-    return salt
+
+    # Flatten the join-table rows so the API exposes a SideEffect-shaped item
+    # (with overrides from SaltSideEffect.frequency/notes) rather than the
+    # raw association-object structure.
+    side_effects = [
+        SaltSideEffectItem(
+            side_effect_id=sse.side_effect.side_effect_id,
+            side_effect_name=sse.side_effect.side_effect_name,
+            severity=sse.side_effect.severity,
+            frequency=sse.frequency or sse.side_effect.frequency,
+            description=sse.side_effect.description,
+            notes=sse.notes,
+        )
+        for sse in salt.side_effects
+        if sse.side_effect is not None
+    ]
+    contraindications = [
+        SaltContraindicationItem(
+            contraindication_id=sc.contraindication.contraindication_id,
+            contraindication_name=sc.contraindication.contraindication_name,
+            description=sc.contraindication.description,
+            icd10_code=sc.contraindication.icd10_code,
+            severity=sc.severity or sc.contraindication.severity,
+            notes=sc.notes,
+        )
+        for sc in salt.contraindications
+        if sc.contraindication is not None
+    ]
+
+    return SaltResponse(
+        salt_id=salt.salt_id,
+        salt_name=salt.salt_name,
+        description=salt.description,
+        chemical_formula=salt.chemical_formula,
+        habit_forming=salt.habit_forming,
+        prescription_required=salt.prescription_required,
+        schedule=salt.schedule,
+        pregnancy_category=salt.pregnancy_category,
+        lactation_safe=salt.lactation_safe,
+        lactation_notes=salt.lactation_notes,
+        chemical_class=salt.chemical_class,
+        therapeutic_class=salt.therapeutic_class,
+        action_class=salt.action_class,
+        strengths=salt.strengths,
+        side_effects=side_effects,
+        contraindications=contraindications,
+        created_at=salt.created_at,
+        updated_at=salt.updated_at,
+    )
 
 
 @router.get("/salts/{salt_id}/strengths", response_model=list[SaltStrengthResponse])

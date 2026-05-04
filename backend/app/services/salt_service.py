@@ -5,7 +5,15 @@ from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Salt, SaltStrength, ChemicalClass, TherapeuticClass, ActionClass
+from app.models import (
+    Salt,
+    SaltStrength,
+    ChemicalClass,
+    TherapeuticClass,
+    ActionClass,
+    SaltSideEffect,
+    SaltContraindication,
+)
 
 
 class SaltService:
@@ -13,7 +21,7 @@ class SaltService:
 
     @staticmethod
     async def get_salt_by_id(db: AsyncSession, salt_id: UUID) -> Salt | None:
-        """Get salt by ID with all relationships."""
+        """Get salt by ID with all relationships needed for the detail view."""
         result = await db.execute(
             select(Salt)
             .options(
@@ -21,6 +29,10 @@ class SaltService:
                 selectinload(Salt.chemical_class),
                 selectinload(Salt.therapeutic_class),
                 selectinload(Salt.action_class),
+                selectinload(Salt.side_effects).joinedload(SaltSideEffect.side_effect),
+                selectinload(Salt.contraindications).joinedload(
+                    SaltContraindication.contraindication
+                ),
             )
             .where(Salt.salt_id == salt_id)
         )

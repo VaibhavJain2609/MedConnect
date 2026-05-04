@@ -19,6 +19,24 @@ export interface SaltStrength {
   pediatric_approved: boolean;
 }
 
+export interface SaltSideEffectItem {
+  side_effect_id: string;
+  side_effect_name: string;
+  severity?: string | null;
+  frequency?: string | null;
+  description?: string | null;
+  notes?: string | null;
+}
+
+export interface SaltContraindicationItem {
+  contraindication_id: string;
+  contraindication_name: string;
+  description?: string | null;
+  icd10_code?: string | null;
+  severity?: string | null;
+  notes?: string | null;
+}
+
 export interface Salt {
   salt_id: string;
   salt_name: string;
@@ -42,6 +60,8 @@ export interface Salt {
     class_name: string;
   };
   strengths: SaltStrength[];
+  side_effects: SaltSideEffectItem[];
+  contraindications: SaltContraindicationItem[];
   created_at: string;
   updated_at: string;
 }

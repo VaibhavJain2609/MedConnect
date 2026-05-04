@@ -1,7 +1,7 @@
 """Drug interaction detection service for MD-18."""
 
 from uuid import UUID
-from sqlalchemy import select, or_, and_, func
+from sqlalchemy import select, or_, and_, func, case
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -57,7 +57,7 @@ class InteractionService:
             .where(or_(*interaction_conditions))
             .order_by(
                 # Order by severity (most severe first)
-                func.case(
+                case(
                     (DrugInteraction.severity == "contraindicated", 1),
                     (DrugInteraction.severity == "major", 2),
                     (DrugInteraction.severity == "moderate", 3),
@@ -126,7 +126,7 @@ class InteractionService:
             query = query.where(DrugInteraction.severity == severity)
 
         query = query.order_by(
-            func.case(
+            case(
                 (DrugInteraction.severity == "contraindicated", 1),
                 (DrugInteraction.severity == "major", 2),
                 (DrugInteraction.severity == "moderate", 3),

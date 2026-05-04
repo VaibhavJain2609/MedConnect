@@ -80,12 +80,34 @@ class SaltBase(BaseModel):
     lactation_notes: str | None = None
 
 
+class SaltSideEffectItem(BaseModel):
+    """A side effect as exposed on the salt detail view (flattened from join)."""
+    side_effect_id: UUID
+    side_effect_name: str
+    severity: str | None = None
+    frequency: str | None = None
+    description: str | None = None
+    notes: str | None = None
+
+
+class SaltContraindicationItem(BaseModel):
+    """A contraindication as exposed on the salt detail view (flattened from join)."""
+    contraindication_id: UUID
+    contraindication_name: str
+    description: str | None = None
+    icd10_code: str | None = None
+    severity: str | None = None
+    notes: str | None = None
+
+
 class SaltResponse(SaltBase):
     salt_id: UUID
     chemical_class: ChemicalClassResponse | None = None
     therapeutic_class: TherapeuticClassResponse | None = None
     action_class: ActionClassResponse | None = None
     strengths: list[SaltStrengthResponse] = []
+    side_effects: list[SaltSideEffectItem] = []
+    contraindications: list[SaltContraindicationItem] = []
     created_at: datetime
     updated_at: datetime
 

@@ -36,9 +36,11 @@ import {
   getBrandsForSalt,
   getBrand,
   getBrandAlternatives,
+  getSaltInteractions,
   type Salt,
   type Brand,
   type BrandForSalt,
+  type DrugInteraction,
 } from "@/lib/api/medicines-emr";
 
 // API functions for Manufacturers
@@ -283,6 +285,13 @@ export default function MedicinesPageEMR() {
   const { data: selectedSalt } = useQuery({
     queryKey: ["salt-details", selectedSaltId],
     queryFn: () => getSalt(selectedSaltId!),
+    enabled: !!selectedSaltId && showSaltDetails,
+  });
+
+  // Fetch drug interactions for the selected salt (separate endpoint)
+  const { data: saltInteractions } = useQuery({
+    queryKey: ["salt-interactions", selectedSaltId],
+    queryFn: () => getSaltInteractions(selectedSaltId!),
     enabled: !!selectedSaltId && showSaltDetails,
   });
 
@@ -666,7 +675,9 @@ export default function MedicinesPageEMR() {
             </DialogTitle>
             <DialogDescription>Active Pharmaceutical Ingredient Details</DialogDescription>
           </DialogHeader>
-          {selectedSalt && <SaltDetailsView salt={selectedSalt} />}
+          {selectedSalt && (
+            <SaltDetailsView salt={selectedSalt} interactions={saltInteractions ?? []} />
+          )}
         </DialogContent>
       </Dialog>
 
@@ -966,7 +977,32 @@ export default function MedicinesPageEMR() {
 }
 
 // Salt Details View Component
-function SaltDetailsView({ salt }: { salt: Salt }) {
+function SaltDetailsView({
+  salt,
+  interactions,
+}: {
+  salt: Salt;
+  interactions: DrugInteraction[];
+}) {
+  const severityVariant = (s?: string | null): "default" | "secondary" | "destructive" | "outline" => {
+    switch ((s || "").toLowerCase()) {
+      case "contraindicated":
+      case "severe":
+      case "life-threatening":
+      case "major":
+      case "absolute":
+        return "destructive";
+      case "moderate":
+        return "default";
+      case "minor":
+      case "mild":
+      case "relative":
+        return "secondary";
+      default:
+        return "outline";
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
@@ -1029,6 +1065,125 @@ function SaltDetailsView({ salt }: { salt: Salt }) {
             </Badge>
           ))}
         </div>
+      </div>
+
+      <div className="border-t pt-4">
+        <p className="text-sm font-medium text-gray-500 mb-2">
+          Side Effects ({salt.side_effects.length})
+        </p>
+        {salt.side_effects.length === 0 ? (
+          <p className="text-sm text-gray-400">No side effects recorded.</p>
+        ) : (
+          <ul className="space-y-2">
+            {salt.side_effects.map((se) => (
+              <li
+                key={se.side_effect_id}
+                className="flex items-start justify-between gap-3 rounded border bg-gray-50 p-2"
+              >
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{se.side_effect_name}</p>
+                  {(se.description || se.notes) && (
+                    <p className="text-xs text-gray-600 mt-0.5">
+                      {se.notes || se.description}
+                    </p>
+                  )}
+                </div>
+                <div className="flex shrink-0 flex-wrap gap-1 justify-end">
+                  {se.severity && (
+                    <Badge variant={severityVariant(se.severity)} className="text-xs capitalize">
+                      {se.severity}
+                    </Badge>
+                  )}
+                  {se.frequency && (
+                    <Badge variant="outline" className="text-xs capitalize">
+                      {se.frequency}
+                    </Badge>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="border-t pt-4">
+        <p className="text-sm font-medium text-gray-500 mb-2">
+          Contraindications ({salt.contraindications.length})
+        </p>
+        {salt.contraindications.length === 0 ? (
+          <p className="text-sm text-gray-400">No contraindications recorded.</p>
+        ) : (
+          <ul className="space-y-2">
+            {salt.contraindications.map((ci) => (
+              <li
+                key={ci.contraindication_id}
+                className="flex items-start justify-between gap-3 rounded border bg-gray-50 p-2"
+              >
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{ci.contraindication_name}</p>
+                  {(ci.description || ci.notes) && (
+                    <p className="text-xs text-gray-600 mt-0.5">
+                      {ci.notes || ci.description}
+                    </p>
+                  )}
+                </div>
+                <div className="flex shrink-0 flex-wrap gap-1 justify-end">
+                  {ci.severity && (
+                    <Badge variant={severityVariant(ci.severity)} className="text-xs capitalize">
+                      {ci.severity}
+                    </Badge>
+                  )}
+                  {ci.icd10_code && (
+                    <Badge variant="outline" className="text-xs font-mono">
+                      {ci.icd10_code}
+                    </Badge>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="border-t pt-4">
+        <p className="text-sm font-medium text-gray-500 mb-2">
+          Drug Interactions ({interactions.length})
+        </p>
+        {interactions.length === 0 ? (
+          <p className="text-sm text-gray-400">No known drug interactions recorded.</p>
+        ) : (
+          <ul className="space-y-2">
+            {interactions.map((di) => {
+              const otherSalt = di.salt_1.id === salt.salt_id ? di.salt_2 : di.salt_1;
+              return (
+                <li
+                  key={di.interaction_id}
+                  className="rounded border bg-gray-50 p-2 space-y-1"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-sm font-medium text-gray-900">
+                      with <span className="text-blue-700">{otherSalt.name}</span>
+                    </p>
+                    <Badge variant={severityVariant(di.severity)} className="text-xs capitalize">
+                      {di.severity}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-gray-700">{di.effect}</p>
+                  {di.management && (
+                    <p className="text-xs text-gray-600">
+                      <span className="font-medium">Management:</span> {di.management}
+                    </p>
+                  )}
+                  {di.evidence_level && (
+                    <p className="text-xs text-gray-500">
+                      Evidence: <span className="capitalize">{di.evidence_level}</span>
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
 
       {salt.description && (
