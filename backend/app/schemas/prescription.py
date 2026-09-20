@@ -35,6 +35,27 @@ class PrescriptionCreate(BaseModel):
     appointment_id: Optional[UUID] = None
     clinic_id: Optional[UUID] = None
     branch_id: Optional[UUID] = None
+    # Required when the clinical safety gate reports a "major" alert;
+    # recorded verbatim in PrescriptionAudit rows.
+    safety_override_reason: Optional[str] = None
+
+
+class SafetyAlert(BaseModel):
+    """One clinical-safety finding surfaced by the prescription safety gate."""
+
+    severity: str  # minor | moderate | major | contraindicated
+    kind: str      # interaction | allergy | duplicate_therapy | contraindication
+    detail: str
+    salts: Optional[list[str]] = None
+    medicine: Optional[str] = None
+
+
+class SafetyResult(BaseModel):
+    """Safety-gate outcome attached to prescription creation responses."""
+
+    checked: bool = True
+    alerts: list[SafetyAlert] = []
+    overrides_applied: bool = False
 
 
 class PrescriptionResponse(BaseModel):
@@ -51,6 +72,8 @@ class PrescriptionResponse(BaseModel):
     translated: dict | None
     valid_until: date | None
     created_at: datetime
+    # Populated only on POST /prescriptions (clinical safety gate outcome)
+    safety: Optional[SafetyResult] = None
 
     class Config:
         from_attributes = True
