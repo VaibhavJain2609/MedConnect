@@ -22,17 +22,12 @@ import {
 } from "@/lib/api/admin-users";
 import api from "@/lib/api";
 import { Avatar } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
+import { StatusBadge } from "@/components/ui/status-badge";
 
 type Tab = "overview" | "prescriptions" | "records";
-
-const recordTypeBadge: Record<string, string> = {
-  lab_result: "inProgress",
-  prescription: "completed",
-  imaging: "upcoming",
-  clinical_note: "pending",
-  discharge_summary: "overdue",
-};
 
 interface PatientDetailDrawerProps {
   patientId: string | null;
@@ -110,7 +105,7 @@ export function PatientDetailDrawer({
         <div className="flex items-center justify-between px-6 py-4 border-b border-dreams-border shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             {isLoading || !user ? (
-              <div className="h-5 w-48 bg-gray-200 rounded animate-pulse" />
+              <Skeleton className="h-5 w-48" />
             ) : (
               <>
                 <Avatar fallback={user.full_name} size="sm" />
@@ -119,9 +114,9 @@ export function PatientDetailDrawer({
                     {user.full_name}
                   </h2>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <Badge variant={user.is_active ? "completed" : "pending"}>
-                      {user.is_active ? "Active" : "Inactive"}
-                    </Badge>
+                    <StatusBadge
+                      status={user.is_active ? "active" : "inactive"}
+                    />
                   </div>
                 </div>
               </>
@@ -173,7 +168,7 @@ export function PatientDetailDrawer({
         <div className="flex-1 overflow-y-auto p-6">
           {isLoading ? (
             <div className="flex justify-center py-12">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
+              <Spinner size="lg" />
             </div>
           ) : !user ? null : (
             <>
@@ -401,13 +396,10 @@ export function PatientDetailDrawer({
                     </div>
                   ) : !prescriptions ? (
                     <div className="flex justify-center py-12">
-                      <div className="h-6 w-6 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
+                      <Spinner />
                     </div>
                   ) : prescriptions.data.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-16 text-dreams-textSecondary">
-                      <Pill className="h-10 w-10 mb-3 opacity-30" />
-                      <p className="text-sm">No prescriptions found</p>
-                    </div>
+                    <EmptyState icon={Pill} title="No prescriptions found" />
                   ) : (
                     <>
                       <table className="w-full text-sm">
@@ -489,13 +481,13 @@ export function PatientDetailDrawer({
                     </div>
                   ) : !records ? (
                     <div className="flex justify-center py-12">
-                      <div className="h-6 w-6 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
+                      <Spinner />
                     </div>
                   ) : records.data.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-16 text-dreams-textSecondary">
-                      <FileText className="h-10 w-10 mb-3 opacity-30" />
-                      <p className="text-sm">No medical records found</p>
-                    </div>
+                    <EmptyState
+                      icon={FileText}
+                      title="No medical records found"
+                    />
                   ) : (
                     <>
                       <table className="w-full text-sm">
@@ -528,14 +520,7 @@ export function PatientDetailDrawer({
                                 {new Date(rec.created_at).toLocaleDateString()}
                               </td>
                               <td className="px-4 py-3">
-                                <Badge
-                                  variant={
-                                    (recordTypeBadge[rec.record_type] as any) ??
-                                    "pending"
-                                  }
-                                >
-                                  {rec.record_type.replace(/_/g, " ")}
-                                </Badge>
+                                <StatusBadge status={rec.record_type} />
                               </td>
                               <td className="px-4 py-3 text-dreams-textPrimary font-medium max-w-[120px] truncate">
                                 {rec.title}

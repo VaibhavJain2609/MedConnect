@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ShieldOff } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
+import { Spinner } from "@/components/ui/spinner";
 
 export function AuthGuard({
   children,
@@ -28,7 +29,7 @@ export function AuthGuard({
   if (!initialized || loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
+        <Spinner size="lg" />
       </div>
     );
   }

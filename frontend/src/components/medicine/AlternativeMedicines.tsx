@@ -3,6 +3,9 @@
 import { useState, useEffect } from 'react';
 import { Brand, getBrandAlternatives } from '@/lib/api/medicines-emr';
 import { RefreshCw, ShoppingCart } from 'lucide-react';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
+import { StatusBadge } from '@/components/ui/status-badge';
 
 interface AlternativeMedicinesProps {
   brandId: string;
@@ -43,11 +46,11 @@ export default function AlternativeMedicines({
 
   if (loading) {
     return (
-      <div className={`animate-pulse ${className}`}>
-        <div className="h-4 bg-gray-200 rounded w-1/3 mb-3"></div>
+      <div className={className} role="status" aria-label="Loading alternatives">
+        <Skeleton className="h-4 w-1/3 mb-3" />
         <div className="space-y-2">
-          <div className="h-16 bg-gray-100 rounded"></div>
-          <div className="h-16 bg-gray-100 rounded"></div>
+          <Skeleton className="h-16" />
+          <Skeleton className="h-16" />
         </div>
       </div>
     );
@@ -70,10 +73,12 @@ export default function AlternativeMedicines({
 
   if (alternatives.length === 0) {
     return (
-      <div className={`rounded-lg border border-gray-200 bg-gray-50 p-4 ${className}`}>
-        <p className="text-sm text-gray-600">
-          No alternative brands found with the same composition ({currentComposition}).
-        </p>
+      <div className={`rounded-lg border border-gray-200 bg-gray-50 ${className}`}>
+        <EmptyState
+          title="No alternative brands found"
+          description={`No brands share the same composition (${currentComposition}).`}
+          className="py-8"
+        />
       </div>
     );
   }
@@ -107,9 +112,7 @@ export default function AlternativeMedicines({
                     {alternative.brand_name}
                   </h5>
                   {alternative.is_discontinued && (
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-200 text-gray-700">
-                      DISCONTINUED
-                    </span>
+                    <StatusBadge status="discontinued" label="Discontinued" />
                   )}
                 </div>
 

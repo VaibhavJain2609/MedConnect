@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { FileText } from "lucide-react";
 import api from "@/lib/api";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Spinner } from "@/components/ui/spinner";
 
 interface Medicine {
   name: string;
@@ -91,11 +94,19 @@ export function TemplateLoadModal({ onClose, onLoad }: Props) {
 
         <div className="mb-4 max-h-96 overflow-y-auto">
           {loading ? (
-            <p className="py-8 text-center text-gray-500">Loading templates...</p>
+            <div className="flex justify-center py-8">
+              <Spinner label="Loading templates" />
+            </div>
           ) : filteredTemplates.length === 0 ? (
-            <p className="py-8 text-center text-gray-500">
-              {searchTerm ? "No templates match your search" : "No templates available"}
-            </p>
+            <EmptyState
+              icon={FileText}
+              title={
+                searchTerm
+                  ? "No templates match your search"
+                  : "No templates available"
+              }
+              className="py-8"
+            />
           ) : (
             <div className="space-y-2">
               {filteredTemplates.map((template) => (
