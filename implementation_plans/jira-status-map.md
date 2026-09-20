@@ -1,89 +1,95 @@
 # Jira Board Status Map
 
-*Source: `jira-import.csv` (git history, commit 2694230). Compared against codebase state after the audit-fix merge (6fb7cde). Jira API unavailable (no `JIRA_*` creds in `.env`) — apply these transitions when credentials are provided.*
+*Source: `jira-import.csv` (git history, commit 2694230). Jira API unavailable (no `JIRA_*` creds) — `.claude/jira_cli.py` exits with "Missing Jira credentials". This file is the authoritative local board until creds are provided. Updated through critic round 3 (commit 283127c).*
 
 ## Mark DONE — exists and works (verified in code)
 
 **Medicine Database & Dataset**
 - Research/acquire Indian medicine dataset → loaded (EMR catalog: brands/salts/manufacturers)
-- Source drug interaction data → `DrugInteraction` model + `/api/v1/interactions`
+- Source drug interaction data → `DrugInteraction` model + `/api/v1/interactions` (auth'd)
 - Alternative/generic mappings → `BrandComposition`, `SaltAlternative`, alternatives endpoint
 - Data ingestion pipeline → `scripts/load_indian_medicines.py`, `03_import_emr_medicine_data.py`
 - Therapeutic class categorization → `TherapeuticClass` model
 - Schedule classification (H/H1/X) → `Salt.schedule` field
 - dosage_form standardization → `Brand.dosage_form`
 - Medicine search API → `medicines_emr.py` search endpoints
-- Medicine autocomplete → `medicines_emr.py` autocomplete (now trigram-indexed)
-- Search indexes migration → `alembic_medicine` `b3f0c1d2e4a5` (moved to correct chain)
+- Medicine autocomplete → trigram-indexed
+- Search indexes migration → `alembic_medicine` `b3f0c1d2e4a5`
 - Medicine detail endpoint → exists
 
-**Admin Panel — Core Infrastructure**
-- `require_admin()` dependency → `dependencies.py`
-- Admin API router → `routers/admin/*`
-- Admin dashboard + stats → `admin/dashboard/page.tsx` + `admin/stats.py` (real queries now)
-- Admin sidebar → exists (Catalog group added)
-- Admin Keycloak login/role mapping → auto-provision role sync
-- Admin layout + AuthGuard → exists
-- `audit_logs` table + migration → migration 010
-- Audit service + `log_change` → `audit_service.py` (`changed_by` now populated)
-- Audit list/filter API → `admin/audit.py`
-- Recent activity feed → admin dashboard (actionable now)
-- Frontend route protection → `AuthGuard`
-
-**Admin Panel — Medicine Management**
-- List page, add form, edit page (now reachable), bulk import UI, brand CRUD endpoints → all exist (`admin/brands.py`, `admin/salts.py`, `admin/manufacturers.py`)
-
-**Admin Panel — User Management**
-- User list, detail, activate/deactivate (now with confirm), role change (now syncs to Keycloak), walk-in user creation, user CRUD endpoints
-
-**Admin Panel — Doctor Verification**
-- Pending queue, verification detail, approve/reject endpoint, notification on verify, doctor list + filters, suspension (is_active)
+**Admin Panel**
+- `require_admin`, admin routers, dashboard + real stats, sidebar (incl. Catalog), Keycloak role mapping, AuthGuard
+- `audit_logs` table + `log_change` service + `changed_by`; audit list/filter/export/diff
+- Medicine management: list/add/edit/bulk-import UI + brand/salt/manufacturer CRUD (all authenticated now)
+- User management: list/detail/activate/role-change→Keycloak/walk-in create/confirm dialogs
+- Doctor verification: pending queue/detail/approve+notify/suspend
+- Announcement broadcast + platform settings pages → REAL now (announcements create notifications; settings enforced: maintenance_mode middleware, max_upload_mb, reminder_channels_enabled)
+- Admin visits + lab-results pages + endpoints exist
+- Appointment-request approve/reject endpoints (round 3 — were live 404s)
 
 **Prescription Enhancement**
-- Autocomplete in form, auto-populate fields, interaction warnings UI, alternatives display, PDF generation + print view (now downloadable via authenticated blob), templates (endpoints fixed: `/doctors/prescription-templates`, added to sidebar)
+- Autocomplete, auto-populate, interaction warnings UI, alternatives, PDF (authenticated blob download), templates CRUD + sidebar
+- **Server-side clinical safety gate** — interactions + allergies + duplicate therapy + contraindications, override flow, `PrescriptionAudit` persistence, unresolved-item alerts
 
 **Patient Portal**
-- Profile edit, medical history, appointment booking, notification center (now in sidebar), document upload (secured), vitals tracking + paired BP entry, vitals charts (Recharts), record download (authenticated download helper)
+- Profile edit, medical history, booking, notification center + badge, document upload (secured: presign→owner-binding→ACL), vitals + paired BP + charts, record download helper
+- **Lab results page** (with categories), **billing page** (invoices + receipts), **medications view** (active Rx + adherence), live queue position
 
 **Doctor Portal**
-- Appointment management, patient search, patient history quick-view, prescription templates, doctor notifications (sidebar entry added)
+- Appointments, patient search (now actually filters server-side), patient history, templates, notifications
+- **Availability windows + leave + slot generation** (`/doctor/schedule`, `/availability/*`)
+- **SOAP encounters** (`/doctor/visits`, `/api/v1/encounters`, write-audited)
+- Clinic staff invites + receptionist memberships (`/doctor/clinic/invites` in nav; `/invite` redeem page; AuthGuard membership bypass)
 
 **Notifications**
-- In-app notification system + unread badge → exists (reminders now actually create notifications)
-- Notification preferences page → backend fixed (was 500ing)
+- In-app system + unread badge; reminder worker creates notifications per channel; sms/whatsapp pref keys settable; platform channel kill-switch honored
 
 **Security & Compliance**
-- Rate limiting → `rate_limit.py` (XFF hardened)
-- RBAC audit → **done this session** (all audit findings verified + fixed)
+- Rate limiting (trusted-proxy XFF), RBAC audit closed, upload ACL + key binding, PHI read audit middleware (incl. encounters/lab-results/search), consent write-gating on revoked links, CSP hardened (ws: gated to dev), Keycloak prod hardening, Jitsi random room tokens, admin self-delete guards, audit writes on encounters
+- **Access-service centralization** — NOT done; still 5 divergent copies (flagged refactor)
 
 **Testing & Quality**
-- CI/CD pipeline → `.github/workflows/*` (hardened: gated CD, scan-before-push, security-scan, dependabot)
-- Frontend Jest setup → now functional (lint + jest + build all green)
+- CI/CD hardened; backend suite 210/210 green on real Postgres 16; alembic chain verified upgrade/downgrade; test infra (NullPool, env-overridable URLs, fakeredis)
 
 **Infrastructure & DevOps**
-- Staging/prod K8s + Terraform → `infra/` (deploy-blockers fixed — pending first apply)
-- Prometheus + Grafana → `kube-prometheus-stack` + ServiceMonitor
-- Redis layer → exists (rate limit + ARQ; caching still TODO)
-- S3 storage → `storage_service` has s3 backend path (IRSA pending)
+- Staging/prod K8s + Terraform (deploy-blockers fixed), kube-prometheus-stack + ServiceMonitor, Redis (rate limit + ARQ + upload registry), S3 backend path (IRSA pending), .dockerignore×3, non-root compose, multi-stage Dockerfiles, pinned tags, dependabot, security-scan.yml
 
 ## Mark PARTIAL — exists but incomplete
 
-- Bulk medicine export → client-side CSV only; no backend `/admin/reports/export`
-- Bulk user export CSV → not implemented
-- User activity timeline → not on user detail page
-- Doctor document upload → onboarding captures fields; file upload path partial
+- Bulk medicine/user export → client-side CSV only; no backend export endpoint
+- User activity timeline on user detail page → missing
+- Doctor document upload in onboarding → fields captured, file path partial
 - Verified badge patient-facing → partial
-- Prescription validity tracking → `valid_until` exists; expiry notifications missing
-- Patient booking → works but free-text datetime (slot system is a new task)
-- DB backups → RDS retention raised to 30d; no restore drill/pg_dump
-- Backend unit/integration tests → suites expanded this session but coverage far from 80%
+- Prescription validity → `valid_until` exists; expiry notifications missing
+- Patient slot booking → availability + slot gen exists; patient-facing slot-picker UI missing
+- DB backups → RDS 30d retention; no restore drill/runbook
+- Coverage → suite green but far from 80%
 - Pre-commit hooks → not configured
+- SMS/WhatsApp → channel abstraction + prefs + kill-switch exist; provider adapters (MSG91/Twilio) not implemented
+- Reminder unschedule → abort exists; true re-defer on update works, but no `unschedule` on cancel-from-status-endpoint
+- Download helpers → canonical `lib/download.ts` exists; 3 inline copies remain
 
-## NOT DONE — candidates for next implementation rounds
+## NOT DONE — next implementation rounds
 
-- **High-value unblocked:** Rx safety gate server-side; doctor availability + slot booking; teleconsult link; reminder channels (email/SMS/WhatsApp abstraction); patient lab results + billing pages; visit/SOAP notes; receptionist roles; medications view; announcements + settings; admin doctor/visits CRUD endpoints (frontend calls them → 405); global `/api/v1/search` (frontend calls → 404); audit trail for PHI reads; queue/appointment DB constraints; access_service centralization; Keycloak prod realm hardening; CSP re-add (currently removed from BOTH nginx and next.config — regression); design-system primitives; record export (FHIR); seed script; template PATCH endpoint
-- **Blocked/external:** ABHA/ABDM (needs sandbox creds), SMS/WhatsApp providers (need accounts), OCR/AI features (need model/provider decision), load testing (needs env), i18n (needs translation assets), barcode lookup (needs data source), push notifications (needs VAPID/push service)
+- **Unblocked, prioritized:**
+  1. Patient slot-picker booking UI (backend ready)
+  2. access_service centralization (5 divergent copies — root cause of past authz bugs)
+  3. Write-side `log_change` coverage: vitals, billing, queue, appointments, uploads, clinics
+  4. Notification preferences UI page (API exists, zero callers)
+  5. Receptionist backend role-enforcement on clinical endpoints (currently relies on global role)
+  6. Doctor onboarding document upload completion
+  7. Record export endpoint (FHIR bundles already generated)
+  8. SMS/WhatsApp provider adapters (code the interface; no live creds needed)
+  9. Prescription expiry notifications
+  10. Verified badge patient-facing completion
+  11. User activity timeline on admin user detail
+  12. Backend export endpoints (CSV) for medicines/users/audit
+  13. Pre-commit hooks config
+  14. PrometheusRule alert set + Grafana dashboards + RUNBOOK.md
+  15. Download-helper convergence (3 inline copies → `lib/download.ts`)
+- **BLOCKED — ABDM/ABHA: awaiting regulatory approval (user-confirmed)** — do not implement: ABHA creation/linking, NRCeS-conformant FHIR, HIP module (tickets 107–116)
+- **Blocked/external:** SMS/WhatsApp live provider accounts (code adapters anyway), OCR/AI features, load testing env, i18n assets, barcode data source, push VAPID/service
 
 ## Apply when Jira creds available
 
-`python3 .claude/jira_cli.py list` → match tickets by summary → `complete <KEY>` for the DONE list above. The CSV has no issue keys — they were assigned at import; match by Summary text.
+Drop `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`, `JIRA_PROJECT_KEY=MED` into `.env`, then `python3 .claude/jira_cli.py list` → match by Summary → `complete <KEY>` for DONE items.

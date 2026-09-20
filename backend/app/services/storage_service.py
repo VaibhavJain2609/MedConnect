@@ -101,14 +101,6 @@ async def generate_presigned_upload(file_name: str, content_type: str, owner_id)
     }
 
 
-async def get_file_url(object_key: str) -> str:
-    """Return an accessible URL for the stored file."""
-    if settings.STORAGE_BACKEND == "s3":
-        return await _generate_s3_download_url(object_key)
-    # Local: serve via our own endpoint
-    return f"{settings.BACKEND_URL}/api/v1/uploads/{object_key}"
-
-
 def get_local_file_path(object_key: str) -> str:
     """Return the absolute filesystem path for a local object key."""
     # Prevent path traversal: resolve and ensure it stays under UPLOADS_DIR
