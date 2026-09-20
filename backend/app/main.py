@@ -25,6 +25,7 @@ from app.routers.admin import users as admin_users
 from app.routers.admin import clinics as admin_clinics
 from app.routers.admin import audit as admin_audit
 from app.routers.admin import lab_results as admin_lab_results
+from app.routers.admin import broadcast as admin_broadcast
 from app.routers import clinics
 from app.routers import onboarding
 from app.routers import clinic_invites
@@ -230,6 +231,7 @@ app.include_router(admin_users.router)
 app.include_router(admin_clinics.router)
 app.include_router(admin_audit.router)
 app.include_router(admin_lab_results.router)
+app.include_router(admin_broadcast.router)
 app.include_router(clinics.router)
 app.include_router(onboarding.router)
 app.include_router(clinic_invites.router)
