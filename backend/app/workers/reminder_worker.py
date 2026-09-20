@@ -5,7 +5,6 @@ Run with:
     arq app.workers.reminder_worker.WorkerSettings
 """
 import structlog
-from arq import cron
 from arq.connections import RedisSettings
 
 from app.config import settings
@@ -15,23 +14,42 @@ logger = structlog.get_logger()
 
 
 async def startup(ctx: dict) -> None:
-    """Create the DB session factory on worker startup."""
+    """Init Sentry (if configured) and create the DB session factory."""
+    if settings.SENTRY_DSN:
+        import sentry_sdk
+
+        sentry_sdk.init(dsn=settings.SENTRY_DSN, traces_sample_rate=0.1)
+        logger.info("sentry_initialized")
+
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
     engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True)
+    ctx["db_engine"] = engine
     ctx["db_session_factory"] = async_sessionmaker(engine, expire_on_commit=False)
     logger.info("reminder_worker_started")
 
 
 async def shutdown(ctx: dict) -> None:
+    """Dispose the DB engine so pooled connections are closed cleanly."""
+    engine = ctx.get("db_engine")
+    if engine is not None:
+        await engine.dispose()
     logger.info("reminder_worker_shutdown")
+
+
+_redis_settings = RedisSettings.from_dsn(settings.REDIS_URL)
+# arq 0.26 maps conn_timeout onto redis-py's socket_connect_timeout; there is
+# no separate socket_timeout field on RedisSettings in this version.
+_redis_settings.conn_timeout = 5
+_redis_settings.conn_retry_delay = 1
 
 
 class WorkerSettings:
     functions = [send_appointment_reminder]
     on_startup = startup
     on_shutdown = shutdown
-    redis_settings = RedisSettings.from_dsn(settings.REDIS_URL)
+    redis_settings = _redis_settings
     max_jobs = 10
     job_timeout = 60  # seconds
     keep_result = 3600  # keep results for 1 hour
+    health_check_key = "arq:health:reminder-worker"
