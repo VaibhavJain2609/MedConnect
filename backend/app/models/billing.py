@@ -40,4 +40,5 @@ class Billing(Base):
         Index("idx_billing_patient", "patient_id", postgresql_where=(deleted_at.is_(None))),
         Index("idx_billing_clinic_status", "clinic_id", "status", postgresql_where=(deleted_at.is_(None))),
         Index("idx_billing_created_at", "created_at", postgresql_where=(deleted_at.is_(None))),
+        Index("idx_billing_appointment", "appointment_id", postgresql_where=(deleted_at.is_(None))),
     )

@@ -46,5 +46,5 @@ class MedicalRecord(Base):
         Index("idx_records_type", "record_type", postgresql_where=(deleted_at.is_(None))),
         Index("idx_records_created", "created_at", postgresql_where=(deleted_at.is_(None))),
         Index("idx_records_clinic", "clinic_id", postgresql_where=(deleted_at.is_(None))),
-        Index("idx_records_amended_from", "amended_from_id"),
+        Index("idx_records_amended_from", "amended_from_id", postgresql_where=(amended_from_id.isnot(None))),
     )

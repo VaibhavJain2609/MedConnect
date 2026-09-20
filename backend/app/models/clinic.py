@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -77,7 +77,14 @@ class ClinicMembership(Base):
     branch: Mapped["ClinicBranch"] = relationship(back_populates="memberships")
 
     __table_args__ = (
-        UniqueConstraint("user_id", "clinic_id", name="uq_membership_user_clinic"),
+        # Partial unique: soft-deleted memberships must not block re-invites
+        Index(
+            "uq_membership_user_clinic",
+            "user_id",
+            "clinic_id",
+            unique=True,
+            postgresql_where=(deleted_at.is_(None)),
+        ),
         Index("idx_memberships_clinic", "clinic_id", postgresql_where=(deleted_at.is_(None))),
         Index("idx_memberships_user", "user_id", postgresql_where=(deleted_at.is_(None))),
     )
