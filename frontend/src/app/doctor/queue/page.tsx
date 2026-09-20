@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import api from "@/lib/api";
-import { useAuthStore } from "@/stores/auth-store";
+import { useClinicStore } from "@/stores/clinic-store";
 
 interface QueueEntry {
   id: string;
@@ -61,6 +61,15 @@ function BillPatientModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  // Close on Escape
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const amt = parseFloat(amount);
@@ -71,17 +80,14 @@ function BillPatientModal({
     setSaving(true);
     setError("");
     try {
-      await api.post(
-        "/api/v1/billing",
-        {
-          patient_id: state.patientId,
-          clinic_id: clinicId || undefined,
-          amount: amt,
-          payment_method: paymentMethod,
-          notes: notes || undefined,
-        },
-        clinicId ? { headers: { "X-Clinic-Id": clinicId } } : {}
-      );
+      // X-Clinic-Id header is attached automatically by the axios interceptor
+      await api.post("/api/v1/billing", {
+        patient_id: state.patientId,
+        clinic_id: clinicId || undefined,
+        amount: amt,
+        payment_method: paymentMethod,
+        notes: notes || undefined,
+      });
       onClose();
     } catch (err: unknown) {
       const axiosError = err as { response?: { data?: { detail?: { error?: { message?: string } } | string } } };
@@ -98,8 +104,17 @@ function BillPatientModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Create invoice"
+        className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
         <h2 className="text-lg font-bold text-dreams-textPrimary mb-1">Create Invoice</h2>
         <p className="text-sm text-dreams-textSecondary mb-4">
           Patient: <span className="font-medium text-dreams-textPrimary">{state.patientName ?? "Unknown"}</span>
@@ -175,10 +190,9 @@ function BillPatientModal({
 }
 
 export default function QueuePage() {
-  const { user } = useAuthStore();
-  const clinicId = typeof window !== "undefined"
-    ? localStorage.getItem("activeClinicId") ?? ""
-    : "";
+  // Reactive clinic id from the persisted clinic store — the axios
+  // interceptor attaches it as X-Clinic-Id automatically.
+  const clinicId = useClinicStore((s) => s.activeClinicId) ?? "";
 
   const [entries, setEntries] = useState<QueueEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -193,9 +207,7 @@ export default function QueuePage() {
       return;
     }
     try {
-      const res = await api.get("/api/v1/queue", {
-        headers: { "X-Clinic-Id": clinicId },
-      });
+      const res = await api.get("/api/v1/queue");
       setEntries(res.data.data ?? res.data);
       setError("");
     } catch {
@@ -214,11 +226,7 @@ export default function QueuePage() {
   async function updateStatus(id: string, status: QueueEntry["status"]) {
     setActionLoading(id + status);
     try {
-      await api.patch(
-        `/api/v1/queue/${id}/status`,
-        { status },
-        { headers: { "X-Clinic-Id": clinicId } }
-      );
+      await api.patch(`/api/v1/queue/${id}/status`, { status });
       await fetchQueue();
     } catch {
       alert("Failed to update status.");

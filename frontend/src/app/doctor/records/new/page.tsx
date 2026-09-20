@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useRef, useCallback } from "react";
+import { Suspense, useState, useRef, useCallback, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import api from "@/lib/api";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
@@ -24,19 +24,16 @@ interface PatientSuggestion {
 }
 
 function PatientSearch({
-  initialId,
+  selected,
   onSelect,
 }: {
-  initialId: string;
+  selected: PatientSuggestion | null;
   onSelect: (patient: PatientSuggestion | null) => void;
 }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PatientSuggestion[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [selected, setSelected] = useState<PatientSuggestion | null>(
-    initialId ? ({ id: initialId, full_name: initialId, phone: null, last_visit_at: null } as PatientSuggestion) : null
-  );
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const search = useCallback((q: string) => {
@@ -64,14 +61,12 @@ function PatientSearch({
   };
 
   const handleSelect = (patient: PatientSuggestion) => {
-    setSelected(patient);
     setOpen(false);
     setQuery("");
     onSelect(patient);
   };
 
   const handleClear = () => {
-    setSelected(null);
     onSelect(null);
   };
 
@@ -89,6 +84,7 @@ function PatientSearch({
         <button
           type="button"
           onClick={handleClear}
+          aria-label="Clear selected patient"
           className="text-dreams-textSecondary hover:text-red-500 transition-colors"
         >
           <X className="h-4 w-4" />
@@ -100,6 +96,7 @@ function PatientSearch({
   return (
     <div className="relative">
       <input
+        id="record-patient"
         type="text"
         value={query}
         onChange={handleChange}
@@ -159,12 +156,39 @@ function NewRecordForm() {
       initialPatientId
         ? {
             id: initialPatientId,
-            full_name: initialPatientId,
+            full_name: "Loading patient…",
             phone: null,
             last_visit_at: null,
           }
         : null
     );
+
+  // Hydrate the patient's real name when arriving via ?patient_id=
+  useEffect(() => {
+    if (!initialPatientId) return;
+    api
+      .get(`/api/v1/doctors/patients/${initialPatientId}/profile`)
+      .then((res) => {
+        const p = res.data;
+        if (p?.id) {
+          setSelectedPatient({
+            id: p.id,
+            full_name: p.full_name || initialPatientId,
+            phone: p.phone ?? null,
+            last_visit_at: p.last_visit_at ?? null,
+          });
+        }
+      })
+      .catch(() => {
+        // Fall back to showing the raw id rather than a stuck "Loading…"
+        setSelectedPatient((prev) =>
+          prev?.id === initialPatientId
+            ? { ...prev, full_name: initialPatientId }
+            : prev
+        );
+      });
+  }, [initialPatientId]);
+
   const [recordType, setRecordType] = useState("opd_note");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -190,7 +214,7 @@ function NewRecordForm() {
         description: description || undefined,
       });
       setSuccess(true);
-      setTimeout(() => router.push("/doctor/dashboard"), 1500);
+      setTimeout(() => router.push(`/doctor/patients/${selectedPatient.id}`), 1500);
     } catch (err: any) {
       setError(
         err.response?.data?.detail?.error?.message || "Failed to create record"
@@ -207,7 +231,7 @@ function NewRecordForm() {
           Record created successfully!
         </p>
         <p className="mt-1 text-sm text-green-600">
-          Redirecting to dashboard...
+          Redirecting to patient profile...
         </p>
       </div>
     );
@@ -225,20 +249,21 @@ function NewRecordForm() {
       )}
 
       <div className="mb-4">
-        <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+        <label htmlFor="record-patient" className="mb-1 block text-sm font-medium text-dreams-textPrimary">
           Patient *
         </label>
         <PatientSearch
-          initialId={initialPatientId}
+          selected={selectedPatient}
           onSelect={setSelectedPatient}
         />
       </div>
 
       <div className="mb-4">
-        <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+        <label htmlFor="record-type" className="mb-1 block text-sm font-medium text-dreams-textPrimary">
           Record Type
         </label>
         <select
+          id="record-type"
           value={recordType}
           onChange={(e) => setRecordType(e.target.value)}
           className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
@@ -252,10 +277,11 @@ function NewRecordForm() {
       </div>
 
       <div className="mb-4">
-        <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+        <label htmlFor="record-title" className="mb-1 block text-sm font-medium text-dreams-textPrimary">
           Title
         </label>
         <input
+          id="record-title"
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -266,10 +292,11 @@ function NewRecordForm() {
       </div>
 
       <div className="mb-6">
-        <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+        <label htmlFor="record-description" className="mb-1 block text-sm font-medium text-dreams-textPrimary">
           Description / Notes
         </label>
         <textarea
+          id="record-description"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={4}

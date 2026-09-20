@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { globalSearch, type SearchResult } from "@/lib/api/search";
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/ui/avatar";
+import { useUiStore } from "@/stores/ui-store";
 
 /**
  * GlobalSearch Component
@@ -24,7 +25,10 @@ import { Avatar } from "@/components/ui/avatar";
  * <GlobalSearch />
  */
 export const GlobalSearch: React.FC = () => {
-  const [isOpen, setIsOpen] = React.useState(false);
+  // Open state lives in the shared ui-store so header trigger buttons
+  // and the ⌘K/Ctrl+K shortcut drive the same modal.
+  const isOpen = useUiStore((s) => s.searchOpen);
+  const setIsOpen = useUiStore((s) => s.setSearchOpen);
   const [searchQuery, setSearchQuery] = React.useState("");
   const router = useRouter();
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -86,7 +90,7 @@ export const GlobalSearch: React.FC = () => {
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, results, selectedIndex]);
+  }, [isOpen, results, selectedIndex, setIsOpen]);
 
   // Focus input when modal opens
   React.useEffect(() => {
@@ -146,7 +150,12 @@ export const GlobalSearch: React.FC = () => {
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-start justify-center pt-[10vh]">
-        <div className="bg-white rounded-lg shadow-2xl w-full max-w-2xl mx-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Global search"
+          className="bg-white rounded-lg shadow-2xl w-full max-w-2xl mx-4"
+        >
           {/* Search Input */}
           <div className="flex items-center gap-3 p-4 border-b border-dreams-border">
             <Search className="h-5 w-5 text-dreams-textSecondary flex-shrink-0" />
@@ -168,6 +177,7 @@ export const GlobalSearch: React.FC = () => {
                 setSelectedIndex(0);
               }}
               className="p-1 rounded hover:bg-dreams-lightBg"
+              aria-label="Close search"
             >
               <X className="h-5 w-5 text-dreams-textSecondary" />
             </button>
@@ -283,15 +293,20 @@ GlobalSearch.displayName = "GlobalSearch";
  * <GlobalSearchTrigger />
  */
 export const GlobalSearchTrigger: React.FC<{
-  onOpen: () => void;
+  onOpen?: () => void;
 }> = ({ onOpen }) => {
+  const openSearch = useUiStore((s) => s.openSearch);
   const isMac =
     typeof window !== "undefined" &&
     navigator.platform.toUpperCase().indexOf("MAC") >= 0;
 
   return (
     <button
-      onClick={onOpen}
+      onClick={() => {
+        onOpen?.();
+        openSearch();
+      }}
+      aria-label="Open global search"
       className="flex items-center gap-3 w-64 px-3 py-2 rounded-lg border border-dreams-border bg-white hover:bg-dreams-lightBg/50 transition-colors"
     >
       <Search className="h-4 w-4 text-dreams-textSecondary" />

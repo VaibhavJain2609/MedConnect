@@ -17,22 +17,29 @@ import { FilePlus, Printer, Search } from "lucide-react";
 
 export default function DoctorPrescriptionsPage() {
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
   const [page, setPage] = useState(1);
   const [cursors, setCursors] = useState<Record<number, string | null>>({ 1: null });
   const [allRecords, setAllRecords] = useState<any[]>([]);
 
+  // Debounce search input so we don't fire a request per keystroke
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
   // Reset to page 1 when search changes
-  useEffect(() => { setPage(1); setCursors({ 1: null }); setAllRecords([]); }, [search]);
+  useEffect(() => { setPage(1); setCursors({ 1: null }); setAllRecords([]); }, [debouncedSearch]);
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ["doctor-prescriptions", search, page],
+    queryKey: ["doctor-prescriptions", debouncedSearch, page],
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set("limit", "20");
       const cursor = cursors[page] ?? null;
       if (cursor) params.set("cursor", cursor);
-      if (search) params.set("q", search);
+      if (debouncedSearch) params.set("q", debouncedSearch);
 
       const res = await api.get(`/api/v1/doctors/prescriptions?${params}`);
       const nextCursor = res.data.pagination?.next_cursor ?? null;

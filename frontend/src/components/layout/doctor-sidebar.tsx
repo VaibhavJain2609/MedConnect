@@ -16,6 +16,8 @@ import {
   UserPlus,
   Calendar,
   ListOrdered,
+  Bell,
+  BookOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/auth";
@@ -44,6 +46,7 @@ const navSections: NavSection[] = [
     items: [
       { href: "/doctor/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/doctor/appointments", label: "Appointments", icon: Calendar },
+      { href: "/doctor/notifications", label: "Notifications", icon: Bell },
     ],
   },
   {
@@ -51,6 +54,7 @@ const navSections: NavSection[] = [
     items: [
       { href: "/doctor/patients", label: "My Patients", icon: Users },
       { href: "/doctor/prescriptions", label: "My Prescriptions", icon: Pill },
+      { href: "/doctor/prescriptions/templates", label: "Templates", icon: BookOpen },
       { href: "/doctor/queue", label: "Queue", icon: ListOrdered },
       { href: "/doctor/clinic", label: "My Clinic", icon: Building2 },
       { href: "/doctor/patients/link", label: "Link Patient", icon: UserPlus },
@@ -78,12 +82,18 @@ function SidebarNavItem({
 }) {
   const Icon = item.icon;
   // Exact match for action pages to avoid highlighting "new" when on list page
-  // Also avoid /doctor/patients matching /doctor/patients/link
+  // Also avoid /doctor/patients matching /doctor/patients/link, and
+  // /doctor/prescriptions matching /doctor/prescriptions/new or /templates
   const isActive =
     pathname === item.href ||
     (item.href !== "/doctor/prescriptions/new" &&
       item.href !== "/doctor/records/new" &&
       item.href !== "/doctor/patients" &&
+      !(
+        item.href === "/doctor/prescriptions" &&
+        (pathname.startsWith("/doctor/prescriptions/new") ||
+          pathname.startsWith("/doctor/prescriptions/templates"))
+      ) &&
       pathname.startsWith(item.href + "/"));
 
   return (
@@ -131,6 +141,7 @@ export function DoctorSidebar({
             variant="ghost"
             size="icon"
             onClick={onToggle}
+            aria-label={isOpen ? "Collapse sidebar" : "Expand sidebar"}
             className={cn(
               "text-gray-400 hover:text-white hover:bg-white/10",
               !isOpen && "mx-auto"
@@ -149,6 +160,7 @@ export function DoctorSidebar({
             variant="ghost"
             size="icon"
             onClick={onMobileClose}
+            aria-label="Close menu"
             className="text-gray-400 hover:text-white hover:bg-white/10"
           >
             <ChevronLeft className="h-4 w-4" />

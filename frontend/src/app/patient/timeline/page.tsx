@@ -23,19 +23,26 @@ const RECORD_TYPES = [
 export default function TimelinePage() {
   const [type, setType] = useState("");
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
   const [cursors, setCursors] = useState<Record<number, string | null>>({ 1: null });
   const [allRecords, setAllRecords] = useState<any[]>([]);
 
+  // Debounce search input so we don't fire a request per keystroke
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
   // Reset to page 1 when filters change
-  useEffect(() => { setPage(1); setCursors({ 1: null }); setAllRecords([]); }, [type, search]);
+  useEffect(() => { setPage(1); setCursors({ 1: null }); setAllRecords([]); }, [type, debouncedSearch]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["timeline", type, search, page],
+    queryKey: ["timeline", type, debouncedSearch, page],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (type) params.set("type", type);
-      if (search) params.set("q", search);
+      if (debouncedSearch) params.set("q", debouncedSearch);
       params.set("limit", "20");
       const cursor = cursors[page] ?? null;
       if (cursor) params.set("cursor", cursor);
@@ -52,6 +59,21 @@ export default function TimelinePage() {
       return res.data;
     },
   });
+
+  // Map record_id → real prescription id so PrescriptionCard can offer
+  // a PDF download (the PDF endpoint needs the Prescription id, not the
+  // timeline record id).
+  const { data: prescriptionsData } = useQuery({
+    queryKey: ["patient-prescriptions-map"],
+    queryFn: async () => {
+      const res = await api.get("/api/v1/patients/prescriptions?limit=100");
+      return res.data;
+    },
+    staleTime: 60_000,
+  });
+  const recordToPrescriptionId = new Map<string, string>(
+    (prescriptionsData?.data ?? []).map((p: any) => [p.record_id, p.id])
+  );
 
   return (
     <div className="space-y-6">
@@ -123,6 +145,7 @@ export default function TimelinePage() {
                     variant="patient"
                     collapsible={true}
                     defaultExpanded={false}
+                    prescriptionId={recordToPrescriptionId.get(record.id)}
                   />
                 );
               }

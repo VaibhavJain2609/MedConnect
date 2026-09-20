@@ -5,15 +5,13 @@ import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { DoctorSidebar } from "./doctor-sidebar";
 import { Button } from "@/components/ui/button";
-import { Avatar } from "@/components/ui/avatar";
 import { GlobalSearch, GlobalSearchTrigger } from "@/components/ui/global-search";
 import { NotificationCenter } from "@/components/layout/notification-center";
+import { UserMenu } from "@/components/layout/user-menu";
 import {
   Menu,
   Settings,
-  ChevronDown,
 } from "lucide-react";
-import { logout } from "@/lib/auth";
 import { useAuthStore } from "@/stores/auth-store";
 import { ClinicSelector } from "@/components/layout/clinic-selector";
 import api from "@/lib/api";
@@ -69,12 +67,13 @@ export function DoctorLayout({ children }: { children: React.ReactNode }) {
               size="icon"
               className="md:hidden"
               onClick={() => setMobileMenuOpen(true)}
+              aria-label="Open menu"
             >
               <Menu className="h-5 w-5" />
             </Button>
 
             {/* Global search trigger */}
-            <GlobalSearchTrigger onOpen={() => {}} />
+            <GlobalSearchTrigger />
 
             {/* Clinic selector */}
             <ClinicSelector />
@@ -90,7 +89,9 @@ export function DoctorLayout({ children }: { children: React.ReactNode }) {
               variant="ghost"
               size="icon"
               className="text-gray-600 hover:text-dreams-blue"
-              title="Settings"
+              title="Notifications"
+              aria-label="Notifications"
+              onClick={() => router.push("/doctor/notifications")}
             >
               <Settings className="h-5 w-5" />
             </Button>
@@ -99,20 +100,7 @@ export function DoctorLayout({ children }: { children: React.ReactNode }) {
             <div className="h-8 w-px bg-gray-200 mx-2" />
 
             {/* User dropdown */}
-            <button className="flex items-center gap-2 hover:bg-gray-50 rounded-lg px-2 py-1.5 transition-colors">
-              <Avatar
-                src={null}
-                fallback={user?.full_name || "D"}
-                size="sm"
-              />
-              <div className="hidden md:block text-left">
-                <p className="text-sm font-medium text-gray-900">
-                  {user?.full_name || "Doctor"}
-                </p>
-                <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
-              </div>
-              <ChevronDown className="h-4 w-4 text-gray-400" />
-            </button>
+            <UserMenu role="doctor" />
           </div>
         </header>
 

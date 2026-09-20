@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   LineChart,
@@ -11,7 +11,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { AlertTriangle, Plus, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { AlertTriangle, Plus, TrendingUp, TrendingDown, Minus, X } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import {
   VITAL_META,
@@ -42,6 +42,12 @@ function formatDateTime(iso: string) {
   });
 }
 
+/** Current local time formatted for a datetime-local input (avoids UTC off-by-one). */
+function localDateTimeInputValue(d = new Date()) {
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
 function TrendIndicator({ current, previous }: { current: number; previous?: number }) {
   if (!previous) return <Minus className="h-4 w-4 text-dreams-textSecondary" />;
   const diff = current - previous;
@@ -61,9 +67,7 @@ function AddVitalForm({ selectedType, onClose, onSuccess }: AddVitalFormProps) {
   const [value, setValue] = useState("");
   const [unit, setUnit] = useState(meta.unit);
   const [notes, setNotes] = useState("");
-  const [recordedAt, setRecordedAt] = useState(
-    new Date().toISOString().slice(0, 16)
-  );
+  const [recordedAt, setRecordedAt] = useState(localDateTimeInputValue());
   const [error, setError] = useState("");
   const [criticalWarning, setCriticalWarning] = useState("");
 
@@ -181,13 +185,183 @@ function AddVitalForm({ selectedType, onClose, onSuccess }: AddVitalFormProps) {
   );
 }
 
+/**
+ * Paired blood-pressure entry — systolic + diastolic in one form.
+ * Submits two vitals rows (bp_systolic / bp_diastolic) sharing the same
+ * recorded_at so they stay correlated.
+ */
+function AddBloodPressureForm({
+  onClose,
+  onSuccess,
+}: {
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [systolic, setSystolic] = useState("");
+  const [diastolic, setDiastolic] = useState("");
+  const [notes, setNotes] = useState("");
+  const [recordedAt, setRecordedAt] = useState(localDateTimeInputValue());
+  const [error, setError] = useState("");
+
+  const mutation = useMutation({
+    mutationFn: async (payload: {
+      systolic: number;
+      diastolic: number;
+      recorded_at: string;
+      notes?: string;
+    }) => {
+      await Promise.all([
+        createVital({
+          vital_type: "bp_systolic",
+          value: payload.systolic,
+          unit: "mmHg",
+          recorded_at: payload.recorded_at,
+          notes: payload.notes,
+        }),
+        createVital({
+          vital_type: "bp_diastolic",
+          value: payload.diastolic,
+          unit: "mmHg",
+          recorded_at: payload.recorded_at,
+          notes: payload.notes,
+        }),
+      ]);
+    },
+    onSuccess: () => {
+      onSuccess();
+      onClose();
+    },
+    onError: () => {
+      setError("Failed to save reading. Please try again.");
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const sys = parseFloat(systolic);
+    const dia = parseFloat(diastolic);
+    if (isNaN(sys) || isNaN(dia)) {
+      setError("Please enter valid numbers for both systolic and diastolic.");
+      return;
+    }
+    if (sys <= dia) {
+      setError("Systolic should be higher than diastolic (e.g., 120 / 80).");
+      return;
+    }
+    setError("");
+    mutation.mutate({
+      systolic: sys,
+      diastolic: dia,
+      recorded_at: new Date(recordedAt).toISOString(),
+      notes: notes || undefined,
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <span className="block text-sm font-medium text-dreams-textPrimary mb-1">
+          Blood Pressure (mmHg)
+        </span>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            value={systolic}
+            onChange={(e) => setSystolic(e.target.value)}
+            placeholder="Systolic, e.g., 120"
+            aria-label="Systolic (mmHg)"
+            className="flex-1 border border-dreams-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
+            required
+            autoFocus
+          />
+          <span className="text-dreams-textSecondary font-medium">/</span>
+          <input
+            type="number"
+            value={diastolic}
+            onChange={(e) => setDiastolic(e.target.value)}
+            placeholder="Diastolic, e.g., 80"
+            aria-label="Diastolic (mmHg)"
+            className="flex-1 border border-dreams-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
+            required
+          />
+        </div>
+        <p className="text-xs text-dreams-textSecondary mt-1">
+          Normal range: 90–120 / 60–80 mmHg
+        </p>
+      </div>
+      <div>
+        <label
+          htmlFor="bp-recorded-at"
+          className="block text-sm font-medium text-dreams-textPrimary mb-1"
+        >
+          Date & Time
+        </label>
+        <input
+          id="bp-recorded-at"
+          type="datetime-local"
+          value={recordedAt}
+          onChange={(e) => setRecordedAt(e.target.value)}
+          className="w-full border border-dreams-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
+        />
+      </div>
+      <div>
+        <label
+          htmlFor="bp-notes"
+          className="block text-sm font-medium text-dreams-textPrimary mb-1"
+        >
+          Notes (optional)
+        </label>
+        <textarea
+          id="bp-notes"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={2}
+          placeholder="e.g., after exercise, fasting"
+          className="w-full border border-dreams-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue resize-none"
+        />
+      </div>
+      {error && <p className="text-sm text-red-500">{error}</p>}
+      <div className="flex gap-2 justify-end">
+        <button
+          type="button"
+          onClick={onClose}
+          className="px-4 py-2 text-sm border border-dreams-border rounded-lg hover:bg-dreams-lightBg transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={mutation.isPending}
+          className="px-4 py-2 text-sm bg-dreams-blue text-white rounded-lg hover:bg-dreams-blue/90 transition-colors disabled:opacity-50"
+        >
+          {mutation.isPending ? "Saving..." : "Save BP Reading"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 export default function VitalsPage() {
   const [selectedType, setSelectedType] = useState<VitalType>("bp_systolic");
   const [days, setDays] = useState(30);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showBpForm, setShowBpForm] = useState(false);
   const queryClient = useQueryClient();
 
   const meta = VITAL_META[selectedType];
+
+  // Close any open modal on Escape
+  useEffect(() => {
+    if (!showAddForm && !showBpForm) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setShowAddForm(false);
+        setShowBpForm(false);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [showAddForm, showBpForm]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["patient-vitals", selectedType, days],
@@ -224,25 +398,89 @@ export default function VitalsPage() {
             Track your health metrics over time
           </p>
         </div>
-        <button
-          onClick={() => setShowAddForm(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-dreams-blue text-white rounded-lg hover:bg-dreams-blue/90 transition-colors text-sm font-medium"
-        >
-          <Plus className="h-4 w-4" />
-          Add Reading
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowBpForm(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-dreams-border text-dreams-textPrimary rounded-lg hover:bg-dreams-lightBg transition-colors text-sm font-medium"
+          >
+            <Plus className="h-4 w-4" />
+            Add BP Reading
+          </button>
+          <button
+            onClick={() => setShowAddForm(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-dreams-blue text-white rounded-lg hover:bg-dreams-blue/90 transition-colors text-sm font-medium"
+          >
+            <Plus className="h-4 w-4" />
+            Add Reading
+          </button>
+        </div>
       </div>
 
       {/* Add Reading Modal */}
       {showAddForm && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-4 sm:p-6">
-            <h2 className="text-lg font-bold text-dreams-textPrimary mb-4">
-              Add {meta.label} Reading
-            </h2>
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setShowAddForm(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Add ${meta.label} reading`}
+            className="bg-white rounded-xl shadow-xl w-full max-w-md p-4 sm:p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-dreams-textPrimary">
+                Add {meta.label} Reading
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowAddForm(false)}
+                aria-label="Close"
+                className="text-dreams-textSecondary hover:text-dreams-textPrimary"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
             <AddVitalForm
               selectedType={selectedType}
               onClose={() => setShowAddForm(false)}
+              onSuccess={() =>
+                queryClient.invalidateQueries({ queryKey: ["patient-vitals"] })
+              }
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Add Blood Pressure Modal (paired systolic/diastolic) */}
+      {showBpForm && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setShowBpForm(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Add blood pressure reading"
+            className="bg-white rounded-xl shadow-xl w-full max-w-md p-4 sm:p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-dreams-textPrimary">
+                Add Blood Pressure Reading
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowBpForm(false)}
+                aria-label="Close"
+                className="text-dreams-textSecondary hover:text-dreams-textPrimary"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <AddBloodPressureForm
+              onClose={() => setShowBpForm(false)}
               onSuccess={() =>
                 queryClient.invalidateQueries({ queryKey: ["patient-vitals"] })
               }

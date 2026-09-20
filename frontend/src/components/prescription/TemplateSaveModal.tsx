@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import api from "@/lib/api";
 
 interface Medicine {
@@ -25,6 +25,15 @@ export function TemplateSaveModal({ medicines, diagnosis, notes, onClose, onSave
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  // Close on Escape
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   const handleSave = async () => {
     if (!templateName.trim()) {
       setError("Please enter a template name");
@@ -35,7 +44,7 @@ export function TemplateSaveModal({ medicines, diagnosis, notes, onClose, onSave
     setError("");
 
     try {
-      await api.post("/api/v1/doctors/templates", {
+      await api.post("/api/v1/doctors/prescription-templates", {
         name: templateName,
         medicines: medicines.filter((m) => m.name),
         diagnosis: diagnosis || undefined,
@@ -51,8 +60,17 @@ export function TemplateSaveModal({ medicines, diagnosis, notes, onClose, onSave
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-xl bg-white p-6">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Save as template"
+        className="w-full max-w-md rounded-xl bg-white p-6 mx-4"
+        onClick={(e) => e.stopPropagation()}
+      >
         <h3 className="mb-4 text-lg font-semibold">Save as Template</h3>
 
         {error && (
