@@ -1,31 +1,50 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Search } from "lucide-react";
-import { getVisits, Visit } from "@/lib/api/visits";
+import { Plus, Search, Trash2 } from "lucide-react";
+import { deleteVisit, getVisits, Visit } from "@/lib/api/visits";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
+function formatDateTime(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export default function AdminVisitsPage() {
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState("");
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
 
-  // Fetch visits from backend
+  // Fetch visits (encounters) from backend
   const { data, isLoading, error } = useQuery({
-    queryKey: ["admin-visits", searchQuery, statusFilter, page, limit],
+    queryKey: ["admin-visits", searchQuery, dateFilter, page, limit],
     queryFn: () =>
       getVisits({
         search: searchQuery || undefined,
-        status: statusFilter !== "all" ? statusFilter : undefined,
+        date: dateFilter || undefined,
         page,
         limit,
       }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteVisit(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-visits"] });
+    },
   });
 
   const visits = data?.visits;
@@ -34,13 +53,13 @@ export default function AdminVisitsPage() {
   // Table columns definition
   const columns: ColumnDef<Visit>[] = [
     {
-      accessorKey: "visit_id",
+      accessorKey: "id",
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Visit ID" />
       ),
       cell: ({ row }) => (
-        <span className="font-medium text-dreams-blue">
-          {row.getValue("visit_id")}
+        <span className="font-medium text-dreams-blue font-mono text-xs">
+          {row.original.id.slice(0, 8)}
         </span>
       ),
     },
@@ -52,18 +71,13 @@ export default function AdminVisitsPage() {
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
           <Avatar
-            src={row.original.patient_photo}
-            fallback={row.getValue("patient_name")}
+            fallback={row.original.patient_name ?? "?"}
             size="sm"
           />
-          <span className="font-medium">{row.getValue("patient_name")}</span>
+          <span className="font-medium">
+            {row.original.patient_name ?? "Unknown"}
+          </span>
         </div>
-      ),
-    },
-    {
-      accessorKey: "department",
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Department" />
       ),
     },
     {
@@ -74,43 +88,70 @@ export default function AdminVisitsPage() {
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
           <Avatar
-            src={row.original.doctor_photo}
-            fallback={row.getValue("doctor_name")}
+            fallback={row.original.doctor_name ?? "?"}
             size="sm"
           />
-          <span className="font-medium">{row.getValue("doctor_name")}</span>
+          <span className="font-medium">
+            {row.original.doctor_name ?? "Unknown"}
+          </span>
         </div>
       ),
     },
     {
-      accessorKey: "visit_date",
+      accessorKey: "clinic_name",
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Clinic" />
+      ),
+      cell: ({ row }) => (
+        <span className="text-sm">
+          {row.original.clinic_name ?? "—"}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "created_at",
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Visit Date" />
       ),
       cell: ({ row }) => (
-        <span className="text-sm">{row.getValue("visit_date")}</span>
+        <span className="text-sm">{formatDateTime(row.original.created_at)}</span>
       ),
     },
     {
-      accessorKey: "status",
+      accessorKey: "assessment",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Status" />
+        <DataTableColumnHeader column={column} title="Assessment" />
       ),
       cell: ({ row }) => {
-        const status = row.getValue("status") as string;
-        const statusLabels: Record<string, string> = {
-          scheduled: "Scheduled",
-          in_progress: "In Progress",
-          completed: "Completed",
-          cancelled: "Cancelled",
-        };
-
+        const assessment = row.original.assessment;
         return (
-          <Badge variant={status as any}>
-            {statusLabels[status] || status}
-          </Badge>
+          <span className="text-sm text-dreams-textSecondary line-clamp-2 max-w-xs">
+            {assessment ?? "—"}
+          </span>
         );
       },
+    },
+    {
+      id: "actions",
+      header: "",
+      cell: ({ row }) => (
+        <button
+          onClick={() => {
+            if (
+              window.confirm(
+                "Delete this visit? This will soft-delete the encounter record."
+              )
+            ) {
+              deleteMutation.mutate(row.original.id);
+            }
+          }}
+          disabled={deleteMutation.isPending}
+          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40"
+          title="Delete visit"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      ),
     },
   ];
 
@@ -150,7 +191,7 @@ export default function AdminVisitsPage() {
             </Badge>
           </div>
           <p className="text-dreams-textSecondary mt-1">
-            Manage patient visits and consultations
+            Patient encounters and consultation notes
           </p>
         </div>
 
@@ -171,7 +212,7 @@ export default function AdminVisitsPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Search by patient, doctor, or department..."
+            placeholder="Search by patient, doctor, or clinic..."
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
@@ -181,21 +222,16 @@ export default function AdminVisitsPage() {
           />
         </div>
 
-        {/* Status Filter */}
-        <select
-          value={statusFilter}
+        {/* Date Filter */}
+        <input
+          type="date"
+          value={dateFilter}
           onChange={(e) => {
-            setStatusFilter(e.target.value);
+            setDateFilter(e.target.value);
             setPage(1);
           }}
           className="h-10 px-4 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
-        >
-          <option value="all">All Status</option>
-          <option value="scheduled">Scheduled</option>
-          <option value="in_progress">In Progress</option>
-          <option value="completed">Completed</option>
-          <option value="cancelled">Cancelled</option>
-        </select>
+        />
       </div>
 
       {/* Data Table — server-paginated; internal pager hidden */}

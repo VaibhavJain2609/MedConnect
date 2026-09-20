@@ -10,6 +10,7 @@ from app.models.patient_link import PatientClinicLink, PatientLinkCode
 from app.models.record_access import RecordAccessConsent
 from app.models.appointment import Appointment
 from app.models.doctor_availability import DoctorAvailability, DoctorLeave
+from app.models.encounter import Encounter
 from app.models.vital import PatientVital, VITAL_TYPES
 from app.models.audit import AuditLog
 from app.models.lab_result import LabResult
@@ -70,6 +71,7 @@ __all__ = [
     "Appointment",
     "DoctorAvailability",
     "DoctorLeave",
+    "Encounter",
     "PatientVital",
     "VITAL_TYPES",
     "AuditLog",

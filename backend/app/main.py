@@ -36,6 +36,8 @@ from app.routers import vitals
 from app.routers import prescriptions_pdf
 from app.routers import billing, revenue, queue
 from app.routers import availability
+from app.routers import encounters
+from app.routers.admin import visits as admin_visits
 
 # merge_contextvars first so request_id (bound by RequestIDMiddleware) shows
 # up on every log line. wrap_for_formatter hands structlog events to the
@@ -241,6 +243,8 @@ app.include_router(billing.router)
 app.include_router(revenue.router)
 app.include_router(queue.router)
 app.include_router(availability.router)
+app.include_router(encounters.router)
+app.include_router(admin_visits.router)
 # NOTE: routers/medicines.py, routers/prescriptions.py,
 # routers/admin/medicines.py and routers/admin/components.py are dead/broken
 # and have been removed — do not re-add imports or include_router calls.

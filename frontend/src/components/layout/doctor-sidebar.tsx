@@ -19,6 +19,7 @@ import {
   ListOrdered,
   Bell,
   BookOpen,
+  ClipboardList,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/auth";
@@ -55,6 +56,7 @@ const navSections: NavSection[] = [
     items: [
       { href: "/doctor/patients", label: "My Patients", icon: Users },
       { href: "/doctor/schedule", label: "Schedule", icon: CalendarClock },
+      { href: "/doctor/visits", label: "Encounters", icon: ClipboardList },
       { href: "/doctor/prescriptions", label: "My Prescriptions", icon: Pill },
       { href: "/doctor/prescriptions/templates", label: "Templates", icon: BookOpen },
       { href: "/doctor/queue", label: "Queue", icon: ListOrdered },
