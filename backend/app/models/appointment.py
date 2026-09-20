@@ -16,6 +16,15 @@ class Appointment(Base):
     doctor_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("doctors.id"), nullable=False)
     clinic_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("clinics.id"), nullable=True)
     branch_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("clinic_branches.id"), nullable=True)
+    # NOTE: doctor double-booking is enforced at the DB level by the
+    # exclusion constraint `excl_appointments_doctor_no_overlap`
+    # (migration 024_db_constraint_races):
+    #   EXCLUDE USING gist (doctor_id WITH =,
+    #     tstzrange(scheduled_at, scheduled_at + duration_minutes * interval '1 minute', '[)')
+    #     WITH &&)
+    #   WHERE status IN ('scheduled','arrived','in-progress') AND deleted_at IS NULL
+    # It mirrors _check_doctor_conflict in routers/appointments.py. Do not
+    # change the type of scheduled_at/duration_minutes without updating it.
     scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     duration_minutes: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     type: Mapped[str] = mapped_column(String(20), nullable=False)  # in-person | teleconsult | follow-up
