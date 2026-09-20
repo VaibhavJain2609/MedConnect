@@ -3,10 +3,10 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { Calendar, Clock, Stethoscope, Building2, XCircle, Plus, X, Link2 } from "lucide-react";
+import { Calendar, Clock, Stethoscope, Building2, XCircle, Plus, X, Link2, Video } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
-import { getAppointments, updateAppointmentStatus, createAppointment, type Appointment } from "@/lib/api/appointments";
+import { getAppointments, updateAppointmentStatus, createAppointment, generateMeetingLink, type Appointment } from "@/lib/api/appointments";
 import { useAuthStore } from "@/stores/auth-store";
 import api from "@/lib/api";
 
@@ -58,6 +58,15 @@ function isUpcoming(appt: Appointment) {
     new Date(appt.scheduled_at) >= new Date()
   );
 }
+
+/** Patients may join a teleconsult call starting ~10 minutes before the scheduled time. */
+const TELECONSULT_JOIN_WINDOW_MS = 10 * 60 * 1000;
+
+function canJoinTeleconsult(appt: Appointment) {
+  return Date.now() >= new Date(appt.scheduled_at).getTime() - TELECONSULT_JOIN_WINDOW_MS;
+}
+
+const ACTIVE_STATUSES = ["scheduled", "arrived", "in-progress"];
 
 // ---------------------------------------------------------------------------
 // Doctor search typeahead
@@ -465,13 +474,19 @@ function AppointmentCard({
   appt,
   onCancel,
   isCancelling,
+  onGenerateLink,
+  isGeneratingLink,
 }: {
   appt: Appointment;
   onCancel: (id: string) => void;
   isCancelling: boolean;
+  onGenerateLink: (id: string) => void;
+  isGeneratingLink: boolean;
 }) {
   const { date, time } = formatDateTime(appt.scheduled_at);
   const canCancel = appt.status === "scheduled";
+  const isTeleconsult = appt.type === "teleconsult" && ACTIVE_STATUSES.includes(appt.status);
+  const joinable = isTeleconsult && canJoinTeleconsult(appt);
 
   return (
     <div className="rounded-xl border border-dreams-border bg-white p-4 shadow-card">
@@ -515,6 +530,39 @@ function AppointmentCard({
                 {appt.chief_complaint}
               </p>
             )}
+
+            {/* Teleconsult join */}
+            {isTeleconsult &&
+              (appt.meeting_url ? (
+                joinable ? (
+                  <a
+                    href={appt.meeting_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-flex items-center gap-1 rounded-md bg-dreams-blue px-2.5 py-1 text-xs font-medium text-white hover:opacity-90 transition-opacity"
+                  >
+                    <Video className="h-3.5 w-3.5" />
+                    Join Call
+                  </a>
+                ) : (
+                  <span
+                    className="mt-2 inline-flex items-center gap-1 rounded-md bg-gray-100 px-2.5 py-1 text-xs font-medium text-dreams-textSecondary cursor-not-allowed"
+                    title="The call link opens 10 minutes before the scheduled time"
+                  >
+                    <Video className="h-3.5 w-3.5" />
+                    Join Call (opens 10 min before)
+                  </span>
+                )
+              ) : (
+                <button
+                  disabled={isGeneratingLink}
+                  onClick={() => onGenerateLink(appt.id)}
+                  className="mt-2 flex items-center gap-1 rounded-md border border-dreams-blue px-2.5 py-1 text-xs font-medium text-dreams-blue hover:bg-dreams-blue/10 disabled:opacity-50 transition-colors"
+                >
+                  <Video className="h-3.5 w-3.5" />
+                  {isGeneratingLink ? "Generating…" : "Get Call Link"}
+                </button>
+              ))}
 
             {/* Cancel button */}
             {canCancel && (
@@ -562,6 +610,13 @@ export default function PatientAppointmentsPage() {
       updateAppointmentStatus(id, { status: "cancelled", cancelled_reason: "Cancelled by patient" }),
     onSuccess: () => {
       setCancelTarget(null);
+      queryClient.invalidateQueries({ queryKey: ["patient-appointments"] });
+    },
+  });
+
+  const meetingLinkMutation = useMutation({
+    mutationFn: (id: string) => generateMeetingLink(id),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["patient-appointments"] });
     },
   });
@@ -667,6 +722,8 @@ export default function PatientAppointmentsPage() {
               appt={appt}
               onCancel={(id) => setCancelTarget(id)}
               isCancelling={cancelMutation.isPending}
+              onGenerateLink={(id) => meetingLinkMutation.mutate(id)}
+              isGeneratingLink={meetingLinkMutation.isPending}
             />
           ))}
         </div>

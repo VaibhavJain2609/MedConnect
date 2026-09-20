@@ -9,6 +9,7 @@ from sqlalchemy.dialects.postgresql import INTERVAL
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
+from app.config import settings
 from app.database import get_db
 from app.dependencies import get_active_clinic, get_current_doctor, get_current_user, require_active_clinic, require_admin
 from app.models.appointment import Appointment
@@ -100,6 +101,7 @@ class AppointmentResponse(BaseModel):
     chief_complaint: str | None = None
     notes: str | None = None
     cancelled_reason: str | None = None
+    meeting_url: str | None = None
     is_provisional: bool = False
     patient_phone: str | None = None
     created_by: UUID
@@ -138,6 +140,7 @@ def _serialize_appointment(
         "chief_complaint": appt.chief_complaint,
         "notes": appt.notes,
         "cancelled_reason": appt.cancelled_reason,
+        "meeting_url": appt.meeting_url,
         "is_provisional": is_provisional,
         "patient_phone": patient_phone,
         "created_by": str(appt.created_by),
@@ -313,6 +316,11 @@ async def _validate_clinic_and_branch(
             )
 
     return effective_clinic_id
+
+
+def _generate_meeting_url(appointment_id: uuid.UUID) -> str:
+    """Deterministic Jitsi room URL for a teleconsult appointment."""
+    return f"{settings.JITSI_BASE_URL.rstrip('/')}/medconnect-{appointment_id}"
 
 
 async def _enqueue_appointment_reminders(appt: Appointment) -> None:
@@ -505,6 +513,8 @@ async def create_appointment(
         notes=req.notes,
         created_by=current_user.id,
     )
+    if appt.type == "teleconsult":
+        appt.meeting_url = _generate_meeting_url(appt.id)
     db.add(appt)
     await db.flush()
     await db.refresh(appt)
@@ -784,6 +794,12 @@ async def update_appointment(
     if req.notes is not None:
         appt.notes = req.notes
 
+    # Keep meeting_url in sync with the (possibly updated) appointment type
+    if appt.type == "teleconsult" and not appt.meeting_url:
+        appt.meeting_url = _generate_meeting_url(appt.id)
+    elif appt.type != "teleconsult":
+        appt.meeting_url = None
+
     await db.flush()
     await db.refresh(appt)
 
@@ -1034,7 +1050,64 @@ async def create_guest_appointment(
         notes=body.notes,
         created_by=current_user.id,
     )
+    if appt.type == "teleconsult":
+        appt.meeting_url = _generate_meeting_url(appt.id)
     db.add(appt)
+    await db.flush()
+    await db.refresh(appt)
+    return await _load_appointment_with_names(db, appt)
+
+
+@router.post("/{appointment_id}/meeting-link")
+async def generate_meeting_link(
+    appointment_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """(Re)generate the teleconsult meeting link. Only the appointment's
+    patient participant or doctor participant may call this."""
+    result = await db.execute(
+        select(Appointment).where(
+            Appointment.id == appointment_id,
+            Appointment.deleted_at.is_(None),
+        )
+    )
+    appt = result.scalar_one_or_none()
+    if not appt:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "NOT_FOUND", "message": "Appointment not found"}},
+        )
+
+    if current_user.role == "patient":
+        if appt.patient_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "FORBIDDEN", "message": "Access denied"}},
+            )
+    elif current_user.role == "doctor":
+        doc_res = await db.execute(
+            select(Doctor).where(Doctor.user_id == current_user.id, Doctor.deleted_at.is_(None))
+        )
+        doctor = doc_res.scalar_one_or_none()
+        if not doctor or appt.doctor_id != doctor.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "FORBIDDEN", "message": "Access denied"}},
+            )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": {"code": "FORBIDDEN", "message": "Only appointment participants can generate a meeting link"}},
+        )
+
+    if appt.type != "teleconsult":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"error": {"code": "NOT_TELECONSULT", "message": "Meeting links are only available for teleconsult appointments"}},
+        )
+
+    appt.meeting_url = _generate_meeting_url(appt.id)
     await db.flush()
     await db.refresh(appt)
     return await _load_appointment_with_names(db, appt)
