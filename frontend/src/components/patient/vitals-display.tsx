@@ -12,6 +12,7 @@ import {
   RespiratoryRateIcon,
   WeightIcon,
 } from "@/components/icons/vital-icons";
+import { StatusBadge } from "@/components/ui/status-badge";
 
 export interface VitalData {
   id: string;
@@ -71,19 +72,6 @@ export const VitalsDisplay: React.FC<VitalsDisplayProps> = ({
     }
   };
 
-  const getStatusBadgeColor = (status: VitalData["status"]) => {
-    switch (status) {
-      case "normal":
-        return "bg-status-completed/10 text-status-completed";
-      case "warning":
-        return "bg-status-pending/10 text-status-pending";
-      case "critical":
-        return "bg-status-overdue/10 text-status-overdue";
-      default:
-        return "bg-gray-100 text-gray-600";
-    }
-  };
-
   const getTrendIcon = (trend?: VitalData["trend"]) => {
     switch (trend) {
       case "up":
@@ -138,14 +126,7 @@ export const VitalsDisplay: React.FC<VitalsDisplayProps> = ({
                   <Icon className="h-6 w-6 text-dreams-blue" />
                 </div>
                 <div className="flex flex-col items-end gap-1">
-                  <span
-                    className={cn(
-                      "text-xs font-medium px-2 py-1 rounded",
-                      getStatusBadgeColor(vital.status)
-                    )}
-                  >
-                    {vital.status.toUpperCase()}
-                  </span>
+                  <StatusBadge status={vital.status} />
                   {vital.trend && vital.trendValue && (
                     <div
                       className={cn(

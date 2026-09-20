@@ -1,11 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { Upload, X, Camera, Loader2 } from "lucide-react";
+import { Upload, X, Camera } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { uploadPhoto } from "@/lib/api/users";
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/ui/avatar";
+import { Spinner } from "@/components/ui/spinner";
 
 export interface PhotoUploadProps {
   currentPhoto?: string | null;
@@ -220,8 +221,8 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
                 {uploadMutation.isPending && (
                   <div className="mt-3">
                     <div className="flex items-center gap-2 text-sm text-dreams-textSecondary">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Uploading...</span>
+                      <Spinner size="sm" label="Uploading photo" />
+                      <span aria-hidden="true">Uploading...</span>
                     </div>
                   </div>
                 )}
@@ -244,8 +245,8 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
             >
               {uploadMutation.isPending ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Uploading...</span>
+                  <Spinner size="sm" label="Uploading photo" />
+                  <span aria-hidden="true">Uploading...</span>
                 </>
               ) : (
                 <>

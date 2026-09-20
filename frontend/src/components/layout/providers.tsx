@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/stores/auth-store";
 import { registerQueryClient } from "@/lib/auth";
 import { Toaster } from "@/components/ui/toaster";
+import { Spinner } from "@/components/ui/spinner";
 
 // Routes that require a resolved auth state before rendering.
 // Public routes (landing, login, signup, auth callback, etc.) render
@@ -44,7 +45,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   if (isProtectedRoute && !initialized) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
+        <Spinner size="lg" />
       </div>
     );
   }

@@ -7,6 +7,8 @@ import { useQuery } from "@tanstack/react-query";
 import { globalSearch, type SearchResult } from "@/lib/api/search";
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/ui/avatar";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Spinner } from "@/components/ui/spinner";
 import { useUiStore } from "@/stores/ui-store";
 
 /**
@@ -187,7 +189,7 @@ export const GlobalSearch: React.FC = () => {
           <div className="max-h-96 overflow-y-auto">
             {isLoading ? (
               <div className="p-8 text-center">
-                <div className="h-6 w-6 animate-spin rounded-full border-2 border-dreams-blue border-t-transparent mx-auto" />
+                <Spinner className="mx-auto" label="Searching" />
               </div>
             ) : results && results.length > 0 ? (
               <div className="py-2">
@@ -233,23 +235,17 @@ export const GlobalSearch: React.FC = () => {
                 ))}
               </div>
             ) : searchQuery.length >= 2 ? (
-              <div className="p-8 text-center">
-                <Search className="h-12 w-12 text-dreams-textSecondary mx-auto mb-3 opacity-50" />
-                <p className="text-dreams-textSecondary">No results found</p>
-                <p className="text-sm text-dreams-textSecondary mt-1">
-                  Try searching with different keywords
-                </p>
-              </div>
+              <EmptyState
+                icon={Search}
+                title="No results found"
+                description="Try searching with different keywords"
+              />
             ) : (
-              <div className="p-8 text-center">
-                <Search className="h-12 w-12 text-dreams-textSecondary mx-auto mb-3 opacity-50" />
-                <p className="text-dreams-textSecondary">
-                  Start typing to search
-                </p>
-                <p className="text-sm text-dreams-textSecondary mt-1">
-                  Search across patients, doctors, appointments, and medicines
-                </p>
-              </div>
+              <EmptyState
+                icon={Search}
+                title="Start typing to search"
+                description="Search across patients, doctors, appointments, and medicines"
+              />
             )}
           </div>
 

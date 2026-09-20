@@ -6,14 +6,24 @@ import {
   flexRender,
   getCoreRowModel,
   getSortedRowModel,
+  RowSelectionState,
   SortingState,
   useReactTable,
   getPaginationRowModel,
   ColumnFiltersState,
   getFilteredRowModel,
 } from "@tanstack/react-table";
-import { ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
+  SearchX,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Checkbox } from "@/components/ui/checkbox";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -25,6 +35,15 @@ export interface DataTableProps<TData, TValue> {
   /** Hide the built-in client-side pager — use when the parent renders
    *  server-side pagination controls instead. */
   hidePagination?: boolean;
+  /** Prepend a checkbox column and track selected rows. */
+  enableRowSelection?: boolean;
+  /** Called with the selected rows' original data whenever selection changes. */
+  onSelectionChange?: (selectedRows: TData[]) => void;
+  /**
+   * Custom content for the empty state. Defaults to an EmptyState with a
+   * "No results found" message.
+   */
+  emptyState?: React.ReactNode;
 }
 
 /**
@@ -66,24 +85,60 @@ export function DataTable<TData, TValue>({
   searchPlaceholder = "Search...",
   className,
   hidePagination = false,
+  enableRowSelection = false,
+  onSelectionChange,
+  emptyState,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
     []
   );
+  const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
+
+  const allColumns = React.useMemo<ColumnDef<TData, TValue>[]>(() => {
+    if (!enableRowSelection) return columns;
+    const selectionColumn: ColumnDef<TData, TValue> = {
+      id: "select",
+      enableSorting: false,
+      enableHiding: false,
+      header: ({ table }) => (
+        <Checkbox
+          checked={
+            table.getIsAllPageRowsSelected() ||
+            (table.getIsSomePageRowsSelected() && "indeterminate")
+          }
+          onCheckedChange={(value) =>
+            table.toggleAllPageRowsSelected(!!value)
+          }
+          aria-label="Select all rows"
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(!!value)}
+          aria-label="Select row"
+        />
+      ),
+    };
+    return [selectionColumn, ...columns];
+  }, [columns, enableRowSelection]);
 
   const table = useReactTable({
     data,
-    columns,
+    columns: allColumns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     onSortingChange: setSorting,
     getSortedRowModel: getSortedRowModel(),
     onColumnFiltersChange: setColumnFilters,
     getFilteredRowModel: getFilteredRowModel(),
+    enableRowSelection,
+    onRowSelectionChange: setRowSelection,
     state: {
       sorting,
       columnFilters,
+      rowSelection,
     },
     initialState: {
       pagination: {
@@ -91,6 +146,16 @@ export function DataTable<TData, TValue>({
       },
     },
   });
+
+  const selectedCount = Object.keys(rowSelection).length;
+  const onSelectionChangeRef = React.useRef(onSelectionChange);
+  onSelectionChangeRef.current = onSelectionChange;
+  React.useEffect(() => {
+    onSelectionChangeRef.current?.(
+      table.getSelectedRowModel().rows.map((row) => row.original)
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCount]);
 
   return (
     <div className={cn("space-y-4", className)}>
@@ -121,6 +186,14 @@ export function DataTable<TData, TValue>({
                   {headerGroup.headers.map((header) => (
                     <th
                       key={header.id}
+                      scope="col"
+                      aria-sort={
+                        header.column.getIsSorted() === "asc"
+                          ? "ascending"
+                          : header.column.getIsSorted() === "desc"
+                            ? "descending"
+                            : undefined
+                      }
                       className="px-4 py-3 text-left text-xs font-semibold text-dreams-textPrimary uppercase tracking-wider"
                     >
                       {header.isPlaceholder
@@ -139,7 +212,11 @@ export function DataTable<TData, TValue>({
                 table.getRowModel().rows.map((row) => (
                   <tr
                     key={row.id}
-                    className="hover:bg-dreams-lightBg/50 transition-colors"
+                    data-state={row.getIsSelected() ? "selected" : undefined}
+                    className={cn(
+                      "hover:bg-dreams-lightBg/50 transition-colors",
+                      row.getIsSelected() && "bg-dreams-lightBg/60"
+                    )}
                   >
                     {row.getVisibleCells().map((cell) => (
                       <td key={cell.id} className="px-4 py-4 text-sm">
@@ -153,11 +230,15 @@ export function DataTable<TData, TValue>({
                 ))
               ) : (
                 <tr>
-                  <td
-                    colSpan={columns.length}
-                    className="px-4 py-8 text-center text-dreams-textSecondary"
-                  >
-                    No results found.
+                  <td colSpan={allColumns.length} className="px-4 py-8">
+                    {emptyState ?? (
+                      <EmptyState
+                        icon={SearchX}
+                        title="No results found"
+                        description="Try adjusting your search or filters."
+                        className="py-4"
+                      />
+                    )}
                   </td>
                 </tr>
               )}
@@ -247,16 +328,26 @@ export function DataTableColumnHeader<TData, TValue>({
     return <div className={cn(className)}>{title}</div>;
   }
 
+  const sorted = column.getIsSorted();
+
   return (
-    <div
+    <button
+      type="button"
       className={cn(
-        "flex items-center gap-2 cursor-pointer select-none hover:text-dreams-blue transition-colors",
+        "flex items-center gap-2 select-none hover:text-dreams-blue transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-dreams-blue rounded-sm",
         className
       )}
-      onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+      onClick={() => column.toggleSorting(sorted === "asc")}
+      aria-label={`Sort by ${title}`}
     >
       {title}
-      <ArrowUpDown className="h-4 w-4" />
-    </div>
+      {sorted === "asc" ? (
+        <ArrowUp className="h-4 w-4" aria-hidden="true" />
+      ) : sorted === "desc" ? (
+        <ArrowDown className="h-4 w-4" aria-hidden="true" />
+      ) : (
+        <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
+      )}
+    </button>
   );
 }
