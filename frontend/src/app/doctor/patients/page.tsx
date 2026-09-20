@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search, Users, ChevronRight } from "lucide-react";
 import { getDoctorPatients, DoctorPatient } from "@/lib/api/doctors";
@@ -10,11 +10,18 @@ import { Avatar } from "@/components/ui/avatar";
 
 export default function DoctorPatientsPage() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+
+  // Debounce search input so we don't fire a request per keystroke
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(searchQuery.trim()), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["doctor-patients-list", searchQuery],
+    queryKey: ["doctor-patients-list", debouncedQuery],
     queryFn: () =>
-      getDoctorPatients({ search: searchQuery || undefined, limit: 100 }),
+      getDoctorPatients({ search: debouncedQuery || undefined, limit: 100 }),
   });
 
   const patients = data?.data ?? [];
@@ -60,10 +67,10 @@ export default function DoctorPatientsPage() {
             <Users className="h-10 w-10 text-dreams-textSecondary" />
           </div>
           <h2 className="text-xl font-semibold text-dreams-textPrimary mb-2">
-            {searchQuery ? "No patients found" : "No patients yet"}
+            {debouncedQuery ? "No patients found" : "No patients yet"}
           </h2>
           <p className="text-dreams-textSecondary max-w-sm">
-            {searchQuery
+            {debouncedQuery
               ? "Try a different search term."
               : "Create a medical record or prescription to add your first patient."}
           </p>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
@@ -23,14 +23,21 @@ const RECORD_TYPES = [
 export default function PatientRecordsPage() {
   const [typeFilter, setTypeFilter] = useState("");
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  // Debounce search input so we don't fire a request per keystroke
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["patient-records", typeFilter, search],
+    queryKey: ["patient-records", typeFilter, debouncedSearch],
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set("limit", "50");
       if (typeFilter) params.set("type", typeFilter);
-      if (search) params.set("q", search);
+      if (debouncedSearch) params.set("q", debouncedSearch);
       const res = await api.get(`/api/v1/patients/records?${params}`);
       return res.data;
     },
@@ -94,7 +101,7 @@ export default function PatientRecordsPage() {
           <FileText className="h-12 w-12 text-dreams-textSecondary mx-auto mb-4" />
           <p className="text-dreams-textSecondary font-medium">No records found.</p>
           <p className="mt-1 text-sm text-dreams-textSecondary/70">
-            {typeFilter || search
+            {typeFilter || debouncedSearch
               ? "Try changing your filters."
               : "Your medical records will appear here once added."}
           </p>

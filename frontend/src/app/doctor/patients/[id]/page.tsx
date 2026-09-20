@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
@@ -69,12 +69,29 @@ function AmendModal({
   const [title, setTitle] = useState(initial.title);
   const [description, setDescription] = useState(initial.description || "");
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Amend record"
+        className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold text-dreams-textPrimary">Amend Record</h2>
-          <button onClick={onClose} className="text-dreams-textSecondary hover:text-dreams-textPrimary">
+          <button onClick={onClose} aria-label="Close" className="text-dreams-textSecondary hover:text-dreams-textPrimary">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -157,7 +174,7 @@ export default function DoctorPatientProfilePage() {
     queryKey: ["doctor-patient-prescriptions-latest", patientId],
     queryFn: async () => {
       const res = await api.get(`/api/v1/doctors/patients/${patientId}/prescriptions`, {
-        params: { limit: 1 },
+        params: { limit: 10 },
       });
       return res.data;
     },
@@ -241,9 +258,21 @@ export default function DoctorPatientProfilePage() {
     }
   }
 
-  // Latest prescription medicines
+  // Active medications — aggregate medicines from all non-expired prescriptions
   const latestPrescription = prescriptionsData?.data?.[0];
-  const activeMedicines: string[] = latestPrescription?.medicines?.map((m: any) => m.name) || [];
+  const activeMedicines: string[] = (() => {
+    const names = new Set<string>();
+    for (const rx of prescriptionsData?.data ?? []) {
+      const stillValid = rx.is_expired === false || !rx.valid_until ||
+        new Date(rx.valid_until).getTime() >= Date.now();
+      if (!stillValid) continue;
+      for (const m of rx.medicines ?? []) {
+        const name = m.name ?? m.brand_name;
+        if (name) names.add(name);
+      }
+    }
+    return Array.from(names);
+  })();
 
   return (
     <div className="space-y-6">
@@ -510,7 +539,7 @@ export default function DoctorPatientProfilePage() {
             <h2 className="text-base font-semibold text-dreams-textPrimary">Active Medications</h2>
             {latestPrescription && (
               <span className="text-xs text-dreams-textSecondary">
-                (from {formatDate(latestPrescription.created_at)})
+                (from non-expired prescriptions)
               </span>
             )}
           </div>
@@ -542,7 +571,7 @@ export default function DoctorPatientProfilePage() {
         <h2 className="mb-4 text-base font-semibold text-dreams-textPrimary">Quick Actions</h2>
         <div className="flex flex-wrap gap-3">
           <Link
-            href={`/doctor/prescriptions/new?patientId=${patientId}`}
+            href={`/doctor/prescriptions/new?patient_id=${patientId}`}
             className="flex items-center gap-2 rounded-lg bg-dreams-blue px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
           >
             <Pill className="h-4 w-4" />
@@ -560,18 +589,30 @@ export default function DoctorPatientProfilePage() {
             className="flex items-center gap-2 rounded-lg border border-dreams-border px-4 py-2 text-sm font-medium text-dreams-textPrimary hover:bg-dreams-lightBg transition-colors"
           >
             <Activity className="h-4 w-4" />
-            View All Records
+            View All Prescriptions
           </Link>
         </div>
       </div>
 
       {/* Record Access Request Modal */}
       {showAccessModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setShowAccessModal(false)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setShowAccessModal(false);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Request full record access"
+            className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-bold text-dreams-textPrimary">Request Full Record Access</h2>
-              <button onClick={() => setShowAccessModal(false)} className="text-dreams-textSecondary hover:text-dreams-textPrimary">
+              <button onClick={() => setShowAccessModal(false)} aria-label="Close" className="text-dreams-textSecondary hover:text-dreams-textPrimary">
                 <X className="h-5 w-5" />
               </button>
             </div>

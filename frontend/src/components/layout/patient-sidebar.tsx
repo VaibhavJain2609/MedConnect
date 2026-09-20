@@ -14,6 +14,7 @@ import {
   ClipboardList,
   Building2,
   Calendar,
+  Bell,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -43,6 +44,7 @@ const navSections: NavSection[] = [
     items: [
       { href: "/patient/timeline", label: "Health Timeline", icon: Activity },
       { href: "/patient/appointments", label: "Appointments", icon: Calendar },
+      { href: "/patient/notifications", label: "Notifications", icon: Bell },
     ],
   },
   {
@@ -126,6 +128,7 @@ export function PatientSidebar({
             variant="ghost"
             size="icon"
             onClick={onToggle}
+            aria-label={isOpen ? "Collapse sidebar" : "Expand sidebar"}
             className={cn(
               "text-gray-400 hover:text-white hover:bg-white/10",
               !isOpen && "mx-auto"

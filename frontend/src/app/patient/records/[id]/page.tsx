@@ -1,16 +1,19 @@
 "use client";
 
+import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { formatDate, recordTypeLabel, recordTypeColor } from "@/lib/utils";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Download } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 
 export default function RecordDetailPage() {
   const params = useParams();
   const router = useRouter();
   const recordId = params.id as string;
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState("");
 
   const { data: record, isLoading } = useQuery({
     queryKey: ["record", recordId],
@@ -19,6 +22,33 @@ export default function RecordDetailPage() {
       return res.data;
     },
   });
+
+  // document_url stores the uploads object key; the file endpoint requires
+  // auth, so download via axios blob instead of a plain <a href>.
+  const handleDownload = async () => {
+    if (!record?.document_url || downloading) return;
+    setDownloading(true);
+    setDownloadError("");
+    try {
+      const res = await api.get(`/api/v1/uploads/${record.document_url}`, {
+        responseType: "blob",
+      });
+      const filename =
+        record.document_url.split("/").pop() || `${record.title || "document"}`;
+      const url = URL.createObjectURL(res.data as Blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setDownloadError("Failed to download the document. Please try again.");
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -65,14 +95,23 @@ export default function RecordDetailPage() {
             </div>
           )}
 
-          {record.fhir_bundle && (
+          {record.document_url && (
             <div className="mb-6">
               <h2 className="mb-2 text-sm font-medium text-dreams-textSecondary uppercase tracking-wide">
-                FHIR R4 Bundle
+                Attached Document
               </h2>
-              <pre className="max-h-96 overflow-auto rounded-lg bg-dreams-lightBg border border-dreams-border p-4 text-xs text-dreams-textPrimary">
-                {JSON.stringify(record.fhir_bundle, null, 2)}
-              </pre>
+              <button
+                type="button"
+                onClick={handleDownload}
+                disabled={downloading}
+                className="inline-flex items-center gap-2 rounded-lg bg-dreams-blue px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+              >
+                <Download className="h-4 w-4" />
+                {downloading ? "Downloading…" : "Download Document"}
+              </button>
+              {downloadError && (
+                <p className="mt-2 text-sm text-red-600">{downloadError}</p>
+              )}
             </div>
           )}
 

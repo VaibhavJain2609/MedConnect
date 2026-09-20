@@ -144,6 +144,7 @@ function PatientSearch({
   return (
     <div className="relative">
       <input
+        id="rx-patient"
         type="text"
         value={query}
         onChange={handleChange}
@@ -281,9 +282,27 @@ function LoadTemplateModal({
   onLoad: (t: PrescriptionTemplate) => void;
   onClose: () => void;
 }) {
+  // Close on Escape
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-md rounded-xl bg-white shadow-xl p-6">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Load template"
+        className="w-full max-w-md rounded-xl bg-white shadow-xl p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-dreams-textPrimary">
             Load Template
@@ -291,6 +310,7 @@ function LoadTemplateModal({
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close"
             className="text-dreams-textSecondary hover:text-dreams-textPrimary"
           >
             <X className="h-5 w-5" />
@@ -339,9 +359,28 @@ function SaveTemplateModal({
   onClose: () => void;
 }) {
   const [name, setName] = useState("");
+
+  // Close on Escape
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-sm rounded-xl bg-white shadow-xl p-6">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Save as template"
+        className="w-full max-w-sm rounded-xl bg-white shadow-xl p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-dreams-textPrimary">
             Save as Template
@@ -349,6 +388,7 @@ function SaveTemplateModal({
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close"
             className="text-dreams-textSecondary hover:text-dreams-textPrimary"
           >
             <X className="h-5 w-5" />
@@ -359,6 +399,7 @@ function SaveTemplateModal({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Template name (e.g., Fever protocol)"
+          aria-label="Template name"
           className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20 mb-4"
           autoFocus
         />
@@ -726,7 +767,7 @@ export default function NewPrescriptionPage() {
           )}
 
           <div className="mb-4">
-            <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+            <label htmlFor="rx-patient" className="mb-1 block text-sm font-medium text-dreams-textPrimary">
               Patient *
             </label>
             {selectedPatient ? (
@@ -744,6 +785,7 @@ export default function NewPrescriptionPage() {
                 <button
                   type="button"
                   onClick={() => setSelectedPatient(null)}
+                  aria-label="Clear selected patient"
                   className="text-dreams-textSecondary hover:text-red-500 transition-colors"
                 >
                   <X className="h-4 w-4" />
@@ -757,10 +799,11 @@ export default function NewPrescriptionPage() {
           {/* Clinic selector */}
           {clinics.length > 0 && (
             <div className="mb-4">
-              <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+              <label htmlFor="rx-clinic" className="mb-1 block text-sm font-medium text-dreams-textPrimary">
                 Clinic
               </label>
               <select
+                id="rx-clinic"
                 value={selectedClinicId}
                 onChange={(e) => setSelectedClinicId(e.target.value)}
                 className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
@@ -778,7 +821,7 @@ export default function NewPrescriptionPage() {
           {/* Branch selector (shown when clinic has branches) */}
           {selectedClinicId && (branchesLoading || branches.length > 0) && (
             <div className="mb-4">
-              <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+              <label htmlFor="rx-branch" className="mb-1 block text-sm font-medium text-dreams-textPrimary">
                 Branch
               </label>
               {branchesLoading ? (
@@ -788,6 +831,7 @@ export default function NewPrescriptionPage() {
                 </div>
               ) : (
                 <select
+                  id="rx-branch"
                   value={selectedBranchId}
                   onChange={(e) => setSelectedBranchId(e.target.value)}
                   className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
@@ -804,10 +848,11 @@ export default function NewPrescriptionPage() {
           )}
 
           <div className="mb-4">
-            <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+            <label htmlFor="rx-diagnosis" className="mb-1 block text-sm font-medium text-dreams-textPrimary">
               Diagnosis
             </label>
             <input
+              id="rx-diagnosis"
               type="text"
               value={diagnosis}
               onChange={(e) => setDiagnosis(e.target.value)}
@@ -817,10 +862,11 @@ export default function NewPrescriptionPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+            <label htmlFor="rx-notes" className="mb-1 block text-sm font-medium text-dreams-textPrimary">
               Notes
             </label>
             <textarea
+              id="rx-notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
@@ -865,16 +911,19 @@ export default function NewPrescriptionPage() {
                 )}
               </div>
 
-              {/* Medicine Search */}
+              {/* Medicine Search — wrapping <label> gives implicit association
+                  with the input rendered inside MedicineAutocomplete */}
               <div className="mb-4">
-                <label className="mb-2 block text-sm font-medium text-dreams-textPrimary">
-                  Medicine Name *
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-dreams-textPrimary">
+                    Medicine Name *
+                  </span>
+                  <MedicineAutocomplete
+                    onSelect={(medicine) => handleMedicineSelect(idx, medicine)}
+                    placeholder="Search for medicine (e.g., Dolo, Paracetamol)..."
+                    className="w-full"
+                  />
                 </label>
-                <MedicineAutocomplete
-                  onSelect={(medicine) => handleMedicineSelect(idx, medicine)}
-                  placeholder="Search for medicine (e.g., Dolo, Paracetamol)..."
-                  className="w-full"
-                />
                 {med.brand_name ? (
                   <div className="mt-2 rounded-md bg-green-50 border-2 border-green-200 px-3 py-2">
                     <div className="flex items-center gap-2">
@@ -900,10 +949,11 @@ export default function NewPrescriptionPage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 {/* Dose */}
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+                  <label htmlFor={`rx-dose-${idx}`} className="mb-1 block text-sm font-medium text-dreams-textPrimary">
                     Dose
                   </label>
                   <input
+                    id={`rx-dose-${idx}`}
                     type="text"
                     value={med.dose}
                     onChange={(e) => updateMedicine(idx, "dose", e.target.value)}
@@ -914,10 +964,14 @@ export default function NewPrescriptionPage() {
 
                 {/* Frequency */}
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+                  <span id={`rx-frequency-label-${idx}`} className="mb-1 block text-sm font-medium text-dreams-textPrimary">
                     Frequency *
-                  </label>
-                  <div className="flex flex-wrap gap-1.5">
+                  </span>
+                  <div
+                    role="group"
+                    aria-labelledby={`rx-frequency-label-${idx}`}
+                    className="flex flex-wrap gap-1.5"
+                  >
                     {FREQUENCY_OPTIONS.map((f) => (
                       <button
                         key={f}
@@ -938,10 +992,11 @@ export default function NewPrescriptionPage() {
 
                 {/* Duration */}
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+                  <label htmlFor={`rx-duration-${idx}`} className="mb-1 block text-sm font-medium text-dreams-textPrimary">
                     Duration *
                   </label>
                   <select
+                    id={`rx-duration-${idx}`}
                     value={med.duration}
                     onChange={(e) =>
                       updateMedicine(idx, "duration", e.target.value)
@@ -958,10 +1013,11 @@ export default function NewPrescriptionPage() {
 
                 {/* Route */}
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+                  <label htmlFor={`rx-route-${idx}`} className="mb-1 block text-sm font-medium text-dreams-textPrimary">
                     Route
                   </label>
                   <select
+                    id={`rx-route-${idx}`}
                     value={med.route}
                     onChange={(e) =>
                       updateMedicine(idx, "route", e.target.value)
@@ -979,10 +1035,11 @@ export default function NewPrescriptionPage() {
 
               {/* Instructions */}
               <div className="mt-4">
-                <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+                <label htmlFor={`rx-instructions-${idx}`} className="mb-1 block text-sm font-medium text-dreams-textPrimary">
                   Instructions
                 </label>
                 <input
+                  id={`rx-instructions-${idx}`}
                   type="text"
                   value={med.instructions}
                   onChange={(e) =>

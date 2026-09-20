@@ -35,9 +35,18 @@ export function TemplateLoadModal({ onClose, onLoad }: Props) {
     fetchTemplates();
   }, []);
 
+  // Close on Escape
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   const fetchTemplates = async () => {
     try {
-      const response = await api.get("/api/v1/doctors/templates");
+      const response = await api.get("/api/v1/doctors/prescription-templates");
       setTemplates(response.data.data);
     } catch (err: any) {
       setError("Failed to load templates");
@@ -51,8 +60,17 @@ export function TemplateLoadModal({ onClose, onLoad }: Props) {
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-2xl rounded-xl bg-white p-6">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Load template"
+        className="w-full max-w-2xl rounded-xl bg-white p-6 mx-4"
+        onClick={(e) => e.stopPropagation()}
+      >
         <h3 className="mb-4 text-lg font-semibold">Load Template</h3>
 
         {error && (

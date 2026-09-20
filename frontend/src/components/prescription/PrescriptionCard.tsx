@@ -16,6 +16,8 @@
  */
 
 import { useState } from "react";
+import { Download } from "lucide-react";
+import api from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 
 interface Medicine {
@@ -41,6 +43,12 @@ interface PrescriptionCardProps {
   collapsible?: boolean;
   defaultExpanded?: boolean;
   className?: string;
+  /**
+   * Real Prescription entity id used for the PDF download endpoint
+   * (GET /api/v1/prescriptions/{id}/pdf). Note: `prescription.id` on the
+   * patient timeline is the *record* id, so pass this explicitly.
+   */
+  prescriptionId?: string;
 }
 
 // Map frequency text to meal icons
@@ -77,13 +85,40 @@ export function PrescriptionCard({
   variant = 'patient',
   collapsible = false,
   defaultExpanded = false,
-  className = ''
+  className = '',
+  prescriptionId,
 }: PrescriptionCardProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState(false);
 
   const toggleExpanded = () => {
     if (collapsible) {
       setIsExpanded(!isExpanded);
+    }
+  };
+
+  const handleDownloadPdf = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!prescriptionId || downloading) return;
+    setDownloading(true);
+    setDownloadError(false);
+    try {
+      const res = await api.get(`/api/v1/prescriptions/${prescriptionId}/pdf`, {
+        responseType: "blob",
+      });
+      const url = URL.createObjectURL(res.data as Blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `prescription-${prescriptionId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setDownloadError(true);
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -161,12 +196,28 @@ export function PrescriptionCard({
             </div>
           </div>
 
-          {prescription.doctor_name && variant === 'patient' && (
-            <div className="text-right ml-4">
-              <p className="text-xs text-gray-500">Prescribed by</p>
-              <p className="font-medium text-gray-900">{prescription.doctor_name}</p>
-            </div>
-          )}
+          <div className="ml-4 flex flex-col items-end gap-2">
+            {prescription.doctor_name && variant === 'patient' && (
+              <div className="text-right">
+                <p className="text-xs text-gray-500">Prescribed by</p>
+                <p className="font-medium text-gray-900">{prescription.doctor_name}</p>
+              </div>
+            )}
+            {variant === 'patient' && prescriptionId && (
+              <button
+                type="button"
+                onClick={handleDownloadPdf}
+                disabled={downloading}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-dreams-blue px-3 py-1 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+              >
+                <Download className="h-3 w-3" />
+                {downloading ? "Downloading…" : "Download PDF"}
+              </button>
+            )}
+            {downloadError && (
+              <p className="text-xs text-red-600">PDF download failed</p>
+            )}
+          </div>
         </div>
       </div>
 

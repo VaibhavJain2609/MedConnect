@@ -2,7 +2,8 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Calendar, Clock, Stethoscope, Building2, XCircle, Plus, X } from "lucide-react";
+import Link from "next/link";
+import { Calendar, Clock, Stethoscope, Building2, XCircle, Plus, X, Link2 } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
 import { getAppointments, updateAppointmentStatus, createAppointment, type Appointment } from "@/lib/api/appointments";
@@ -43,8 +44,12 @@ function formatDateTime(iso: string) {
   };
 }
 
+/** Local date formatted as YYYY-MM-DD (toISOString is UTC and rolls back a day in IST). */
 function formatDateInput(d: Date) {
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function isUpcoming(appt: Appointment) {
@@ -180,13 +185,23 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  // Close modal on Escape
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   // Load patient's approved clinic links
-  const { data: clinicLinksData } = useQuery({
+  const { data: clinicLinksData, isLoading: clinicLinksLoading } = useQuery({
     queryKey: ["patient-clinic-links"],
     queryFn: () => api.get("/api/v1/patients/clinic-links").then((r) => r.data),
   });
   const approvedClinics: { id: string; clinic_id: string; clinic_name: string }[] =
     (clinicLinksData?.data ?? []).filter((l: any) => l.consent_status === "approved");
+  const noLinkedClinics = !clinicLinksLoading && approvedClinics.length === 0;
 
   // Load doctors at selected clinic
   const { data: clinicDoctorsData } = useQuery({
@@ -236,14 +251,24 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-[calc(100%-2rem)] sm:w-full sm:max-w-lg rounded-xl bg-white shadow-xl">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Book appointment"
+        className="w-[calc(100%-2rem)] sm:w-full sm:max-w-lg rounded-xl bg-white shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-dreams-border px-6 py-4">
           <h2 className="text-lg font-semibold text-dreams-textPrimary">Book Appointment</h2>
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close"
             className="text-dreams-textSecondary hover:text-dreams-textPrimary"
           >
             <X className="h-5 w-5" />
@@ -258,6 +283,18 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
           )}
 
           {/* Clinic */}
+          {noLinkedClinics && (
+            <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+              <Link2 className="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-600" />
+              <p className="text-sm text-blue-800">
+                You haven&apos;t linked any clinics yet.{" "}
+                <Link href="/patient/clinics" className="font-medium underline" onClick={onClose}>
+                  Link a clinic first
+                </Link>{" "}
+                to pick from its doctors — or search for a doctor by name below.
+              </p>
+            </div>
+          )}
           {approvedClinics.length > 0 && (
             <div>
               <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
@@ -318,6 +355,7 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
                 <button
                   type="button"
                   onClick={() => setSelectedDoctor(null)}
+                  aria-label="Clear selected doctor"
                   className="text-dreams-textSecondary hover:text-red-500 transition-colors"
                 >
                   <X className="h-4 w-4" />
@@ -510,6 +548,7 @@ function AppointmentCard({
 export default function PatientAppointmentsPage() {
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
   const [showBooking, setShowBooking] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState<string | null>(null);
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
 
@@ -522,9 +561,20 @@ export default function PatientAppointmentsPage() {
     mutationFn: (id: string) =>
       updateAppointmentStatus(id, { status: "cancelled", cancelled_reason: "Cancelled by patient" }),
     onSuccess: () => {
+      setCancelTarget(null);
       queryClient.invalidateQueries({ queryKey: ["patient-appointments"] });
     },
   });
+
+  // Close cancel-confirm dialog on Escape
+  useEffect(() => {
+    if (!cancelTarget) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setCancelTarget(null);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [cancelTarget]);
 
   const allAppointments: Appointment[] = data?.data ?? [];
   const upcomingAppointments = allAppointments.filter(isUpcoming).sort(
@@ -615,10 +665,50 @@ export default function PatientAppointmentsPage() {
             <AppointmentCard
               key={appt.id}
               appt={appt}
-              onCancel={(id) => cancelMutation.mutate(id)}
+              onCancel={(id) => setCancelTarget(id)}
               isCancelling={cancelMutation.isPending}
             />
           ))}
+        </div>
+      )}
+
+      {/* Cancel confirmation dialog */}
+      {cancelTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setCancelTarget(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Cancel appointment"
+            className="w-full max-w-sm rounded-xl bg-white shadow-xl p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold text-dreams-textPrimary">
+              Cancel this appointment?
+            </h2>
+            <p className="mt-2 text-sm text-dreams-textSecondary">
+              This cannot be undone. The clinic will be notified of the cancellation.
+            </p>
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setCancelTarget(null)}
+                className="flex-1 rounded-lg border border-dreams-border px-4 py-2 text-sm font-medium text-dreams-textPrimary hover:bg-dreams-lightBg transition-colors"
+              >
+                Keep Appointment
+              </button>
+              <button
+                type="button"
+                disabled={cancelMutation.isPending}
+                onClick={() => cancelMutation.mutate(cancelTarget)}
+                className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+              >
+                {cancelMutation.isPending ? "Cancelling…" : "Yes, Cancel"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
