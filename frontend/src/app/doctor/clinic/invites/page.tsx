@@ -7,6 +7,7 @@ import api from "@/lib/api";
 import { useClinicStore } from "@/stores/clinic-store";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
+import type { ClinicStaffRole } from "@/lib/api/clinics";
 
 interface Invite {
   id: string;
@@ -34,6 +35,9 @@ export default function ClinicInvitesPage() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<"invites" | "requests">("invites");
   const [copied, setCopied] = useState<string | null>(null);
+  const [inviteRole, setInviteRole] = useState<ClinicStaffRole>("doctor");
+  // Role to grant when approving a join request, keyed by request id.
+  const [approveRoles, setApproveRoles] = useState<Record<string, ClinicStaffRole>>({});
 
   const { data: invitesData } = useQuery({
     queryKey: ["clinic-invites", activeClinicId],
@@ -53,7 +57,7 @@ export default function ClinicInvitesPage() {
     mutationFn: () =>
       api.post(`/api/v1/clinics/${activeClinicId}/invites`, {
         invite_type: "code",
-        role: "doctor",
+        role: inviteRole,
         expires_days: 7,
       }),
     onSuccess: () => {
@@ -70,8 +74,8 @@ export default function ClinicInvitesPage() {
   });
 
   const reviewMutation = useMutation({
-    mutationFn: ({ id, action }: { id: string; action: string }) =>
-      api.put(`/api/v1/clinics/${activeClinicId}/join-requests/${id}`, { action }),
+    mutationFn: ({ id, action, role }: { id: string; action: string; role?: ClinicStaffRole }) =>
+      api.put(`/api/v1/clinics/${activeClinicId}/join-requests/${id}`, { action, role }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clinic-join-requests", activeClinicId] });
     },
@@ -98,14 +102,28 @@ export default function ClinicInvitesPage() {
 
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-dreams-textPrimary">Invites & Join Requests</h1>
-        <button
-          onClick={() => createInviteMutation.mutate()}
-          disabled={createInviteMutation.isPending}
-          className="flex items-center gap-2 rounded-lg bg-dreams-blue px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-        >
-          <Plus className="h-4 w-4" />
-          Generate Invite Code
-        </button>
+        <div className="flex items-center gap-2">
+          <label htmlFor="invite-role" className="text-sm text-dreams-textSecondary">
+            Role
+          </label>
+          <select
+            id="invite-role"
+            value={inviteRole}
+            onChange={(e) => setInviteRole(e.target.value as ClinicStaffRole)}
+            className="rounded-lg border border-dreams-border bg-white px-3 py-2 text-sm text-dreams-textPrimary focus:outline-none focus:ring-2 focus:ring-dreams-blue/30"
+          >
+            <option value="doctor">Doctor</option>
+            <option value="receptionist">Receptionist</option>
+          </select>
+          <button
+            onClick={() => createInviteMutation.mutate()}
+            disabled={createInviteMutation.isPending}
+            className="flex items-center gap-2 rounded-lg bg-dreams-blue px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            <Plus className="h-4 w-4" />
+            Generate Invite Code
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -206,8 +224,28 @@ export default function ClinicInvitesPage() {
                 <div className="flex items-center gap-2">
                   {req.status === "pending" ? (
                     <>
+                      <select
+                        aria-label="Role to grant on approval"
+                        value={approveRoles[req.id] ?? "doctor"}
+                        onChange={(e) =>
+                          setApproveRoles((prev) => ({
+                            ...prev,
+                            [req.id]: e.target.value as ClinicStaffRole,
+                          }))
+                        }
+                        className="rounded-lg border border-dreams-border bg-white px-2 py-1.5 text-sm text-dreams-textPrimary focus:outline-none focus:ring-2 focus:ring-dreams-blue/30"
+                      >
+                        <option value="doctor">Doctor</option>
+                        <option value="receptionist">Receptionist</option>
+                      </select>
                       <button
-                        onClick={() => reviewMutation.mutate({ id: req.id, action: "approved" })}
+                        onClick={() =>
+                          reviewMutation.mutate({
+                            id: req.id,
+                            action: "approved",
+                            role: approveRoles[req.id] ?? "doctor",
+                          })
+                        }
                         className="rounded-lg bg-green-50 px-3 py-1.5 text-sm text-green-700 hover:bg-green-100"
                       >
                         Approve

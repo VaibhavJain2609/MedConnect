@@ -30,12 +30,20 @@ export interface Clinic {
   updated_at: string
 }
 
+// Clinic membership roles. `receptionist` is a non-clinical staff role:
+// queue/check-in, appointments, patient list (contact only) and billing —
+// no medical records, prescriptions, member management or revenue reports.
+export type ClinicRole = 'owner' | 'admin' | 'doctor' | 'receptionist'
+
+// Roles that may be granted via invites / join-request approvals.
+export type ClinicStaffRole = 'doctor' | 'receptionist'
+
 export interface ClinicMember {
   id: string
   user_id: string
   full_name: string
   email: string | null
-  role: 'owner' | 'admin' | 'doctor'
+  role: ClinicRole
   branch_id: string | null
   is_active: boolean
   joined_at: string

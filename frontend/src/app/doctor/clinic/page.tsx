@@ -82,7 +82,7 @@ export default function DoctorClinicPage() {
   }
 
   const members: ClinicMember[] = membersData?.data ?? [];
-  const roleBadge: Record<string, string> = { owner: "overdue", admin: "inProgress", doctor: "completed" };
+  const roleBadge: Record<string, string> = { owner: "overdue", admin: "inProgress", doctor: "completed", receptionist: "pending" };
 
   return (
     <div className="space-y-6">

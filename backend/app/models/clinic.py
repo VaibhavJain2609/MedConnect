@@ -64,7 +64,7 @@ class ClinicMembership(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     clinic_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("clinics.id"), nullable=False)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    role: Mapped[str] = mapped_column(String(20), nullable=False)  # owner | admin | doctor
+    role: Mapped[str] = mapped_column(String(20), nullable=False)  # owner | admin | doctor | receptionist
     branch_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("clinic_branches.id"), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
