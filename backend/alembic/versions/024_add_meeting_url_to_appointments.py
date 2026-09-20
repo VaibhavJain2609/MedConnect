@@ -8,7 +8,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = "024_add_meeting_url_to_appointments"
-down_revision = "023_schema_repairs"
+down_revision = "024_add_encounters"
 branch_labels = None
 depends_on = None
 

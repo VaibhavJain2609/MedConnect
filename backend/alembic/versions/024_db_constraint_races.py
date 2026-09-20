@@ -37,7 +37,7 @@ Race fixes:
 from alembic import op
 
 revision = "024_db_constraint_races"
-down_revision = "023_schema_repairs"
+down_revision = "024_platform_settings"
 branch_labels = None
 depends_on = None
 

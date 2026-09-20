@@ -15,7 +15,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = "024_add_encounters"
-down_revision = "023_schema_repairs"
+down_revision = "024_doctor_availability"
 branch_labels = None
 depends_on = None
 
