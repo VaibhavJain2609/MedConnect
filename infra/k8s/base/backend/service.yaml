@@ -4,6 +4,11 @@ metadata:
   name: backend
   labels:
     app: backend
+  annotations:
+    # Same value as the Ingress-level alb.ingress.kubernetes.io/healthcheck-path
+    # default — repeated here so the target group's health check stays correct
+    # if the Ingress-level annotation ever changes for another service.
+    alb.ingress.kubernetes.io/healthcheck-path: /health
 spec:
   type: ClusterIP
   selector:

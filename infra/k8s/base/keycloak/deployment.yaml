@@ -73,6 +73,18 @@ spec:
             limits:
               cpu: 500m
               memory: 1Gi
+          # Keycloak's first boot (JVM + Quarkus + realm import + initial DB
+          # schema creation against RDS) routinely exceeds the ~80s the
+          # liveness probe's initialDelay allows, which crash-loops a cold
+          # start. The startupProbe gates liveness until /health/started
+          # reports up — 30 × 10s gives a 5-minute budget.
+          startupProbe:
+            httpGet:
+              path: /health/started
+              port: health
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
           readinessProbe:
             httpGet:
               path: /health/ready

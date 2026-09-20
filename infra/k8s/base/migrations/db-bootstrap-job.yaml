@@ -1,0 +1,84 @@
+# One-shot, idempotent database bootstrap. RDS only creates the single
+# `db_name` database (`medconnect` — see infra/terraform/modules/rds); nothing
+# else creates `medconnect_medicines`, the `keycloak` schema, or the pg_trgm /
+# pgvector extensions the alembic migrations assume. This Job runs ahead of
+# `alembic-migrate` (listed before it in kustomization.yaml) on every deploy;
+# every statement is a no-op on reruns.
+#
+# Same immutability caveat as migrations/job.yaml: the pipeline must
+# `kubectl delete job -l app=db-bootstrap --ignore-not-found` before apply, or
+# give the Job a fresh name each run.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-bootstrap
+  labels:
+    app: db-bootstrap
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app: db-bootstrap
+    spec:
+      restartPolicy: Never
+      securityContext:
+        # postgres:NN-alpine image's postgres user is uid 70.
+        runAsUser: 70
+        runAsGroup: 70
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: db-bootstrap
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+
+              # DATABASE_URL_SYNC (postgresql://user:pass@host:5432/medconnect)
+              # comes from the backend-secrets ExternalSecret. The RDS instance
+              # enforces rds.force_ssl=1, so sslmode=require is explicit here
+              # rather than relying on libpq's default `prefer`.
+              ADMIN_URL="${DATABASE_URL_SYNC}?sslmode=require"
+              MEDICINE_URL="${DATABASE_URL_SYNC%/medconnect}/medconnect_medicines?sslmode=require"
+
+              # Postgres has no CREATE DATABASE IF NOT EXISTS — SELECT-then-create
+              # via \gexec is the idempotent equivalent (cannot run inside a
+              # transaction block, so it goes through its own statement).
+              psql "$ADMIN_URL" -v ON_ERROR_STOP=1 <<'SQL'
+              SELECT 'CREATE DATABASE medconnect_medicines'
+                WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'medconnect_medicines')\gexec
+              CREATE SCHEMA IF NOT EXISTS keycloak;
+              SQL
+
+              # pg_trgm / vector on the medicine DB — the alembic medicine
+              # migrations create indexes (GIN trigram, tsvector) that need
+              # them; IF NOT EXISTS keeps this a no-op on redeploys. The main
+              # `medconnect` DB's `vector` extension is created by alembic
+              # migration 001 itself, so it is intentionally not done here.
+              psql "$MEDICINE_URL" -v ON_ERROR_STOP=1 \
+                -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm; CREATE EXTENSION IF NOT EXISTS vector;'
+          envFrom:
+            - configMapRef:
+                name: medconnect-config
+            - secretRef:
+                name: backend-secrets
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi

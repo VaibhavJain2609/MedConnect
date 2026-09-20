@@ -116,7 +116,19 @@ locals {
   }
 
   redis_secret = {
-    REDIS_URL = "redis://:${urlencode(random_password.redis_auth.result)}@${module.elasticache.primary_endpoint}:${module.elasticache.port}/0"
+    # rediss:// (TLS) — the elasticache module sets transit_encryption_enabled=true,
+    # so a plain redis:// client would be refused at the transport level.
+    # `?ssl_cert_reqs=none` is required: ElastiCache's TLS cert is signed by an
+    # AWS-internal CA absent from the container trust store, so default cert
+    # verification fails. redis.asyncio.from_url (rate limiter, health check)
+    # honours the param; TLS stays on, only CA verification is relaxed.
+    #
+    # KNOWN GAP: arq's RedisSettings.from_dsn (arq==0.26.1,
+    # backend/app/workers/reminder_worker.py) ignores every query param except
+    # `db`, so the reminder worker still verifies the cert and will fail to
+    # connect until the app passes ssl_cert_reqs='none' explicitly (or mounts
+    # the ElastiCache CA bundle). App-code follow-up — out of infra scope.
+    REDIS_URL = "rediss://:${urlencode(random_password.redis_auth.result)}@${module.elasticache.primary_endpoint}:${module.elasticache.port}/0?ssl_cert_reqs=none"
   }
 
   # KEYCLOAK_ADMIN is read by the Keycloak container itself (bootstrap admin

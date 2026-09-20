@@ -45,6 +45,12 @@ variable "allowed_cidr_blocks" {
   default = []
 }
 
+variable "snapshot_retention_limit" {
+  description = "Days to retain automatic ElastiCache snapshots. 0 disables snapshots entirely — a cache loss is then unrecoverable, so keep at least a few days even in staging."
+  type        = number
+  default     = 7
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

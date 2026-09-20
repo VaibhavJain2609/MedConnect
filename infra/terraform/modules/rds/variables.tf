@@ -73,9 +73,21 @@ variable "allowed_cidr_blocks" {
   default     = []
 }
 
+variable "db_name" {
+  description = "Initial database RDS creates at provision time. `medconnect` is the app's main DB; the second logical database (`medconnect_medicines`) and the `keycloak` schema are created post-apply by the in-cluster db-bootstrap Job (infra/k8s/base/migrations/db-bootstrap-job.yaml)."
+  type        = string
+  default     = "medconnect"
+}
+
 variable "backup_retention_period" {
   type    = number
   default = 7
+}
+
+variable "backup_window" {
+  description = "Daily UTC window for automated backups, HH:MM-HH:MM (e.g. \"20:00-21:00\" ≈ 01:30-02:30 IST). null lets AWS pick — fine for staging, set an explicit low-traffic window for prod."
+  type        = string
+  default     = null
 }
 
 variable "performance_insights_enabled" {

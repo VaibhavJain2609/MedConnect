@@ -17,18 +17,45 @@ spec:
       serviceAccountName: backend-sa
       securityContext:
         runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      # Spread replicas across AZs and nodes — ScheduleAnyway (not
+      # DoNotSchedule) so a single-node/single-AZ cluster can still schedule
+      # rather than leaving pods Pending.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: backend
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: backend
       # emptyDir satisfies the production config validator (UPLOADS_DIR must
       # not be under /tmp) but does NOT solve multi-replica or restart
       # persistence — a file uploaded to one pod is invisible to the others
       # and lost on pod recreation. STORAGE_BACKEND=s3 is the real fix
       # (storage_service.py already has an S3 code path); wiring it needs
       # IRSA-based app code changes out of scope for this pipeline.
+      #
+      # `tmp` exists because of readOnlyRootFilesystem below: uvicorn's
+      # --reload is off, but Python's tempfile, multipart upload spooling,
+      # and libs that scratch to /tmp all need a writable path.
       volumes:
         - name: uploads
           emptyDir: {}
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi
       containers:
         - name: backend
           image: medconnect-backend:latest
+          imagePullPolicy: IfNotPresent
           ports:
             - name: http
               containerPort: 8000
@@ -40,9 +67,15 @@ spec:
           volumeMounts:
             - name: uploads
               mountPath: /data/uploads
+            - name: tmp
+              mountPath: /tmp
           securityContext:
             runAsNonRoot: true
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
           resources:
             requests:
               cpu: 250m
@@ -50,6 +83,11 @@ spec:
             limits:
               cpu: 500m
               memory: 1Gi
+          # Readiness uses the deep /health endpoint (checks Postgres +
+          # Redis) so a dependency outage pulls the pod out of Service
+          # rotation. Liveness deliberately uses the shallow /livez instead:
+          # restarting the container cannot fix a DB blip, it only turns a
+          # brownout into a crash-loop.
           readinessProbe:
             httpGet:
               path: /health
@@ -60,7 +98,7 @@ spec:
             failureThreshold: 6
           livenessProbe:
             httpGet:
-              path: /health
+              path: /livez
               port: http
             initialDelaySeconds: 30
             periodSeconds: 15

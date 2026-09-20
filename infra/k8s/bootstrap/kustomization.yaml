@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Cluster-scoped / namespace-creating resources that the CD pipeline's IAM
+# role CANNOT apply — environments/shared/main.tf grants GitHub Actions only
+# AmazonEKSEditPolicy scoped to the medconnect-staging / medconnect-prod
+# namespaces, which excludes cluster-scoped kinds (Namespace,
+# ClusterSecretStore). A cluster-admin applies this once per cluster:
+#
+#   kubectl apply -k infra/k8s/bootstrap
+#
+# BEFORE the first `kubectl apply -k` of either overlay. See infra/README.md
+# for the full bootstrap order.
+#
+# No `namespace:` transformer here — everything below is either
+# cluster-scoped or carries its own metadata.name explicitly.
+
+resources:
+  - namespaces.yaml
+  - cluster-secret-store.yaml

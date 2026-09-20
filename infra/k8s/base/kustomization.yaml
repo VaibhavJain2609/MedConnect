@@ -3,8 +3,13 @@ kind: Kustomization
 
 namespace: medconnect
 
+# Namespace + ClusterSecretStore are deliberately NOT here: both are
+# cluster-scoped, and the CD pipeline's IAM role (AmazonEKSEditPolicy, scoped
+# to medconnect-staging/medconnect-prod) cannot apply cluster-scoped kinds.
+# They live in infra/k8s/bootstrap/ and are applied once by a cluster-admin —
+# see infra/README.md for the bootstrap order.
+
 resources:
-  - namespace.yaml
   - configmap.yaml
   - backend/serviceaccount.yaml
   - backend/deployment.yaml
@@ -18,11 +23,18 @@ resources:
   - frontend/pdb.yaml
   - keycloak/deployment.yaml
   - keycloak/service.yaml
+  - reminder-worker/deployment.yaml
+  # db-bootstrap must run before alembic: it creates the `medconnect_medicines`
+  # database, the `keycloak` schema, and the pg_trgm/vector extensions that
+  # the migrations assume exist.
+  - migrations/db-bootstrap-job.yaml
   - migrations/job.yaml
   - ingress/ingress.yaml
-  - external-secrets/cluster-secret-store.yaml
   - external-secrets/backend-external-secret.yaml
   - external-secrets/keycloak-external-secret.yaml
+  # Optional hardening — uncomment to enforce per-namespace resource budgets.
+  # Safe to enable: every workload in this base sets explicit requests/limits.
+  # - resourcequota.yaml
 
 # disableNameSuffixHash so the name stays exactly "keycloak-realm-config" —
 # keycloak/deployment.yaml's volumes.configMap.name references it literally,

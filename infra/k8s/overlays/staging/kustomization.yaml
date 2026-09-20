@@ -36,6 +36,22 @@ patches:
       - op: replace
         path: /data/NEXT_PUBLIC_API_URL
         value: https://staging.medconnect.example.com/api
+      # Internal cluster DNS for the keycloak Service — namespace-qualified to
+      # this overlay's namespace. Deliberately NOT the bare `http://keycloak:8080`
+      # literal, which Settings.check_production_config() rejects under
+      # APP_ENV=production (backend/app/config.py).
+      - op: replace
+        path: /data/KEYCLOAK_URL
+        value: http://keycloak.medconnect-staging.svc.cluster.local:8080
+      # Public origins: frontend served at / and backend under /api on the
+      # same host, so both are the app hostname. FRONTEND_URL must not contain
+      # "localhost" under APP_ENV=production.
+      - op: replace
+        path: /data/FRONTEND_URL
+        value: https://staging.medconnect.example.com
+      - op: replace
+        path: /data/BACKEND_URL
+        value: https://staging.medconnect.example.com
 
   - target:
       kind: Ingress
@@ -53,3 +69,38 @@ patches:
       - op: replace
         path: /spec/rules/1/host
         value: staging.medconnect.example.com
+
+  # ExternalSecrets: bind to the shared cluster-admin-applied ClusterSecretStore
+  # (infra/k8s/bootstrap/cluster-secret-store.yaml) and point dataFrom at this
+  # environment's Secrets Manager paths — Terraform's secrets module writes
+  # JSON to medconnect/<environment>/<suffix>.
+  - target:
+      kind: ExternalSecret
+      name: backend-secrets
+    patch: |-
+      - op: replace
+        path: /spec/secretStoreRef/name
+        value: medconnect-secrets-store
+      - op: replace
+        path: /spec/dataFrom/0/extract/key
+        value: medconnect/staging/rds
+      - op: replace
+        path: /spec/dataFrom/1/extract/key
+        value: medconnect/staging/redis
+      - op: replace
+        path: /spec/dataFrom/2/extract/key
+        value: medconnect/staging/keycloak-admin
+
+  - target:
+      kind: ExternalSecret
+      name: keycloak-secrets
+    patch: |-
+      - op: replace
+        path: /spec/secretStoreRef/name
+        value: medconnect-secrets-store
+      - op: replace
+        path: /spec/dataFrom/0/extract/key
+        value: medconnect/staging/keycloak-admin
+      - op: replace
+        path: /spec/dataFrom/1/extract/key
+        value: medconnect/staging/rds

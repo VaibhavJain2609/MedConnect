@@ -41,15 +41,18 @@ variable "sentry_dsn" {
 }
 
 variable "auth_hostname" {
-  type = string
+  description = "Keycloak's public hostname for this environment, e.g. auth.medconnect.example.com"
+  type        = string
 }
 
 variable "app_hostname" {
-  type = string
+  description = "Frontend/backend public hostname for this environment, e.g. medconnect.example.com"
+  type        = string
 }
 
 variable "acm_certificate_arn" {
-  type = string
+  description = "ACM cert covering both auth_hostname and app_hostname (or a wildcard), provisioned manually or via a separate ACM+Route53 module — out of scope here since it depends on a real owned domain"
+  type        = string
 }
 
 variable "tags" {

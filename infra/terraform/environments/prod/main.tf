@@ -32,14 +32,18 @@ resource "random_password" "keycloak_admin" {
 module "rds" {
   source = "../../modules/rds"
 
-  identifier                 = "medconnect-${local.environment}-db"
-  environment                = local.environment
-  instance_class             = var.rds_instance_class
-  allocated_storage          = var.rds_allocated_storage
-  max_allocated_storage      = var.rds_max_allocated_storage
-  multi_az                   = true
-  deletion_protection        = true
-  skip_final_snapshot        = false
+  identifier              = "medconnect-${local.environment}-db"
+  environment             = local.environment
+  instance_class          = var.rds_instance_class
+  allocated_storage       = var.rds_allocated_storage
+  max_allocated_storage   = var.rds_max_allocated_storage
+  multi_az                = true
+  deletion_protection     = true
+  skip_final_snapshot     = false
+  backup_retention_period = 30
+  # UTC; 20:00-21:00 UTC ≈ 01:30-02:30 IST — the lowest-traffic hour for an
+  # India-facing app. Staging leaves this null (AWS picks).
+  backup_window              = "20:00-21:00"
   master_username            = local.db_username
   master_password            = random_password.rds_master.result
   vpc_id                     = data.terraform_remote_state.shared.outputs.vpc_id
@@ -92,7 +96,19 @@ locals {
   }
 
   redis_secret = {
-    REDIS_URL = "redis://:${urlencode(random_password.redis_auth.result)}@${module.elasticache.primary_endpoint}:${module.elasticache.port}/0"
+    # rediss:// (TLS) — the elasticache module sets transit_encryption_enabled=true,
+    # so a plain redis:// client would be refused at the transport level.
+    # `?ssl_cert_reqs=none` is required: ElastiCache's TLS cert is signed by an
+    # AWS-internal CA absent from the container trust store, so default cert
+    # verification fails. redis.asyncio.from_url (rate limiter, health check)
+    # honours the param; TLS stays on, only CA verification is relaxed.
+    #
+    # KNOWN GAP: arq's RedisSettings.from_dsn (arq==0.26.1,
+    # backend/app/workers/reminder_worker.py) ignores every query param except
+    # `db`, so the reminder worker still verifies the cert and will fail to
+    # connect until the app passes ssl_cert_reqs='none' explicitly (or mounts
+    # the ElastiCache CA bundle). App-code follow-up — out of infra scope.
+    REDIS_URL = "rediss://:${urlencode(random_password.redis_auth.result)}@${module.elasticache.primary_endpoint}:${module.elasticache.port}/0?ssl_cert_reqs=none"
   }
 
   keycloak_admin_secret = {

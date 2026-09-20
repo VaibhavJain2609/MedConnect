@@ -2,10 +2,16 @@
 # aws-load-balancer-controller
 # ---------------------------------------------------------------------------
 
+# Every helm_release pins `version` — unpinned releases resolve to whatever
+# the repo's latest is at apply time, which makes `terraform apply` output
+# non-reproducible and lets a surprise chart-major upgrade break the cluster
+# without any diff in this repo. Bump these deliberately.
+
 resource "helm_release" "aws_load_balancer_controller" {
   name             = "aws-load-balancer-controller"
   repository       = "https://aws.github.io/eks-charts"
   chart            = "aws-load-balancer-controller"
+  version          = "3.5.0"
   namespace        = "kube-system"
   create_namespace = false
 
@@ -44,10 +50,13 @@ resource "helm_release" "aws_load_balancer_controller" {
 # external-secrets
 # ---------------------------------------------------------------------------
 
+# Chart 2.x serves only the stable external-secrets.io/v1 API (v1beta1 was
+# dropped in ESO 2.0) — the k8s manifests under infra/k8s use v1 to match.
 resource "helm_release" "external_secrets" {
   name             = "external-secrets"
   repository       = "https://charts.external-secrets.io"
   chart            = "external-secrets"
+  version          = "2.10.0"
   namespace        = local.irsa_service_accounts.external_secrets.namespace
   create_namespace = true
 
@@ -75,6 +84,7 @@ resource "helm_release" "cluster_autoscaler" {
   name       = "cluster-autoscaler"
   repository = "https://kubernetes.github.io/autoscaler"
   chart      = "cluster-autoscaler"
+  version    = "9.59.0"
   namespace  = "kube-system"
 
   set {
@@ -111,6 +121,7 @@ resource "helm_release" "metrics_server" {
   name       = "metrics-server"
   repository = "https://kubernetes-sigs.github.io/metrics-server/"
   chart      = "metrics-server"
+  version    = "3.14.0"
   namespace  = "kube-system"
 }
 
@@ -122,6 +133,7 @@ resource "helm_release" "kube_prometheus_stack" {
   name             = "kube-prometheus-stack"
   repository       = "https://prometheus-community.github.io/helm-charts"
   chart            = "kube-prometheus-stack"
+  version          = "91.4.1"
   namespace        = "monitoring"
   create_namespace = true
 
@@ -136,9 +148,11 @@ resource "helm_release" "kube_prometheus_stack" {
 # ---------------------------------------------------------------------------
 
 resource "helm_release" "cert_manager" {
-  name             = "cert-manager"
-  repository       = "https://charts.jetstack.io"
-  chart            = "cert-manager"
+  name       = "cert-manager"
+  repository = "https://charts.jetstack.io"
+  chart      = "cert-manager"
+  # cert-manager's chart version carries a literal `v` prefix.
+  version          = "v1.21.2"
   namespace        = local.irsa_service_accounts.cert_manager.namespace
   create_namespace = true
 
