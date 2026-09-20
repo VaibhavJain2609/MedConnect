@@ -1,5 +1,7 @@
 import keycloak from "./keycloak";
 import { getMe as fetchMe, type UserProfile } from "./api/users";
+import { useAuthStore } from "@/stores/auth-store";
+import { useClinicStore } from "@/stores/clinic-store";
 
 export interface User {
   id: string;
@@ -35,6 +37,7 @@ export async function initKeycloak(): Promise<boolean> {
       onLoad: "check-sso",
       pkceMethod: "S256",
       checkLoginIframe: false,
+      silentCheckSsoRedirectUri: window.location.origin + "/silent-check-sso.html",
       redirectUri: window.location.origin + "/auth/callback",
     });
 
@@ -74,8 +77,45 @@ export function signupRedirect() {
   }
 }
 
+// Registered by Providers so logout() can purge cached server data.
+let _queryClient: { clear: () => void } | null = null;
+export function registerQueryClient(client: { clear: () => void } | null) {
+  _queryClient = client;
+}
+
 export function logout() {
-  if (typeof window !== "undefined" && keycloak) {
+  if (typeof window === "undefined") return;
+
+  // Drop React Query cache — PHI must not persist on shared devices
+  try {
+    _queryClient?.clear();
+  } catch {
+    // ignore
+  }
+
+  // Clear persisted client state
+  try {
+    useAuthStore.getState().clear();
+    useClinicStore.getState().clearClinics();
+    localStorage.removeItem("clinic-store");
+    localStorage.removeItem("auth-store");
+  } catch {
+    // ignore storage errors (private mode, etc.)
+  }
+
+  // Clear service-worker caches
+  try {
+    if ("caches" in window) {
+      void caches
+        .keys()
+        .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+        .catch(() => {});
+    }
+  } catch {
+    // ignore
+  }
+
+  if (keycloak) {
     keycloak.logout({ redirectUri: window.location.origin });
   }
 }

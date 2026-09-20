@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import api from "@/lib/api";
+import { downloadFile, openFileInNewTab } from "@/lib/download";
 import Link from "next/link";
 
 interface PrescriptionPrintData {
@@ -54,6 +55,35 @@ export default function PrescriptionPrintPage() {
   const [data, setData] = useState<PrescriptionPrintData | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [pdfBusy, setPdfBusy] = useState<"download" | "preview" | null>(null);
+  const [pdfError, setPdfError] = useState("");
+
+  const handleDownloadPdf = async () => {
+    setPdfError("");
+    setPdfBusy("download");
+    try {
+      await downloadFile(
+        `/api/v1/prescriptions/${id}/pdf?download=true`,
+        `prescription-${id.slice(0, 8)}.pdf`
+      );
+    } catch {
+      setPdfError("Could not download the PDF. Please try again.");
+    } finally {
+      setPdfBusy(null);
+    }
+  };
+
+  const handlePreviewPdf = async () => {
+    setPdfError("");
+    setPdfBusy("preview");
+    try {
+      await openFileInNewTab(`/api/v1/prescriptions/${id}/pdf`);
+    } catch {
+      setPdfError("Could not load the PDF preview. Please try again.");
+    } finally {
+      setPdfBusy(null);
+    }
+  };
 
   useEffect(() => {
     api
@@ -113,22 +143,20 @@ export default function PrescriptionPrintPage() {
         >
           Print
         </button>
-        <a
-          href={`/api/v1/prescriptions/${id}/pdf?download=true`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors"
+        <button
+          onClick={handleDownloadPdf}
+          disabled={pdfBusy !== null}
+          className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
         >
-          Download PDF
-        </a>
-        <a
-          href={`/api/v1/prescriptions/${id}/pdf`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="px-4 py-2 border border-gray-300 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+          {pdfBusy === "download" ? "Downloading…" : "Download PDF"}
+        </button>
+        <button
+          onClick={handlePreviewPdf}
+          disabled={pdfBusy !== null}
+          className="px-4 py-2 border border-gray-300 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
         >
-          Preview PDF
-        </a>
+          {pdfBusy === "preview" ? "Loading…" : "Preview PDF"}
+        </button>
         {data && (
           <a
             href={`https://wa.me/?text=${encodeURIComponent(
@@ -147,6 +175,9 @@ export default function PrescriptionPrintPage() {
         >
           Close
         </Link>
+        {pdfError && (
+          <p className="w-full text-sm text-red-600">{pdfError}</p>
+        )}
       </div>
 
       {/* Prescription body */}

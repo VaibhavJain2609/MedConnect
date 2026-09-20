@@ -1,41 +1,62 @@
-import { useState, useCallback } from "react"
+import { useSyncExternalStore } from "react"
 
 type ToastType = "default" | "destructive"
 
-interface Toast {
+export interface Toast {
   id: string
   title: string
   description?: string
   variant?: ToastType
 }
 
+const TOAST_DURATION_MS = 4000
+
+// Module-level store so toasts triggered anywhere are rendered by the
+// single <Toaster /> mounted in Providers.
+let toasts: Toast[] = []
+const listeners = new Set<() => void>()
+const EMPTY: Toast[] = []
+
+function emit() {
+  listeners.forEach((listener) => listener())
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+  }
+}
+
+function getSnapshot(): Toast[] {
+  return toasts
+}
+
+function getServerSnapshot(): Toast[] {
+  return EMPTY
+}
+
+export function toast({ title, description, variant = "default" }: Omit<Toast, "id">) {
+  const id = Math.random().toString(36).substring(2, 10)
+  toasts = [...toasts, { id, title, description, variant }]
+  emit()
+
+  setTimeout(() => dismiss(id), TOAST_DURATION_MS)
+
+  return { id }
+}
+
+export function dismiss(toastId: string) {
+  toasts = toasts.filter((t) => t.id !== toastId)
+  emit()
+}
+
 export function useToast() {
-  const [toasts, setToasts] = useState<Toast[]>([])
-
-  const toast = useCallback(({ title, description, variant = "default" }: Omit<Toast, "id">) => {
-    const id = Math.random().toString(36).substring(7)
-
-    // Simple console log for now (you can enhance this with actual toast UI later)
-    console.log(`[${variant}] ${title}${description ? `: ${description}` : ""}`)
-
-    const newToast = { id, title, description, variant }
-    setToasts((prev) => [...prev, newToast])
-
-    // Auto-dismiss after 5 seconds
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id))
-    }, 5000)
-
-    return { id }
-  }, [])
-
-  const dismiss = useCallback((toastId: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== toastId))
-  }, [])
+  const current = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
 
   return {
     toast,
     dismiss,
-    toasts,
+    toasts: current,
   }
 }
