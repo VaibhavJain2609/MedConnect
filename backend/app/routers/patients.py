@@ -10,7 +10,7 @@ from app.dependencies import require_patient
 from app.models.doctor import Doctor
 from app.models.user import User
 from app.schemas.common import PaginatedResponse, PaginationMeta
-from app.schemas.record import RecordResponse, VALID_RECORD_TYPES
+from app.schemas.record import RecordResponse, VALID_RECORD_TYPES, _validate_document_url
 from app.schemas.user import MedicalHistoryUpdate, PatientProfileUpdate
 from app.services.prescription_service import get_patient_prescriptions
 from app.services.record_service import create_record, get_patient_timeline, get_record_detail
@@ -198,6 +198,11 @@ class PatientRecordCreate(BaseModel):
                 f"record_type must be one of: {', '.join(PATIENT_UPLOAD_RECORD_TYPES)}"
             )
         return v
+
+    @field_validator("document_url")
+    @classmethod
+    def validate_document_url(cls, v: str | None) -> str | None:
+        return _validate_document_url(v)
 
 
 @router.post("/records", response_model=RecordResponse, status_code=status.HTTP_201_CREATED)
