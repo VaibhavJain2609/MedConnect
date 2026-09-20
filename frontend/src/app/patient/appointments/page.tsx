@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
@@ -62,8 +63,8 @@ function isUpcoming(appt: Appointment) {
 /** Patients may join a teleconsult call starting ~10 minutes before the scheduled time. */
 const TELECONSULT_JOIN_WINDOW_MS = 10 * 60 * 1000;
 
-function canJoinTeleconsult(appt: Appointment) {
-  return Date.now() >= new Date(appt.scheduled_at).getTime() - TELECONSULT_JOIN_WINDOW_MS;
+function canJoinTeleconsult(appt: Appointment, now: number) {
+  return now >= new Date(appt.scheduled_at).getTime() - TELECONSULT_JOIN_WINDOW_MS;
 }
 
 const ACTIVE_STATUSES = ["scheduled", "arrived", "in-progress"];
@@ -486,7 +487,14 @@ function AppointmentCard({
   const { date, time } = formatDateTime(appt.scheduled_at);
   const canCancel = appt.status === "scheduled";
   const isTeleconsult = appt.type === "teleconsult" && ACTIVE_STATUSES.includes(appt.status);
-  const joinable = isTeleconsult && canJoinTeleconsult(appt);
+  // Tick every 30s so the Join button unlocks when the window opens
+  const [now, setNow] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    if (!isTeleconsult) return;
+    const t = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, [isTeleconsult]);
+  const joinable = isTeleconsult && canJoinTeleconsult(appt, now);
 
   return (
     <div className="rounded-xl border border-dreams-border bg-white p-4 shadow-card">
@@ -597,6 +605,7 @@ export default function PatientAppointmentsPage() {
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
   const [showBooking, setShowBooking] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
 
@@ -618,6 +627,14 @@ export default function PatientAppointmentsPage() {
     mutationFn: (id: string) => generateMeetingLink(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["patient-appointments"] });
+    },
+    onError: (err: unknown) => {
+      const msg =
+        (err as { userMessage?: string })?.userMessage ??
+        (err as { response?: { data?: { detail?: { error?: { message?: string } } } } })
+          ?.response?.data?.detail?.error?.message ??
+        "Could not generate the meeting link";
+      setLinkError(msg);
     },
   });
 
@@ -713,6 +730,12 @@ export default function PatientAppointmentsPage() {
         </div>
       )}
 
+      {linkError && (
+        <div className="rounded-lg border border-status-overdue/30 bg-status-overdue/10 px-4 py-2 text-sm text-status-overdue">
+          {linkError}
+        </div>
+      )}
+
       {/* Appointment list */}
       {!isLoading && displayedAppointments.length > 0 && (
         <div className="space-y-3">
@@ -721,9 +744,9 @@ export default function PatientAppointmentsPage() {
               key={appt.id}
               appt={appt}
               onCancel={(id) => setCancelTarget(id)}
-              isCancelling={cancelMutation.isPending}
-              onGenerateLink={(id) => meetingLinkMutation.mutate(id)}
-              isGeneratingLink={meetingLinkMutation.isPending}
+              isCancelling={cancelMutation.isPending && cancelTarget === appt.id}
+              onGenerateLink={(id) => { setLinkError(null); meetingLinkMutation.mutate(id); }}
+              isGeneratingLink={meetingLinkMutation.isPending && meetingLinkMutation.variables === appt.id}
             />
           ))}
         </div>

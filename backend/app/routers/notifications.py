@@ -62,6 +62,10 @@ DEFAULT_NOTIFICATION_PREFERENCES: dict = {
     "lab_results": True,
     "prescription_alerts": True,
     "system_alerts": True,
+    # Channel toggles consumed by services/notification_channels.py —
+    # without these, sms/whatsapp are opt-out-impossible.
+    "sms_notifications": False,
+    "whatsapp_notifications": False,
 }
 
 
@@ -70,6 +74,8 @@ class NotificationPreferencesUpdate(BaseModel):
 
     email_notifications: bool = True
     push_notifications: bool = True
+    sms_notifications: bool = False
+    whatsapp_notifications: bool = False
     appointment_reminders: bool = True
     lab_results: bool = True
     prescription_alerts: bool = True

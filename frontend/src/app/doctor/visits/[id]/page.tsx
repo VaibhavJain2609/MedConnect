@@ -68,7 +68,10 @@ export default function EncounterDetailPage() {
 
   const deleteMutation = useMutation({
     mutationFn: () => deleteEncounter(id),
-    onSuccess: () => router.push("/doctor/visits"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["doctor-encounters"] });
+      router.push("/doctor/visits");
+    },
     onError: () => setError("Failed to delete encounter."),
   });
 

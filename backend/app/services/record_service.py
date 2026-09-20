@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import and_, func, select, tuple_
+from sqlalchemy import and_, func, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -194,6 +194,7 @@ async def get_doctor_patients(
     doctor_id: UUID,
     cursor: UUID | None = None,
     limit: int = 20,
+    search: str | None = None,
 ) -> tuple[list[dict], str | None, bool]:
     from sqlalchemy import union
     from app.models.clinic import ClinicMembership
@@ -232,6 +233,16 @@ async def get_doctor_patients(
     combined = union(records_stmt, clinic_stmt).subquery()
 
     stmt = select(combined.c.id, combined.c.full_name, combined.c.email, combined.c.phone)
+
+    if search:
+        term = f"%{search}%"
+        stmt = stmt.where(
+            or_(
+                combined.c.full_name.ilike(term),
+                combined.c.email.ilike(term),
+                combined.c.phone.ilike(term),
+            )
+        )
 
     # Keyset pagination. The emitted cursor (next_cursor below) is the last
     # row's patient id; resolve it to its full_name, then take rows strictly

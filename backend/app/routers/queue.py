@@ -7,11 +7,12 @@ patient check-in (add_to_queue) and status advancement — so no endpoint here
 may assume the member is a doctor.
 """
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -118,14 +119,14 @@ async def add_to_queue(
     # Auto-assign queue number: max for today at this clinic + 1
     today = datetime.now(tz=timezone.utc).date()
     day_start = datetime(today.year, today.month, today.day, 0, 0, 0, tzinfo=timezone.utc)
-    day_end = datetime(today.year, today.month, today.day, 23, 59, 59, tzinfo=timezone.utc)
+    day_end = day_start + timedelta(days=1)  # half-open — matches queue_date
 
     max_num_res = await db.execute(
         select(func.max(QueueEntry.queue_number)).where(
             QueueEntry.clinic_id == clinic_id,
             QueueEntry.deleted_at.is_(None),
             QueueEntry.created_at >= day_start,
-            QueueEntry.created_at <= day_end,
+            QueueEntry.created_at < day_end,
         )
     )
     max_num = max_num_res.scalar_one_or_none() or 0
@@ -142,7 +143,22 @@ async def add_to_queue(
         notes=req.notes,
     )
     db.add(entry)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        # uq_queue_entries_daily_number caught a same-second race — retry once
+        await db.rollback()
+        max_num_res = await db.execute(
+            select(func.max(QueueEntry.queue_number)).where(
+                QueueEntry.clinic_id == clinic_id,
+                QueueEntry.deleted_at.is_(None),
+                QueueEntry.created_at >= day_start,
+                QueueEntry.created_at < day_end,
+            )
+        )
+        entry.queue_number = (max_num_res.scalar_one_or_none() or 0) + 1
+        db.add(entry)
+        await db.flush()
     await db.refresh(entry)
 
     patient_names, doctor_names = await _resolve_names(db, [entry])
@@ -165,13 +181,13 @@ async def get_queue(
 
     today = datetime.now(tz=timezone.utc).date()
     day_start = datetime(today.year, today.month, today.day, 0, 0, 0, tzinfo=timezone.utc)
-    day_end = datetime(today.year, today.month, today.day, 23, 59, 59, tzinfo=timezone.utc)
+    day_end = day_start + timedelta(days=1)
 
     stmt = select(QueueEntry).where(
         QueueEntry.clinic_id == clinic_id,
         QueueEntry.deleted_at.is_(None),
         QueueEntry.created_at >= day_start,
-        QueueEntry.created_at <= day_end,
+        QueueEntry.created_at < day_end,
     )
 
     if status_filter:

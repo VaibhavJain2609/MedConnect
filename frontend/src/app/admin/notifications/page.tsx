@@ -87,7 +87,7 @@ export default function AdminNotificationsPage() {
       toast({
         title: "Broadcast failed",
         description:
-          err instanceof Error ? err.message : "Could not send the announcement.",
+          (err as { userMessage?: string })?.userMessage || (err instanceof Error ? err.message : "Could not send the announcement."),
         variant: "destructive",
       });
     } finally {
@@ -181,7 +181,7 @@ export default function AdminNotificationsPage() {
             value={actionUrl}
             onChange={(e) => setActionUrl(e.target.value)}
             maxLength={512}
-            placeholder="/patient/appointments or https://…"
+            placeholder="/patient/appointments"
             className="h-10 w-full px-3 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
           />
           <p className="text-xs text-dreams-textSecondary mt-1">

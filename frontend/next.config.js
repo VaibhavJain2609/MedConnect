@@ -38,7 +38,9 @@ const nextConfig = {
       "'self'",
       cspOrigin(process.env.NEXT_PUBLIC_API_URL),
       cspOrigin(process.env.NEXT_PUBLIC_KEYCLOAK_URL),
-      'ws:', 'wss:', // Next.js HMR websocket (dev)
+      // Next.js HMR websockets — dev only; bare ws:/wss: schemes in prod CSP
+      // would let injected scripts exfiltrate over arbitrary websockets.
+      ...(process.env.NODE_ENV !== 'production' ? ['ws:', 'wss:'] : []),
     ].filter(Boolean).join(' ');
     return [
       {

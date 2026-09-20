@@ -67,12 +67,13 @@ router = APIRouter(prefix="/api/v1/doctors", tags=["doctors"])
 async def list_patients(
     cursor: UUID | None = Query(None),
     limit: int = Query(20, ge=1, le=100),
+    search: str | None = Query(None),
     doctor_info: tuple[User, Doctor] = Depends(get_current_doctor),
     db: AsyncSession = Depends(get_db),
 ):
     _, doctor = doctor_info
     patients, next_cursor, has_more = await get_doctor_patients(
-        db=db, doctor_id=doctor.id, cursor=cursor, limit=limit
+        db=db, doctor_id=doctor.id, cursor=cursor, limit=limit, search=search
     )
     return PaginatedResponse(
         data=patients,
@@ -938,7 +939,7 @@ async def create_rx(
 
     response = PrescriptionResponse.model_validate(prescription)
     response.safety = SafetyResult(
-        checked=True,
+        checked=not gate.unresolved_items,  # False when items bypassed salt resolution
         alerts=[SafetyAlert(**a) for a in gate.alerts],
         overrides_applied=overrides_applied,
     )

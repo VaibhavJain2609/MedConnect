@@ -2,13 +2,16 @@ import math
 from datetime import datetime, timedelta, date
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from app.database import get_db, get_medicine_db
 from app.dependencies import require_admin
+from app.models.notification import NotificationType
+from app.services import notification_service
 from app.models.appointment import Appointment
 from app.models.doctor import Doctor
 from app.models.medical_record import MedicalRecord
@@ -694,3 +697,102 @@ async def get_visit_departments(
         .order_by(MedicalRecord.record_type)
     )
     return [row[0] for row in result.all() if row[0]]
+
+
+class AppointmentRejectBody(BaseModel):
+    reason: Optional[str] = None
+
+
+async def _get_appointment_or_404(db: AsyncSession, appointment_id) -> Appointment:
+    from uuid import UUID
+    try:
+        appt_id = appointment_id if not isinstance(appointment_id, str) else UUID(appointment_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail={"error": {"code": "INVALID_ID", "message": "Invalid appointment ID"}})
+    res = await db.execute(
+        select(Appointment).where(Appointment.id == appt_id, Appointment.deleted_at.is_(None))
+    )
+    appt = res.scalar_one_or_none()
+    if appt is None:
+        raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Appointment not found"}})
+    return appt
+
+
+@router.post("/appointment-requests/{appointment_id}/approve")
+async def approve_appointment_request(
+    appointment_id: str,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Approve a pending appointment request — keeps it 'scheduled' and
+    notifies the patient that the booking was confirmed."""
+    appt = await _get_appointment_or_404(db, appointment_id)
+    if appt.status != "scheduled":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": {"code": "INVALID_STATE", "message": f"Cannot approve an appointment in '{appt.status}' state"}},
+        )
+
+    await notification_service.create_notification(
+        db,
+        user_id=appt.patient_id,
+        notif_type=NotificationType.APPOINTMENT.value,
+        title="Appointment confirmed",
+        body="Your appointment request has been approved.",
+        action_url="/patient/appointments",
+        metadata={"appointment_id": str(appt.id)},
+    )
+
+    from app.services.audit_service import log_change
+    await log_change(
+        db=db,
+        table_name="appointments",
+        record_id=appt.id,
+        action="UPDATE",
+        old_values={"status": appt.status},
+        new_values={"approved_by_admin": True},
+    )
+    await db.commit()
+    return {"id": str(appt.id), "status": appt.status}
+
+
+@router.post("/appointment-requests/{appointment_id}/reject")
+async def reject_appointment_request(
+    appointment_id: str,
+    body: AppointmentRejectBody | None = None,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Reject a pending appointment request — cancels it and notifies the patient."""
+    appt = await _get_appointment_or_404(db, appointment_id)
+    if appt.status not in {"scheduled"}:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": {"code": "INVALID_STATE", "message": f"Cannot reject an appointment in '{appt.status}' state"}},
+        )
+
+    reason = (body.reason if body else None) or "Rejected by clinic administration"
+    appt.status = "cancelled"
+    appt.cancelled_reason = reason
+
+    await notification_service.create_notification(
+        db,
+        user_id=appt.patient_id,
+        notif_type=NotificationType.APPOINTMENT.value,
+        title="Appointment request declined",
+        body=f"Your appointment request was declined. {reason}",
+        action_url="/patient/appointments",
+        metadata={"appointment_id": str(appt.id)},
+    )
+
+    from app.services.audit_service import log_change
+    await log_change(
+        db=db,
+        table_name="appointments",
+        record_id=appt.id,
+        action="UPDATE",
+        old_values={"status": "scheduled"},
+        new_values={"status": "cancelled", "cancelled_reason": reason},
+    )
+    await db.commit()
+    return {"id": str(appt.id), "status": appt.status}

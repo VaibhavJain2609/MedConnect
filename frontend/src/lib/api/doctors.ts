@@ -83,14 +83,6 @@ export async function getDoctors(
 }
 
 /**
- * Get doctor details by ID (public endpoint)
- */
-export async function getDoctor(id: string): Promise<Doctor> {
-  const response = await api.get(`/api/v1/doctors/${id}`);
-  return response.data;
-}
-
-/**
  * Get full doctor detail for admin review (MD-65)
  */
 export async function getAdminDoctor(id: string): Promise<AdminDoctorDetail> {
@@ -152,7 +144,7 @@ export interface DoctorPatient {
 
 export interface DoctorPatientsResponse {
   data: DoctorPatient[];
-  total: number;
+  pagination: { next_cursor: string | null; has_more: boolean; limit: number };
 }
 
 /**

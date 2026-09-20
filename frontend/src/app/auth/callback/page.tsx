@@ -34,9 +34,11 @@ export default function AuthCallbackPage() {
           await fetchUser();
           router.replace("/doctor/onboarding");
         } catch (err) {
-          console.error("Failed to assign doctor role:", err);
+          // set-role now requires a clinic invite code — send the user to the
+          // invite redemption page instead of silently landing as a patient.
+          console.error("Doctor role requires an invite code:", err);
           sessionStorage.removeItem("register_intent");
-          router.replace("/patient/timeline");
+          router.replace("/invite");
         }
         return;
       }

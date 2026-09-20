@@ -71,6 +71,14 @@ _PHI_READ_RULES: tuple[tuple[re.Pattern[str], str], ...] = tuple(
         (r"^/api/v1/patients/record-access-requests(?:/|$)", "record_access"),
         (r"^/api/v1/patients/clinic-links(?:/|$)", "patient_clinic_links"),
         (r"^/api/v1/patients/link-code(?:/|$)", "patient_link_codes"),
+        # ---- Encounters (SOAP notes — highest-density PHI) ------------
+        (rf"^/api/v1/encounters/({_UUID_RE})(?:/|$)", "encounters"),
+        (r"^/api/v1/encounters$", "encounters"),
+        # ---- Patient lab results (PHI) --------------------------------
+        (rf"^/api/v1/patients/lab-results/({_UUID_RE})(?:/|$)", "lab_results"),
+        (r"^/api/v1/patients/lab-results(?:/|$)", "lab_results"),
+        # ---- Global search returns patient/record matches -------------
+        (r"^/api/v1/search(?:/|$)", "search"),
         # ---- Prescription PDFs / uploaded documents -------------------
         (rf"^/api/v1/prescriptions/({_UUID_RE})(?:/|$)", "prescriptions"),
         (r"^/api/v1/uploads/", "uploads"),  # object key is opaque — collection read

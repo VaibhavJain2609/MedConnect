@@ -21,6 +21,7 @@ import {
   Bell,
   BookOpen,
   ClipboardList,
+  Link2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/auth";
@@ -68,7 +69,8 @@ const navSections: NavSection[] = [
       { href: "/doctor/prescriptions/templates", label: "Templates", icon: BookOpen, clinicalOnly: true },
       { href: "/doctor/queue", label: "Queue", icon: ListOrdered },
       { href: "/doctor/clinic", label: "My Clinic", icon: Building2 },
-      { href: "/doctor/patients/link", label: "Link Patient", icon: UserPlus, clinicalOnly: true },
+      { href: "/doctor/clinic/invites", label: "Staff & Invites", icon: UserPlus },
+      { href: "/doctor/patients/link", label: "Link Patient", icon: Link2, clinicalOnly: true },
     ],
   },
   {
@@ -145,7 +147,10 @@ export function DoctorSidebar({
     staleTime: 60_000,
   });
   const membershipRole = membersData?.data.find((m) => m.user_id === user?.id)?.role;
-  const isReceptionist = membershipRole === "receptionist";
+  // Fail CLOSED while the membership is unresolved — a receptionist (or a
+  // doctor mid-load) must never briefly see clinical nav items.
+  const membershipPending = !!activeClinicId && membersData === undefined;
+  const isReceptionist = membershipPending || membershipRole === "receptionist";
 
   const visibleSections = navSections
     .map((section) => ({

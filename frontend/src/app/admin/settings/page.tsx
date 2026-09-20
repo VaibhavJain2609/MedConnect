@@ -124,7 +124,7 @@ function SettingCard({
       toast({
         title: "Save failed",
         description:
-          err instanceof Error ? err.message : "Could not update the setting.",
+          (err as { userMessage?: string })?.userMessage || (err instanceof Error ? err.message : "Could not update the setting."),
         variant: "destructive",
       });
     } finally {

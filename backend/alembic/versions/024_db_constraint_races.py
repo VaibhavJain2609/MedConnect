@@ -65,21 +65,41 @@ def upgrade() -> None:
     # max before creating the unique index. Keeps the earliest row's
     # number; later duplicates get shifted up. Renumbering a queued entry
     # is safe (it's just display order within the day).
+    # Renumber duplicates with ONE dense sequence per (clinic, day) starting
+    # above the day's max. Numbering per duplicate group (rn>1 per
+    # queue_number) would collide across groups: numbers {2,2,3,3} with
+    # day_max=3 both shift to 4. We instead: (a) keep the first occurrence of
+    # each duplicated number at its value, (b) renumber all other dup rows
+    # densely above the true day max in creation order.
     op.execute("""
         WITH ranked AS (
             SELECT id,
+                   queue_number,
                    ROW_NUMBER() OVER (
                        PARTITION BY clinic_id, queue_date, queue_number
                        ORDER BY created_at, id
                    ) AS rn,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY clinic_id, queue_date
+                       ORDER BY created_at, id
+                   ) AS day_seq,
                    MAX(queue_number) OVER (PARTITION BY clinic_id, queue_date) AS day_max
             FROM queue_entries
             WHERE deleted_at IS NULL
+        ),
+        moved AS (
+            SELECT id, day_max,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY clinic_id, queue_date
+                       ORDER BY created_at, id
+                   ) AS dup_seq
+            FROM ranked
+            WHERE rn > 1
         )
         UPDATE queue_entries q
-        SET queue_number = r.day_max + r.rn - 1
-        FROM ranked r
-        WHERE q.id = r.id AND r.rn > 1
+        SET queue_number = m.day_max + m.dup_seq
+        FROM moved m
+        WHERE q.id = m.id
     """)
 
     op.execute(

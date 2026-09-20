@@ -1,11 +1,13 @@
+import secrets
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import cast, func, select, update
 from sqlalchemy.dialects.postgresql import INTERVAL
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -50,6 +52,11 @@ class AppointmentCreate(BaseModel):
     chief_complaint: str | None = None
     notes: str | None = None
 
+    @field_validator("scheduled_at")
+    @classmethod
+    def _scheduled_at_utc(cls, v: datetime) -> datetime:
+        return v.replace(tzinfo=timezone.utc) if v.tzinfo is None else v
+
 
 class AppointmentStatusUpdate(BaseModel):
     status: str
@@ -62,6 +69,13 @@ class AppointmentUpdate(BaseModel):
     branch_id: UUID | None = None
     scheduled_at: datetime | None = None
     duration_minutes: int | None = Field(default=None, ge=5, le=480)
+
+    @field_validator("scheduled_at")
+    @classmethod
+    def _scheduled_at_utc(cls, v):
+        if v is not None and v.tzinfo is None:
+            return v.replace(tzinfo=timezone.utc)
+        return v
     type: str | None = None
     chief_complaint: str | None = None
     notes: str | None = None
@@ -77,6 +91,11 @@ class GuestAppointmentCreate(BaseModel):
     chief_complaint: str | None = None
     notes: str | None = None
     branch_id: UUID | None = None
+
+    @field_validator("scheduled_at")
+    @classmethod
+    def _scheduled_at_utc(cls, v: datetime) -> datetime:
+        return v.replace(tzinfo=timezone.utc) if v.tzinfo is None else v
 
 
 class LinkProvisionalRequest(BaseModel):
@@ -196,12 +215,15 @@ async def _load_appointment_with_names(db: AsyncSession, appt: Appointment) -> d
 PAST_SCHEDULE_SKEW = timedelta(minutes=5)
 
 
+def _as_aware_utc(dt: datetime) -> datetime:
+    """Coerce naive datetimes to UTC — timestamptz binds reject naive values."""
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+
+
 def _ensure_not_in_past(scheduled_at: datetime) -> None:
     """Raise 400 if scheduled_at is in the past (beyond a small skew allowance)."""
     now = datetime.now(tz=timezone.utc)
-    candidate = scheduled_at
-    if candidate.tzinfo is None:
-        candidate = candidate.replace(tzinfo=timezone.utc)
+    candidate = _as_aware_utc(scheduled_at)
     if candidate < now - PAST_SCHEDULE_SKEW:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -219,6 +241,7 @@ async def _doctor_patient_relationship_exists(
     doctor_user_id: UUID,
     doctor_id: UUID | None,
     patient_id: UUID,
+    allow_revoked: bool = True,
 ) -> bool:
     """
     Mirrors doctors.py::_check_doctor_patient_relationship (module-private there).
@@ -226,7 +249,12 @@ async def _doctor_patient_relationship_exists(
     True if the doctor has authored at least one medical record for the patient,
     or the doctor's user shares a clinic that has an approved/revoked
     PatientClinicLink for the patient.
+
+    ``allow_revoked=False`` restricts the clinic-link path to ``approved`` —
+    revoked consent must never authorize NEW writes (appointments, encounters,
+    prescriptions), only reads of pre-revocation data.
     """
+    allowed_consent = ["approved", "revoked"] if allow_revoked else ["approved"]
     if doctor_id is not None:
         record_exists = await db.execute(
             select(MedicalRecord.id)
@@ -248,7 +276,7 @@ async def _doctor_patient_relationship_exists(
             ClinicMembership.is_active.is_(True),
             ClinicMembership.deleted_at.is_(None),
             PatientClinicLink.patient_id == patient_id,
-            PatientClinicLink.consent_status.in_(["approved", "revoked"]),
+            PatientClinicLink.consent_status.in_(allowed_consent),
             PatientClinicLink.deleted_at.is_(None),
         )
         .limit(1)
@@ -318,9 +346,14 @@ async def _validate_clinic_and_branch(
     return effective_clinic_id
 
 
-def _generate_meeting_url(appointment_id: uuid.UUID) -> str:
-    """Deterministic Jitsi room URL for a teleconsult appointment."""
-    return f"{settings.JITSI_BASE_URL.rstrip('/')}/medconnect-{appointment_id}"
+def _generate_meeting_url() -> str:
+    """Random unguessable Jitsi room URL for a teleconsult appointment.
+
+    The appointment UUID must NOT be used: it is exposed on queue, admin,
+    search, and audit surfaces — a deterministic room name would let anyone
+    holding the UUID join a live consult on public Jitsi.
+    """
+    return f"{settings.JITSI_BASE_URL.rstrip('/')}/medconnect-{secrets.token_urlsafe(24)}"
 
 
 async def _enqueue_appointment_reminders(appt: Appointment) -> None:
@@ -328,6 +361,15 @@ async def _enqueue_appointment_reminders(appt: Appointment) -> None:
     try:
         from app.workers.scheduler import schedule_appointment_reminders
         await schedule_appointment_reminders(str(appt.id), appt.scheduled_at)
+    except Exception:
+        pass  # reminder scheduling is non-critical
+
+
+async def _unschedule_appointment_reminders(appt: Appointment) -> None:
+    """Abort existing deferred reminder jobs. Never raises (non-critical)."""
+    try:
+        from app.workers.scheduler import unschedule_appointment_reminders
+        await unschedule_appointment_reminders(str(appt.id))
     except Exception:
         pass  # reminder scheduling is non-critical
 
@@ -480,7 +522,7 @@ async def create_appointment(
                 detail={"error": {"code": "FORBIDDEN", "message": "Doctors can only create appointments under their own schedule"}},
             )
         if req.patient_id != current_user.id and not await _doctor_patient_relationship_exists(
-            db, current_user.id, own_doctor_id, req.patient_id
+            db, current_user.id, own_doctor_id, req.patient_id, allow_revoked=False
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -514,9 +556,17 @@ async def create_appointment(
         created_by=current_user.id,
     )
     if appt.type == "teleconsult":
-        appt.meeting_url = _generate_meeting_url(appt.id)
+        appt.meeting_url = _generate_meeting_url()
     db.add(appt)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        # Exclusion constraint caught a concurrent double-booking race
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": {"code": "DOCTOR_UNAVAILABLE", "message": "Doctor has a conflicting appointment at this time"}},
+        )
     await db.refresh(appt)
 
     # Schedule reminders — awaited so enqueue failures are surfaced to logs
@@ -776,6 +826,11 @@ async def update_appointment(
             db, appt.patient_id, new_clinic_id, new_scheduled_at, new_duration, exclude_id=appointment_id
         )
 
+    # Tenant validation on retag — same membership + branch↔clinic rules as create
+    if req.clinic_id is not None or req.branch_id is not None:
+        new_branch_id = req.branch_id if req.branch_id is not None else appt.branch_id
+        await _validate_clinic_and_branch(db, current_user, new_clinic_id, new_branch_id)
+
     # Apply updates
     if req.doctor_id is not None:
         appt.doctor_id = req.doctor_id
@@ -796,15 +851,23 @@ async def update_appointment(
 
     # Keep meeting_url in sync with the (possibly updated) appointment type
     if appt.type == "teleconsult" and not appt.meeting_url:
-        appt.meeting_url = _generate_meeting_url(appt.id)
+        appt.meeting_url = _generate_meeting_url()
     elif appt.type != "teleconsult":
         appt.meeting_url = None
 
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": {"code": "DOCTOR_UNAVAILABLE", "message": "Doctor has a conflicting appointment at this time"}},
+        )
     await db.refresh(appt)
 
-    # Rescheduled — enqueue reminder jobs for the new time
+    # Rescheduled — cancel stale reminder jobs, then enqueue for the new time
     if req.scheduled_at is not None:
+        await _unschedule_appointment_reminders(appt)
         await _enqueue_appointment_reminders(appt)
 
     return await _load_appointment_with_names(db, appt)
@@ -1010,6 +1073,7 @@ async def create_guest_appointment(
                 detail={"error": {"code": "INVALID_BRANCH", "message": "branch_id does not belong to this clinic"}},
             )
 
+    _ensure_not_in_past(body.scheduled_at)
     await _check_doctor_conflict(db, doctor_id, body.scheduled_at, body.duration_minutes)
 
     # Create provisional patient user
@@ -1051,9 +1115,16 @@ async def create_guest_appointment(
         created_by=current_user.id,
     )
     if appt.type == "teleconsult":
-        appt.meeting_url = _generate_meeting_url(appt.id)
+        appt.meeting_url = _generate_meeting_url()
     db.add(appt)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": {"code": "DOCTOR_UNAVAILABLE", "message": "Doctor has a conflicting appointment at this time"}},
+        )
     await db.refresh(appt)
     return await _load_appointment_with_names(db, appt)
 
@@ -1107,7 +1178,7 @@ async def generate_meeting_link(
             detail={"error": {"code": "NOT_TELECONSULT", "message": "Meeting links are only available for teleconsult appointments"}},
         )
 
-    appt.meeting_url = _generate_meeting_url(appt.id)
+    appt.meeting_url = _generate_meeting_url()
     await db.flush()
     await db.refresh(appt)
     return await _load_appointment_with_names(db, appt)

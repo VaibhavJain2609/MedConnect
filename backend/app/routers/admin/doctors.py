@@ -445,6 +445,15 @@ async def delete_doctor(
             detail={"error": {"code": "NOT_FOUND", "message": "Doctor not found"}},
         )
 
+    # Self-sabotage guard — mirrors admin/users.py: deleting the profile also
+    # deactivates the linked user, which would lock an admin out of their own
+    # account when the two are the same person.
+    if doctor.user_id == admin.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": {"code": "SELF_DELETE", "message": "Cannot delete your own doctor profile"}},
+        )
+
     now = datetime.now(timezone.utc)
     doctor.deleted_at = now
     doctor.updated_at = now

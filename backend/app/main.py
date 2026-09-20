@@ -118,9 +118,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Prometheus metrics at /metrics, scraped in-cluster by Prometheus only —
-# the Ingress path rules never expose it externally.
-Instrumentator().instrument(app).expose(app, include_in_schema=False)
 
 # CORS Configuration - Allow frontend to access API
 allowed_origins = [settings.FRONTEND_URL]
@@ -139,6 +136,68 @@ if settings.APP_ENV == "development":
 # between it and the router would run the endpoint in a copied context
 # and hide that value.
 app.add_middleware(AuditReadMiddleware)
+
+
+class MaintenanceModeMiddleware:
+    """Pure-ASGI gate honoring the `maintenance_mode` platform setting.
+
+    When enabled, non-admin API traffic gets 503. Exempt: health/metrics/docs
+    probes, auth (so admins can still log in), and /api/v1/admin/* (the router
+    already enforces require_admin, so non-admins just 403 there anyway).
+    The DB read is cached for 30s to keep the hot path cheap.
+    """
+
+    _EXEMPT_PREFIXES = (
+        "/health", "/livez", "/metrics", "/docs", "/redoc", "/openapi.json",
+        "/api/v1/auth", "/api/v1/admin",
+    )
+    _CACHE_TTL = 30.0
+
+    def __init__(self, app):
+        self.app = app
+        self._cached_at = 0.0
+        self._cached_value = False
+
+    async def _maintenance_on(self) -> bool:
+        import time as _time
+
+        now = _time.monotonic()
+        if now - self._cached_at < self._CACHE_TTL:
+            return self._cached_value
+        try:
+            from app.database import async_session
+            from app.services import platform_settings
+
+            async with async_session() as db:
+                self._cached_value = bool(await platform_settings.get_setting(db, "maintenance_mode"))
+            self._cached_at = now
+        except Exception:
+            # Fail open — a settings-DB outage must not take the API down
+            self._cached_at = now  # still cache to avoid hammering a down DB
+        return self._cached_value
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        path = scope.get("path", "")
+        if path.startswith("/api/v1") and not any(path.startswith(p) for p in self._EXEMPT_PREFIXES):
+            if await self._maintenance_on():
+                response = JSONResponse(
+                    status_code=503,
+                    content={"error": {"code": "MAINTENANCE_MODE", "message": "Platform is under maintenance — please try again shortly"}},
+                )
+                await response(scope, receive, send)
+                return
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(MaintenanceModeMiddleware)
+
+# Prometheus metrics at /metrics — instrumented AFTER the add_middleware
+# calls so it ends up outermost and still observes 429s/redirects from the
+# rate-limiter and CORS layers. Scraped in-cluster only; the Ingress path
+# rules never expose it externally.
+Instrumentator().instrument(app).expose(app, include_in_schema=False)
 
 app.add_middleware(RateLimitMiddleware)
 

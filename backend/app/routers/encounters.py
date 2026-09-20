@@ -8,7 +8,7 @@ PATCH  /api/v1/encounters/{id}   — update (authoring doctor only)
 DELETE /api/v1/encounters/{id}   — soft delete (author or admin)
 """
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -95,13 +95,16 @@ async def _doctor_patient_relationship_exists(
 
     True if:
     - the doctor has authored at least one medical record for the patient, OR
-    - the doctor's user shares a clinic that has an approved/revoked
-      PatientClinicLink for the patient, OR
-    - a valid appointment between this doctor and the patient was supplied
-      (the appointment was already authorized when it was created).
+    - the doctor's user shares a clinic that has an APPROVED
+      PatientClinicLink for the patient (revoked consent must never authorize
+      new writes — it only preserves reads of pre-revocation data), OR
+    - a non-terminal appointment between this doctor and the patient was
+      supplied (the appointment was already authorized when it was created).
     """
     if appointment is not None:
-        return True
+        # A cancelled/no-show appointment is not an active relationship —
+        # otherwise a stale appointment grants indefinite write access.
+        return appointment.status in {"scheduled", "arrived", "in-progress", "completed"}
 
     record_exists = await db.execute(
         select(MedicalRecord.id)
@@ -123,7 +126,7 @@ async def _doctor_patient_relationship_exists(
             ClinicMembership.is_active.is_(True),
             ClinicMembership.deleted_at.is_(None),
             PatientClinicLink.patient_id == patient_id,
-            PatientClinicLink.consent_status.in_(["approved", "revoked"]),
+            PatientClinicLink.consent_status == "approved",
             PatientClinicLink.deleted_at.is_(None),
         )
         .limit(1)
@@ -196,7 +199,12 @@ async def create_encounter(
 
     # Verify patient exists
     patient_res = await db.execute(
-        select(User).where(User.id == req.patient_id, User.deleted_at.is_(None), User.is_active.is_(True))
+        select(User).where(
+            User.id == req.patient_id,
+            User.deleted_at.is_(None),
+            User.is_active.is_(True),
+            User.role == "patient",
+        )
     )
     if not patient_res.scalar_one_or_none():
         raise HTTPException(
@@ -307,7 +315,12 @@ async def list_encounters(
     if date_param:
         try:
             filter_date = datetime.strptime(date_param, "%Y-%m-%d").date()
-            stmt = stmt.where(func.date(Encounter.created_at) == filter_date)
+            # UTC day boundary — consistent with appointments/queue convention
+            day_start = datetime.combine(filter_date, datetime.min.time(), tzinfo=timezone.utc)
+            stmt = stmt.where(
+                Encounter.created_at >= day_start,
+                Encounter.created_at < day_start + timedelta(days=1),
+            )
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -321,7 +334,7 @@ async def list_encounters(
     )
     encounters = result.scalars().all()
 
-    data = [await _load_encounter_with_names(db, enc) for enc in encounters]
+    data = await _load_encounters_with_names(db, encounters)
     return {"data": data, "total": total, "limit": limit, "offset": offset}
 
 
@@ -420,10 +433,18 @@ async def update_encounter(
                 )
             enc.appointment_id = appointment.id
             if enc.clinic_id is None and appointment.clinic_id is not None:
+                await _validate_clinic_membership(db, user, appointment.clinic_id)
                 enc.clinic_id = appointment.clinic_id
 
     if "clinic_id" in update_fields:
         new_clinic_id = update_fields["clinic_id"]
+        if new_clinic_id is None and enc.clinic_id is not None:
+            # Clearing clinic_id would hide the encounter from clinic admins —
+            # disallow; move to another clinic instead.
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": {"code": "VALIDATION_ERROR", "message": "clinic_id cannot be cleared once set"}},
+            )
         await _validate_clinic_membership(db, user, new_clinic_id)
         enc.clinic_id = new_clinic_id
 

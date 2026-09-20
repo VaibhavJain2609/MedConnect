@@ -16,7 +16,7 @@ describe('Badge', () => {
   it('applies the default variant classes', () => {
     render(<Badge>Default</Badge>)
     const el = screen.getByText('Default')
-    expect(el.className).toContain('bg-primary')
+    expect(el.className).toContain('bg-dreams-blue')
     expect(el.className).toContain('rounded-full')
   })
 

@@ -2,6 +2,7 @@
 
 import { Suspense, useState, useRef, useCallback, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { createEncounter } from "@/lib/api/encounters";
 import { getAppointments, Appointment } from "@/lib/api/appointments";
@@ -138,6 +139,7 @@ const VITAL_FIELDS: { key: string; label: string; unit: string }[] = [
 
 function NewEncounterForm() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const clinicId = useClinicStore((s) => s.activeClinicId) ?? null;
 
@@ -261,6 +263,7 @@ function NewEncounterForm() {
         vitals_snapshot:
           Object.keys(vitalsSnapshot).length > 0 ? vitalsSnapshot : undefined,
       });
+      queryClient.invalidateQueries({ queryKey: ["doctor-encounters"] });
       router.push(`/doctor/visits/${enc.id}`);
     } catch (err: unknown) {
       const axiosError = err as {

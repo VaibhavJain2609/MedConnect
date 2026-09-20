@@ -236,7 +236,7 @@ export default function PatientBillingPage() {
       <div className="bg-white rounded-xl shadow-card border border-dreams-border p-4 flex flex-wrap items-center gap-x-8 gap-y-2">
         <div>
           <p className="text-xs font-medium text-dreams-textSecondary uppercase tracking-wide">
-            Total Invoices
+            Invoices Shown
           </p>
           <p className="text-lg font-semibold text-dreams-textPrimary">
             {data?.total ?? 0}

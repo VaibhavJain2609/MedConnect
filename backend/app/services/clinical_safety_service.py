@@ -116,6 +116,7 @@ class SafetyGateResult:
     alerts: list[dict]
     resolved: list[ResolvedItem]
     salt_ids: list[UUID]
+    unresolved_items: list[str] = field(default_factory=list)
 
 
 async def _resolve_brand(medicine_db: AsyncSession, item: dict) -> Brand | None:
@@ -261,12 +262,30 @@ async def run_safety_gate(
 
     alerts: list[dict] = []
 
+    # Items that don't resolve to any catalog salt get NO interaction /
+    # contraindication / duplicate checks — surface that gap explicitly
+    # instead of reporting a false "all clear".
+    unresolved_items = [item.display_name for item in resolved if not item.salts]
+    for name in unresolved_items:
+        alerts.append(
+            {
+                "severity": "moderate",
+                "kind": "unresolved_item",
+                "detail": (
+                    f"'{name}' could not be matched to the medicine catalog — "
+                    "interaction, allergy, and contraindication checks could not "
+                    "run on this item"
+                ),
+                "medicine": name,
+            }
+        )
+
     # (a) Pairwise drug-drug interactions across all resolved salts
     interactions = await InteractionService.check_interactions(medicine_db, salt_ids)
     for ix in interactions:
         alerts.append(
             {
-                "severity": _map_severity(ix["severity"], default="moderate"),
+                "severity": _map_severity(ix["severity"], default="major"),  # fail closed — unknown severities need override, not silent downgrade
                 "kind": "interaction",
                 "detail": (
                     f"{ix['salt_1']['name']} + {ix['salt_2']['name']}: {ix['effect']}"
@@ -374,7 +393,7 @@ async def run_safety_gate(
                     break  # one alert per (salt, contraindication) row is enough
 
     alerts.sort(key=lambda a: -SEVERITY_RANK.get(a["severity"], 0))
-    return SafetyGateResult(alerts=alerts, resolved=resolved, salt_ids=salt_ids)
+    return SafetyGateResult(alerts=alerts, resolved=resolved, salt_ids=salt_ids, unresolved_items=unresolved_items)
 
 
 def _relevant(alerts: list[dict], kinds: set[str], salt_id: UUID | None, medicine: str) -> list[dict]:
@@ -430,7 +449,7 @@ async def write_prescription_audit(
                 duration=item.item.get("duration"),
                 interaction_alerts=[
                     _payload(a, blocked, override_reason)
-                    for a in _relevant(alerts, {"interaction", "duplicate_therapy"}, salt_id, item.display_name)
+                    for a in _relevant(alerts, {"interaction", "duplicate_therapy", "unresolved_item"}, salt_id, item.display_name)
                 ] or None,
                 contraindication_alerts=[
                     _payload(a, blocked, override_reason)

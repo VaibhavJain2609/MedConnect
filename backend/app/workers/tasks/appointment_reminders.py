@@ -20,7 +20,7 @@ from app.models.doctor import Doctor
 from app.models.notification import NotificationType
 from app.models.reminder_log import ReminderLog
 from app.models.user import User
-from app.services import notification_channels, notification_service
+from app.services import notification_channels, notification_service, platform_settings
 
 logger = structlog.get_logger()
 
@@ -87,15 +87,18 @@ async def _process_reminder(
         )
         return
 
-    # Skip if this reminder was already sent (e.g. retried/duplicated job)
-    already_sent_res = await db.execute(
-        select(ReminderLog.id).where(
+    # Per-channel already-sent map — a retry must re-dispatch only the
+    # channels that haven't succeeded yet (early-returning on ANY 'sent' row
+    # would strand e.g. a failed email when in_app succeeded).
+    existing_res = await db.execute(
+        select(ReminderLog).where(
             ReminderLog.appointment_id == appt.id,
             ReminderLog.reminder_type == reminder_type,
-            ReminderLog.status == "sent",
         )
     )
-    if already_sent_res.scalar_one_or_none() is not None:
+    existing_logs = {row.channel: row for row in existing_res.scalars().all()}
+    sent_channels = {c for c, r in existing_logs.items() if r.status == "sent"}
+    if sent_channels and sent_channels >= set(notification_channels.CHANNELS):
         logger.info(
             "reminder_skipped_already_sent",
             appointment_id=appointment_id,
@@ -165,10 +168,29 @@ async def _process_reminder(
                 appointment_id=appointment_id,
                 patient_id=str(patient.id),
             )
+            # Record the opt-out so retries don't re-dispatch doctor notifs blindly
+            if "in_app" not in existing_logs:
+                db.add(
+                    ReminderLog(
+                        id=uuid.uuid4(),
+                        appointment_id=appt.id,
+                        reminder_type=reminder_type,
+                        channel="in_app",
+                        status="skipped",
+                        message="user_opted_out",
+                    )
+                )
+                await db.commit()
         else:
             channels = [
                 c for c in notification_channels.CHANNELS
                 if notification_channels.channel_enabled(c, prefs)
+                and c not in sent_channels
+            ]
+            # Platform-level kill-switch (admin → reminder_channels_enabled)
+            channels = [
+                c for c in channels
+                if await platform_settings.platform_channel_enabled(db, c)
             ]
             channel_results = await notification_channels.send_all(
                 patient,
@@ -195,22 +217,29 @@ async def _process_reminder(
             metadata=notif_meta,
         )
 
-    # One ReminderLog row per attempted channel with the real channel value
+    # One ReminderLog row per attempted channel. NEVER store the rendered
+    # message body (contains patient/doctor names + meeting URL — PHI at rest);
+    # the channel outcome/reason is enough for auditability.
     now = datetime.now(tz=timezone.utc)
     for result in channel_results:
-        db.add(
-            ReminderLog(
-                id=uuid.uuid4(),
-                appointment_id=appt.id,
-                reminder_type=reminder_type,
-                channel=result.channel,
-                status=result.status,
-                message=(
-                    f"{result.reason}: {message}" if result.reason else message
-                ),
-                sent_at=now if result.status == "sent" else None,
+        outcome = result.reason or ("delivered" if result.status == "sent" else result.status)
+        existing = existing_logs.get(result.channel)
+        if existing is not None:
+            existing.status = result.status
+            existing.message = outcome
+            existing.sent_at = now if result.status == "sent" else None
+        else:
+            db.add(
+                ReminderLog(
+                    id=uuid.uuid4(),
+                    appointment_id=appt.id,
+                    reminder_type=reminder_type,
+                    channel=result.channel,
+                    status=result.status,
+                    message=outcome,
+                    sent_at=now if result.status == "sent" else None,
+                )
             )
-        )
     await db.commit()
 
     # NOTE: do not log patient/doctor names or message bodies — PHI must not

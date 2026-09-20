@@ -199,11 +199,18 @@ export default function PatientLabResultsPage() {
 
   const results = useMemo(() => data?.data ?? [], [data]);
 
+  // Category options come from an UNFILTERED query — deriving them from the
+  // filtered result would collapse the dropdown to the current selection.
+  const { data: allData } = useQuery({
+    queryKey: ["patient-lab-results", "all-categories"],
+    queryFn: () => getMyLabResults({ limit: 100 }),
+    staleTime: 60_000,
+  });
   const categories = useMemo(() => {
     const set = new Set<string>();
-    results.forEach((r) => r.test_category && set.add(r.test_category));
+    (allData?.data ?? []).forEach((r) => r.test_category && set.add(r.test_category));
     return Array.from(set).sort();
-  }, [results]);
+  }, [allData]);
 
   // Group by category, preserving date-desc order within each group
   const grouped = useMemo(() => {

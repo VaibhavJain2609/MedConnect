@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Search, X, User, Stethoscope, Calendar, Pill, Clock } from "lucide-react";
+import { Search, X, User, Stethoscope, Calendar, Pill, Clock, Building2, FileText } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { globalSearch, type SearchResult } from "@/lib/api/search";
@@ -120,6 +120,10 @@ export const GlobalSearch: React.FC = () => {
         return <Calendar className="h-4 w-4 text-status-pending" />;
       case "medicine":
         return <Pill className="h-4 w-4 text-status-inProgress" />;
+      case "clinic":
+        return <Building2 className="h-4 w-4 text-dreams-blue" />;
+      case "record":
+        return <FileText className="h-4 w-4 text-status-completed" />;
       default:
         return <Search className="h-4 w-4 text-dreams-textSecondary" />;
     }
@@ -135,6 +139,10 @@ export const GlobalSearch: React.FC = () => {
         return "Appointment";
       case "medicine":
         return "Medicine";
+      case "clinic":
+        return "Clinic";
+      case "record":
+        return "Record";
       default:
         return "";
     }
@@ -187,7 +195,13 @@ export const GlobalSearch: React.FC = () => {
 
           {/* Results */}
           <div className="max-h-96 overflow-y-auto">
-            {isLoading ? (
+            {error ? (
+              <EmptyState
+                icon={Search}
+                title="Search failed"
+                description="Something went wrong — please try again"
+              />
+            ) : isLoading ? (
               <div className="p-8 text-center">
                 <Spinner className="mx-auto" label="Searching" />
               </div>

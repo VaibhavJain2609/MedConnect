@@ -315,6 +315,20 @@ export default function DoctorSchedulePage() {
         </div>
       )}
 
+      {/* Surface query failures — otherwise a failed fetch looks like "not
+          available" on every day, which silently misleads the doctor. */}
+      {(windowsQuery.isError || leavesQuery.isError) && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          Failed to load your schedule — the grid below may be stale.{" "}
+          <button
+            className="underline font-medium"
+            onClick={() => { windowsQuery.refetch(); leavesQuery.refetch(); }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Weekly availability editor */}
       <div className="rounded-xl border border-dreams-border bg-white">
         <div className="flex items-center gap-2 border-b border-dreams-border px-5 py-4">

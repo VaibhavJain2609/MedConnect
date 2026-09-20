@@ -135,6 +135,7 @@ export function DataTable<TData, TValue>({
     getFilteredRowModel: getFilteredRowModel(),
     enableRowSelection,
     onRowSelectionChange: setRowSelection,
+    getRowId: (row: any) => String(row.id ?? row.brand_id ?? row.salt_id ?? JSON.stringify(row)),
     state: {
       sorting,
       columnFilters,
@@ -147,7 +148,6 @@ export function DataTable<TData, TValue>({
     },
   });
 
-  const selectedCount = Object.keys(rowSelection).length;
   const onSelectionChangeRef = React.useRef(onSelectionChange);
   onSelectionChangeRef.current = onSelectionChange;
   React.useEffect(() => {
@@ -155,7 +155,7 @@ export function DataTable<TData, TValue>({
       table.getSelectedRowModel().rows.map((row) => row.original)
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCount]);
+  }, [rowSelection]);
 
   return (
     <div className={cn("space-y-4", className)}>

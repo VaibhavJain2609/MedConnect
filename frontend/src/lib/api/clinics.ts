@@ -179,3 +179,14 @@ export async function updateAdminClinic(id: string, data: Partial<Clinic>): Prom
 export async function deleteAdminClinic(id: string): Promise<void> {
   await api.delete(`/api/v1/admin/clinics/${id}`)
 }
+
+export interface RedeemInviteResponse {
+  message: string;
+  clinic_id: string;
+  role: string;
+}
+
+export async function redeemInvite(code: string): Promise<RedeemInviteResponse> {
+  const res = await api.post('/api/v1/invites/redeem', { code });
+  return res.data;
+}

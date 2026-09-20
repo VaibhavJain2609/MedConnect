@@ -108,6 +108,7 @@ async def upload_file(
     object_key: str,
     request: Request,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Receive raw file bytes and save to local storage (local backend only).
 
@@ -153,6 +154,15 @@ async def upload_file(
             detail={"error": {"code": "ALREADY_EXISTS", "message": "An object already exists at this key"}},
         )
 
+    # Platform-configurable cap (admin → settings → max_upload_mb); the
+    # hardcoded MAX_UPLOAD_BYTES stays as the absolute ceiling.
+    from app.services import platform_settings
+    _setting_mb = await platform_settings.get_setting(db, "max_upload_mb")
+    try:
+        max_upload_bytes = min(int(_setting_mb) * 1024 * 1024, MAX_UPLOAD_BYTES)
+    except (TypeError, ValueError):
+        max_upload_bytes = MAX_UPLOAD_BYTES
+
     # Reject oversized uploads up front when the client declares a length.
     content_length = request.headers.get("content-length")
     if content_length is not None:
@@ -163,20 +173,20 @@ async def upload_file(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={"error": {"code": "INVALID_CONTENT_LENGTH", "message": "Invalid Content-Length header"}},
             )
-        if declared > MAX_UPLOAD_BYTES:
+        if declared > max_upload_bytes:
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail={"error": {"code": "FILE_TOO_LARGE", "message": f"File exceeds maximum size of {MAX_UPLOAD_BYTES // (1024 * 1024)} MB"}},
+                detail={"error": {"code": "FILE_TOO_LARGE", "message": f"File exceeds maximum size of {max_upload_bytes // (1024 * 1024)} MB"}},
             )
 
     # Stream the body with a hard cap (covers chunked/missing Content-Length).
     chunks = bytearray()
     async for chunk in request.stream():
         chunks.extend(chunk)
-        if len(chunks) > MAX_UPLOAD_BYTES:
+        if len(chunks) > max_upload_bytes:
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail={"error": {"code": "FILE_TOO_LARGE", "message": f"File exceeds maximum size of {MAX_UPLOAD_BYTES // (1024 * 1024)} MB"}},
+                detail={"error": {"code": "FILE_TOO_LARGE", "message": f"File exceeds maximum size of {max_upload_bytes // (1024 * 1024)} MB"}},
             )
     body_bytes = bytes(chunks)
 

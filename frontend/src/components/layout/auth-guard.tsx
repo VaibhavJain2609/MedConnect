@@ -2,10 +2,12 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { ShieldOff } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { Spinner } from "@/components/ui/spinner";
+import { getMyClinics } from "@/lib/api/clinics";
 
 export function AuthGuard({
   children,
@@ -26,6 +28,20 @@ export function AuthGuard({
     }
   }, [user, loading, initialized, router]);
 
+  // Non-doctor users holding an active clinic membership (e.g.
+  // receptionists) are allowed into the doctor portal — the backend scopes
+  // them to non-clinical surfaces via ClinicMembership.role, and the sidebar
+  // hides clinical nav items. Hook must run unconditionally (above early
+  // returns) — it is a no-op unless this guard protects the doctor portal
+  // for a non-doctor user.
+  const { data: myClinics, isFetched: clinicsFetched } = useQuery({
+    queryKey: ["my-clinics-guard"],
+    queryFn: getMyClinics,
+    enabled: !!user && requiredRole === "doctor" && user.role !== "doctor",
+    staleTime: 60_000,
+    retry: false,
+  });
+
   if (!initialized || loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
@@ -36,7 +52,23 @@ export function AuthGuard({
 
   if (!user) return null;
 
-  if (requiredRole && user.role !== requiredRole) {
+  const membershipBypass =
+    requiredRole === "doctor" &&
+    user.role !== "doctor" &&
+    clinicsFetched &&
+    (myClinics?.data?.length ?? 0) > 0;
+
+  // While the membership probe is in flight, keep the spinner up rather than
+  // flashing an access-denied screen at a legitimate receptionist.
+  if (requiredRole === "doctor" && user.role !== "doctor" && !membershipBypass && !clinicsFetched) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
+  if (requiredRole && user.role !== requiredRole && !membershipBypass) {
     const backHref =
       user.role === "admin"
         ? "/admin/dashboard"

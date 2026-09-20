@@ -104,3 +104,33 @@ async def schedule_appointment_reminders(
             appointment_id=appointment_id,
             error=str(exc),
         )
+
+
+async def unschedule_appointment_reminders(appointment_id: str) -> None:
+    """Abort deferred reminder jobs for an appointment (reschedule/cancel).
+
+    Job ids are deterministic (``rem:{id}:{h}h``), so an aborted job id can be
+    re-enqueued immediately afterwards — needed when an appointment moves.
+    """
+    from arq.jobs import Job
+
+    try:
+        redis = await _get_redis_pool()
+        for hours_before in (24, 2):
+            job = Job(f"rem:{appointment_id}:{hours_before}h", redis)
+            try:
+                await job.abort()
+                logger.info(
+                    "reminder_aborted",
+                    appointment_id=appointment_id,
+                    hours_before=hours_before,
+                )
+            except Exception:
+                # Job not queued / already running — nothing to abort
+                pass
+    except Exception as exc:
+        logger.error(
+            "reminder_unschedule_failed",
+            appointment_id=appointment_id,
+            error=str(exc),
+        )

@@ -3,7 +3,9 @@ from datetime import date, datetime, time, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import cast, func, select
+from sqlalchemy.dialects.postgresql import INTERVAL
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -218,10 +220,13 @@ async def update_my_availability(
     new_end = req.end_time if req.end_time is not None else window.end_time
     _validate_time_range(new_start, new_end)
 
-    new_clinic_id = req.clinic_id if req.clinic_id is not None else window.clinic_id
     new_branch_id = req.branch_id if req.branch_id is not None else window.branch_id
     if req.clinic_id is not None or req.branch_id is not None:
-        new_clinic_id = await _validate_clinic_and_branch(db, user, req.clinic_id, req.branch_id)
+        # Validate the merged (clinic, branch) pair — a clinic change must not
+        # keep a branch from the old clinic.
+        new_clinic_id = await _validate_clinic_and_branch(db, user, req.clinic_id, new_branch_id)
+    else:
+        new_clinic_id = window.clinic_id
 
     if req.weekday is not None:
         window.weekday = req.weekday
@@ -299,7 +304,15 @@ async def create_my_leave(
         reason=req.reason,
     )
     db.add(leave)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        # uq_doctor_leaves_doctor_date caught a race between the check and insert
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": {"code": "DUPLICATE_LEAVE", "message": "Leave already exists for this date"}},
+        )
     await db.refresh(leave)
     return _serialize_leave(leave)
 
@@ -434,13 +447,18 @@ async def get_doctor_slots(
     # as list_appointments in routers/appointments.py).
     day_start = datetime(target_date.year, target_date.month, target_date.day, 0, 0, 0, tzinfo=timezone.utc)
     day_end = day_start + timedelta(days=1)
+    # Half-open interval overlap — also catches appointments that started the
+    # previous day but still occupy time today (e.g. 23:30 + 60min).
+    appt_end = Appointment.scheduled_at + cast(
+        func.concat(Appointment.duration_minutes, " minutes"), INTERVAL
+    )
     appt_res = await db.execute(
         select(Appointment.scheduled_at, Appointment.duration_minutes).where(
             Appointment.doctor_id == doctor_id,
             Appointment.deleted_at.is_(None),
             Appointment.status.in_(BLOCKING_STATUSES),
-            Appointment.scheduled_at >= day_start,
             Appointment.scheduled_at < day_end,
+            appt_end > day_start,
         )
     )
     booked = [
@@ -458,7 +476,9 @@ async def get_doctor_slots(
         while cursor + duration <= window_end:
             slot_end = cursor + duration
             overlaps = any(cursor < b_end and slot_end > b_start for b_start, b_end in booked)
-            if not overlaps and slot_end > now and (cursor, slot_end) not in seen:
+            # Exclude slots that can no longer be booked (same 5-min skew as _ensure_not_in_past)
+            bookable = cursor >= now - timedelta(minutes=5)
+            if not overlaps and bookable and (cursor, slot_end) not in seen:
                 seen.add((cursor, slot_end))
                 slots.append(
                     AvailabilitySlot(
