@@ -1,4 +1,3 @@
-import asyncio
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
@@ -13,7 +12,7 @@ from sqlalchemy.orm import joinedload
 from app.database import get_db
 from app.dependencies import get_active_clinic, get_current_doctor, get_current_user, require_active_clinic, require_admin
 from app.models.appointment import Appointment
-from app.models.clinic import Clinic, ClinicBranch
+from app.models.clinic import Clinic, ClinicBranch, ClinicMembership
 from app.models.doctor import Doctor
 from app.models.medical_record import MedicalRecord
 from app.models.patient_link import PatientClinicLink, PatientLinkCode
@@ -45,7 +44,7 @@ class AppointmentCreate(BaseModel):
     clinic_id: UUID | None = None
     branch_id: UUID | None = None
     scheduled_at: datetime
-    duration_minutes: int = 30
+    duration_minutes: int = Field(default=30, ge=5, le=480)
     type: str
     chief_complaint: str | None = None
     notes: str | None = None
@@ -61,7 +60,7 @@ class AppointmentUpdate(BaseModel):
     clinic_id: UUID | None = None
     branch_id: UUID | None = None
     scheduled_at: datetime | None = None
-    duration_minutes: int | None = None
+    duration_minutes: int | None = Field(default=None, ge=5, le=480)
     type: str | None = None
     chief_complaint: str | None = None
     notes: str | None = None
@@ -190,6 +189,141 @@ async def _load_appointment_with_names(db: AsyncSession, appt: Appointment) -> d
     )
 
 
+# Allow a small clock-skew margin so "right now" bookings are not rejected
+PAST_SCHEDULE_SKEW = timedelta(minutes=5)
+
+
+def _ensure_not_in_past(scheduled_at: datetime) -> None:
+    """Raise 400 if scheduled_at is in the past (beyond a small skew allowance)."""
+    now = datetime.now(tz=timezone.utc)
+    candidate = scheduled_at
+    if candidate.tzinfo is None:
+        candidate = candidate.replace(tzinfo=timezone.utc)
+    if candidate < now - PAST_SCHEDULE_SKEW:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": {
+                    "code": "INVALID_SCHEDULED_AT",
+                    "message": "scheduled_at cannot be in the past",
+                }
+            },
+        )
+
+
+async def _doctor_patient_relationship_exists(
+    db: AsyncSession,
+    doctor_user_id: UUID,
+    doctor_id: UUID | None,
+    patient_id: UUID,
+) -> bool:
+    """
+    Mirrors doctors.py::_check_doctor_patient_relationship (module-private there).
+
+    True if the doctor has authored at least one medical record for the patient,
+    or the doctor's user shares a clinic that has an approved/revoked
+    PatientClinicLink for the patient.
+    """
+    if doctor_id is not None:
+        record_exists = await db.execute(
+            select(MedicalRecord.id)
+            .where(
+                MedicalRecord.doctor_id == doctor_id,
+                MedicalRecord.patient_id == patient_id,
+                MedicalRecord.deleted_at.is_(None),
+            )
+            .limit(1)
+        )
+        if record_exists.scalar_one_or_none() is not None:
+            return True
+
+    shared_clinic = await db.execute(
+        select(ClinicMembership.id)
+        .join(PatientClinicLink, PatientClinicLink.clinic_id == ClinicMembership.clinic_id)
+        .where(
+            ClinicMembership.user_id == doctor_user_id,
+            ClinicMembership.is_active.is_(True),
+            ClinicMembership.deleted_at.is_(None),
+            PatientClinicLink.patient_id == patient_id,
+            PatientClinicLink.consent_status.in_(["approved", "revoked"]),
+            PatientClinicLink.deleted_at.is_(None),
+        )
+        .limit(1)
+    )
+    return shared_clinic.scalar_one_or_none() is not None
+
+
+async def _validate_clinic_and_branch(
+    db: AsyncSession,
+    user: User,
+    clinic_id: UUID | None,
+    branch_id: UUID | None,
+) -> UUID | None:
+    """
+    Tenant validation for client-supplied clinic_id / branch_id.
+
+    - branch_id must reference an existing branch; if clinic_id is also given,
+      the branch must belong to it; if clinic_id is omitted, the clinic is
+      derived from the branch.
+    - whenever a clinic is supplied (directly or via branch), the caller must
+      hold an active ClinicMembership for it (same check as doctors.py).
+    Returns the effective clinic_id.
+    """
+    effective_clinic_id = clinic_id
+
+    if branch_id is not None:
+        branch_res = await db.execute(
+            select(ClinicBranch).where(
+                ClinicBranch.id == branch_id,
+                ClinicBranch.deleted_at.is_(None),
+            )
+        )
+        branch = branch_res.scalar_one_or_none()
+        if branch is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"error": {"code": "NOT_FOUND", "message": "Branch not found"}},
+            )
+        if effective_clinic_id is None:
+            effective_clinic_id = branch.clinic_id
+        elif branch.clinic_id != effective_clinic_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": {
+                        "code": "INVALID_BRANCH",
+                        "message": "branch_id does not belong to the specified clinic",
+                    }
+                },
+            )
+
+    if effective_clinic_id is not None:
+        membership_res = await db.execute(
+            select(ClinicMembership.id).where(
+                ClinicMembership.clinic_id == effective_clinic_id,
+                ClinicMembership.user_id == user.id,
+                ClinicMembership.is_active.is_(True),
+                ClinicMembership.deleted_at.is_(None),
+            )
+        )
+        if membership_res.scalar_one_or_none() is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "NOT_CLINIC_MEMBER", "message": "Not a member of this clinic"}},
+            )
+
+    return effective_clinic_id
+
+
+async def _enqueue_appointment_reminders(appt: Appointment) -> None:
+    """Enqueue reminder jobs for an appointment. Never raises (non-critical)."""
+    try:
+        from app.workers.scheduler import schedule_appointment_reminders
+        await schedule_appointment_reminders(str(appt.id), appt.scheduled_at)
+    except Exception:
+        pass  # reminder scheduling is non-critical
+
+
 # ─── Conflict helpers ─────────────────────────────────────────────────────────
 
 ACTIVE_STATUSES = ["scheduled", "arrived", "in-progress"]
@@ -282,6 +416,8 @@ async def create_appointment(
             detail={"error": {"code": "INVALID_TYPE", "message": f"type must be one of: {', '.join(sorted(VALID_TYPES))}"}},
         )
 
+    _ensure_not_in_past(req.scheduled_at)
+
     # Resolve doctor_id: use request value or fall back to the authenticated user's doctor record
     doctor_id = req.doctor_id
     if doctor_id is None:
@@ -322,7 +458,9 @@ async def create_appointment(
             detail={"error": {"code": "FORBIDDEN", "message": "Patients can only book appointments for themselves"}},
         )
 
-    # Authorization: doctors can only schedule under their own profile
+    # Authorization: doctors can only schedule under their own profile, and only
+    # for patients they have an existing relationship with (a record they authored
+    # or a shared clinic link) — prevents booking for arbitrary patient_ids.
     if current_user.role == "doctor":
         own_doc_res = await db.execute(
             select(Doctor.id).where(Doctor.user_id == current_user.id, Doctor.deleted_at.is_(None))
@@ -333,19 +471,31 @@ async def create_appointment(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={"error": {"code": "FORBIDDEN", "message": "Doctors can only create appointments under their own schedule"}},
             )
+        if req.patient_id != current_user.id and not await _doctor_patient_relationship_exists(
+            db, current_user.id, own_doctor_id, req.patient_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "PATIENT_ACCESS_DENIED", "message": "No relationship with this patient"}},
+            )
+
+    # Tenant validation: clinic_id/branch_id from the body require membership
+    effective_clinic_id = await _validate_clinic_and_branch(
+        db, current_user, req.clinic_id, req.branch_id
+    )
 
     # Check doctor availability
     await _check_doctor_conflict(db, doctor_id, req.scheduled_at, req.duration_minutes)
 
     # Check patient-clinic conflict (only when a clinic is specified)
-    if req.clinic_id:
-        await _check_patient_clinic_conflict(db, req.patient_id, req.clinic_id, req.scheduled_at, req.duration_minutes)
+    if effective_clinic_id:
+        await _check_patient_clinic_conflict(db, req.patient_id, effective_clinic_id, req.scheduled_at, req.duration_minutes)
 
     appt = Appointment(
         id=uuid.uuid4(),
         patient_id=req.patient_id,
         doctor_id=doctor_id,
-        clinic_id=req.clinic_id,
+        clinic_id=effective_clinic_id,
         branch_id=req.branch_id,
         scheduled_at=req.scheduled_at,
         duration_minutes=req.duration_minutes,
@@ -359,14 +509,9 @@ async def create_appointment(
     await db.flush()
     await db.refresh(appt)
 
-    # Schedule reminders fire-and-forget (non-blocking)
-    try:
-        from app.workers.scheduler import schedule_appointment_reminders
-        asyncio.create_task(
-            schedule_appointment_reminders(str(appt.id), appt.scheduled_at)
-        )
-    except Exception:
-        pass  # reminder scheduling is non-critical
+    # Schedule reminders — awaited so enqueue failures are surfaced to logs
+    # before the response is returned (the helper never raises).
+    await _enqueue_appointment_reminders(appt)
 
     return await _load_appointment_with_names(db, appt)
 
@@ -377,6 +522,8 @@ async def list_appointments(
     status_filter: str | None = Query(None, alias="status"),
     upcoming: bool | None = Query(None),
     all_appointments: bool | None = Query(None, alias="all"),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -432,7 +579,12 @@ async def list_appointments(
     if status_filter:
         stmt = stmt.where(Appointment.status == status_filter)
 
-    stmt = stmt.order_by(Appointment.scheduled_at.asc())
+    # Total count for the filtered query (before pagination)
+    total = (
+        await db.execute(select(func.count()).select_from(stmt.subquery()))
+    ).scalar_one()
+
+    stmt = stmt.order_by(Appointment.scheduled_at.asc()).offset(offset).limit(limit)
     result = await db.execute(stmt)
     appointments = result.scalars().all()
 
@@ -485,7 +637,7 @@ async def list_appointments(
         )
         for a in appointments
     ]
-    return {"data": data, "total": len(data)}
+    return {"data": data, "total": total, "limit": limit, "offset": offset}
 
 
 @router.get("/{appointment_id}")
@@ -601,6 +753,10 @@ async def update_appointment(
             detail={"error": {"code": "INVALID_TYPE", "message": f"type must be one of: {', '.join(sorted(VALID_TYPES))}"}},
         )
 
+    # Cannot reschedule into the past
+    if req.scheduled_at is not None:
+        _ensure_not_in_past(req.scheduled_at)
+
     # Check doctor availability (exclude self to allow updating non-conflicting fields)
     await _check_doctor_conflict(db, new_doctor_id, new_scheduled_at, new_duration, exclude_id=appointment_id)
 
@@ -630,6 +786,11 @@ async def update_appointment(
 
     await db.flush()
     await db.refresh(appt)
+
+    # Rescheduled — enqueue reminder jobs for the new time
+    if req.scheduled_at is not None:
+        await _enqueue_appointment_reminders(appt)
+
     return await _load_appointment_with_names(db, appt)
 
 
@@ -799,6 +960,40 @@ async def create_guest_appointment(
                 detail={"error": {"code": "NOT_FOUND", "message": "Doctor not found"}},
             )
 
+    # Verify the doctor is an active member of this clinic
+    doctor_user_res = await db.execute(
+        select(Doctor.user_id).where(Doctor.id == doctor_id, Doctor.deleted_at.is_(None))
+    )
+    doctor_user_id = doctor_user_res.scalar_one_or_none()
+    doctor_membership = await db.execute(
+        select(ClinicMembership.id).where(
+            ClinicMembership.clinic_id == clinic_id,
+            ClinicMembership.user_id == doctor_user_id,
+            ClinicMembership.is_active.is_(True),
+            ClinicMembership.deleted_at.is_(None),
+        )
+    )
+    if doctor_membership.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": {"code": "DOCTOR_NOT_IN_CLINIC", "message": "Doctor is not a member of this clinic"}},
+        )
+
+    # Verify branch_id belongs to this clinic
+    if body.branch_id is not None:
+        branch_res = await db.execute(
+            select(ClinicBranch.id).where(
+                ClinicBranch.id == body.branch_id,
+                ClinicBranch.clinic_id == clinic_id,
+                ClinicBranch.deleted_at.is_(None),
+            )
+        )
+        if branch_res.scalar_one_or_none() is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": {"code": "INVALID_BRANCH", "message": "branch_id does not belong to this clinic"}},
+            )
+
     await _check_doctor_conflict(db, doctor_id, body.scheduled_at, body.duration_minutes)
 
     # Create provisional patient user
@@ -853,8 +1048,15 @@ async def link_provisional_patient(
     db: AsyncSession = Depends(get_db),
 ):
     """Link a provisional (walk-in) patient to a real patient account using a link code."""
-    clinic_id, _clinic_role = clinic_ctx
+    clinic_id, clinic_role = clinic_ctx
     now = datetime.now(tz=timezone.utc)
+
+    # Merging patient records is a privileged operation — owner/admin only
+    if clinic_role not in {"owner", "admin"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": {"code": "FORBIDDEN", "message": "Only clinic owners and admins can link patient records"}},
+        )
 
     # Fetch provisional user
     prov_res = await db.execute(
@@ -865,6 +1067,35 @@ async def link_provisional_patient(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"error": {"code": "NOT_FOUND", "message": "Provisional patient not found"}},
+        )
+
+    # The provisional patient must actually belong to this clinic — either via a
+    # PatientClinicLink or an appointment at this clinic — before merging.
+    prov_link_res = await db.execute(
+        select(PatientClinicLink.id)
+        .where(
+            PatientClinicLink.patient_id == provisional_user.id,
+            PatientClinicLink.clinic_id == clinic_id,
+            PatientClinicLink.deleted_at.is_(None),
+        )
+        .limit(1)
+    )
+    prov_appt_res = await db.execute(
+        select(Appointment.id)
+        .where(
+            Appointment.patient_id == provisional_user.id,
+            Appointment.clinic_id == clinic_id,
+            Appointment.deleted_at.is_(None),
+        )
+        .limit(1)
+    )
+    if (
+        prov_link_res.scalar_one_or_none() is None
+        and prov_appt_res.scalar_one_or_none() is None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "NOT_FOUND", "message": "Provisional patient has no link or appointments at this clinic"}},
         )
 
     # Look up link code
@@ -942,8 +1173,10 @@ async def link_provisional_patient(
             consented_at=now,
         ))
     elif existing_link.consent_status == "revoked":
-        existing_link.consent_status = "approved"
-        existing_link.consented_at = now
+        # Reset to pending so the patient re-consents instead of silently
+        # regaining clinic access through the merge.
+        existing_link.consent_status = "pending"
+        existing_link.consented_at = None
         existing_link.deleted_at = None
 
     # Soft-delete provisional user
@@ -959,7 +1192,7 @@ async def link_provisional_patient(
     await create_notification(
         db=db,
         user_id=real_id,
-        notif_type="info",
+        notif_type="system",
         title="Appointments linked to your account",
         body=f"Appointments booked under your name at {clinic_name} have been linked to your account.",
         action_url="/patient/appointments",
