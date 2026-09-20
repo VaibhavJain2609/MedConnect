@@ -1,5 +1,5 @@
-import asyncio
 import time
+import uuid
 from collections.abc import AsyncGenerator
 from unittest.mock import MagicMock, patch
 
@@ -11,12 +11,16 @@ from cryptography.hazmat.primitives import serialization
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+import app.dependencies as _dependencies
 from app.database import Base, MedicineBase, get_db, get_medicine_db
 from app.main import app
+from app.models.doctor import Doctor
 from app.models.user import User
 
 TEST_DATABASE_URL = "postgresql+asyncpg://medconnect:medconnect@postgres:5432/medconnect_test"
-TEST_MEDICINE_DATABASE_URL = "postgresql+asyncpg://medconnect:medconnect@postgres:5433/medicine_db_test"
+# The medicine catalog lives on the same Postgres instance; init.sql creates
+# the medicine_db_test database alongside medconnect_test.
+TEST_MEDICINE_DATABASE_URL = "postgresql+asyncpg://medconnect:medconnect@postgres:5432/medicine_db_test"
 
 engine = create_async_engine(TEST_DATABASE_URL, echo=False)
 test_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
@@ -64,11 +68,60 @@ def create_test_token(
     return pyjwt.encode(payload, PRIVATE_KEY_PEM, algorithm="RS256")
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
+# ---------------------------------------------------------------------------
+# Per-test isolation for module-level state
+# ---------------------------------------------------------------------------
+
+
+class _PermissivePipeline:
+    """Async pipeline stand-in that always reports the request under the limit."""
+
+    def incr(self, *args, **kwargs):
+        return self
+
+    def expire(self, *args, **kwargs):
+        return self
+
+    async def execute(self):
+        return [1, True]
+
+
+class _PermissiveRedis:
+    """Fallback for fakeredis: responds like a healthy Redis that never
+    rate-limits (mirrors the middleware's fail-open behaviour)."""
+
+    async def ping(self):
+        return True
+
+    def pipeline(self):
+        return _PermissivePipeline()
+
+
+@pytest.fixture(autouse=True)
+def _isolated_security_state(monkeypatch):
+    """Keep module-level auth/rate-limit state from leaking between tests.
+
+    - ``app.dependencies._user_cache`` caches ``User`` objects keyed by
+      Keycloak sub with a 30s TTL. Fixtures reuse fixed subs
+      (``admin-123``, ``patient-123``), so without clearing, a stale user
+      (with a stale role) from a previous test would be returned.
+    - ``RateLimitMiddleware`` calls ``_get_redis()`` per request; without a
+      patch it opens a real Redis connection. A fresh fakeredis instance per
+      test gives deterministic counters; the permissive stub is a fallback
+      when fakeredis isn't installed.
+    """
+    _dependencies._user_cache.clear()
+
+    try:
+        import fakeredis.aioredis
+
+        fake_redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    except ImportError:  # pragma: no cover - fakeredis ships in requirements-dev.txt
+        fake_redis = _PermissiveRedis()
+
+    monkeypatch.setattr("app.middleware.rate_limit._get_redis", lambda: fake_redis)
+    yield fake_redis
+    _dependencies._user_cache.clear()
 
 
 @pytest_asyncio.fixture(scope="function")
@@ -174,6 +227,63 @@ async def patient_client(client: AsyncClient, patient_user: User) -> AsyncClient
     )
     client.headers["Authorization"] = f"Bearer {token}"
     return client
+
+
+@pytest_asyncio.fixture(scope="function")
+async def doctor_user(db: AsyncSession) -> User:
+    """Create a doctor user."""
+    user = User(
+        keycloak_sub="doctor-123",
+        email="doctor@test.com",
+        full_name="Doctor User",
+        role="doctor",
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture(scope="function")
+async def doctor_profile(db: AsyncSession, doctor_user: User) -> Doctor:
+    """Create a verified, fully-onboarded Doctor profile for ``doctor_user``."""
+    doctor = Doctor(
+        id=uuid.uuid4(),
+        user_id=doctor_user.id,
+        specialization="General Physician",
+        verified=True,
+        onboarding_step="completed",
+    )
+    db.add(doctor)
+    await db.commit()
+    await db.refresh(doctor)
+    return doctor
+
+
+@pytest_asyncio.fixture(scope="function")
+async def doctor_client(
+    client: AsyncClient, doctor_user: User, doctor_profile: Doctor
+) -> AsyncClient:
+    """Authenticated client as a verified doctor (doctor profile included)."""
+    token = create_test_token(
+        sub=doctor_user.keycloak_sub,
+        email=doctor_user.email,
+        name=doctor_user.full_name,
+        roles=["doctor"],
+    )
+    client.headers["Authorization"] = f"Bearer {token}"
+    return client
+
+
+def make_auth_header(user: User, roles: list[str] | None = None) -> dict[str, str]:
+    """Return an Authorization header for an existing user row."""
+    token = create_test_token(
+        sub=user.keycloak_sub,
+        email=user.email,
+        name=user.full_name,
+        roles=roles if roles is not None else [user.role],
+    )
+    return {"Authorization": f"Bearer {token}"}
 
 
 # Medicine database fixtures

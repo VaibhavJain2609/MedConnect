@@ -1,0 +1,8 @@
+# Test-only dependencies. Install alongside runtime deps:
+#   pip install -r requirements.txt -r requirements-dev.txt
+pytest==8.3.4
+pytest-asyncio==0.25.2
+pytest-cov==6.0.0
+httpx==0.28.1        # also in requirements.txt; pinned here so tests can run standalone
+fakeredis==2.26.2    # in-memory Redis for RateLimitMiddleware (see conftest.py)
+polyfactory==2.18.0  # model factories for future fixture generation
