@@ -1,0 +1,70 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+    groups:
+      # Group minor+patch into one PR so routine bumps don't spam; majors
+      # still arrive individually for careful review.
+      minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    groups:
+      minor-patch:
+        update-types: [minor, patch]
+
+  # Base-image bumps (FROM lines) in each Dockerfile directory.
+  - package-ecosystem: docker
+    directory: /backend
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /frontend
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /keycloak
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /postgres
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      minor-patch:
+        update-types: [minor, patch]
+
+  # Provider/version bumps. Dependabot requires a directory that directly
+  # contains .tf files — infra/terraform itself only has subdirs, so each
+  # environment root is listed.
+  - package-ecosystem: terraform
+    directory: /infra/terraform/environments/shared
+    schedule:
+      interval: weekly
+    groups:
+      minor-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: terraform
+    directory: /infra/terraform/environments/staging
+    schedule:
+      interval: weekly
+    groups:
+      minor-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: terraform
+    directory: /infra/terraform/environments/prod
+    schedule:
+      interval: weekly
+    groups:
+      minor-patch:
+        update-types: [minor, patch]

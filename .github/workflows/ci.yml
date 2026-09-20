@@ -11,16 +11,31 @@ permissions:
 jobs:
   gitleaks:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA (supply-chain hardening)
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
+      - uses: gitleaks/gitleaks-action@v2 # pin: resolve tag to full commit SHA
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # Reviews the dependency diff on PRs — blocks new HIGH/CRITICAL
+  # vulnerabilities and licenses in introduced deps before they merge.
+  # Runs only on pull_request (no diff exists on a plain push).
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA
+      - uses: actions/dependency-review-action@v4 # pin: resolve tag to full commit SHA
+        with:
+          fail-on-severity: high
+
   backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     # Two separate Postgres containers, not one — the app's DATABASE_URL and
     # MEDICINE_DB_URL point at two logical databases inside ONE RDS instance
     # in production (see infra/terraform/environments/*/main.tf), but
@@ -42,6 +57,10 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      # conftest.py expects the medicine test DB on postgres:5433 with
+      # database name `medicine_db_test` — the port mapping is 5433(host)
+      # -> 5432(container), and the hosts alias below resolves "postgres"
+      # to 127.0.0.1 so both service containers are reachable on that name.
       postgres_medicine:
         image: postgres:16
         env:
@@ -65,9 +84,9 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5 # pin: resolve tag to full commit SHA
         with:
           python-version: "3.12"
           cache: pip
@@ -88,6 +107,18 @@ jobs:
         working-directory: backend
         run: ruff check .
 
+      # Fails the job on any known-vulnerable pinned dependency. To accept a
+      # CVE that is genuinely not exploitable here, add it as
+      # `--ignore-vuln CVE-YYYY-NNNNN` with an inline reason + recheck date —
+      # same convention as .trivyignore used by the CD image scan.
+      - name: Dependency audit (pip-audit)
+        working-directory: backend
+        run: |
+          pip install pip-audit==2.7.3
+          pip-audit -r requirements.txt --strict
+          # Documented ignore list (add below, one flag each, with reason):
+          #   --ignore-vuln CVE-YYYY-NNNNN  # <reason; recheck by YYYY-MM-DD>
+
       - name: Verify Alembic migrations apply cleanly
         working-directory: backend
         env:
@@ -99,14 +130,19 @@ jobs:
 
       - name: Test (pytest)
         working-directory: backend
-        run: pytest -v --cov=app --cov-report=term-missing
+        # --cov-fail-under=20 is a floor matching roughly where the (thin)
+        # suite sits today so coverage can't silently regress to zero.
+        # TODO: ratchet this up in ~5-point steps as test coverage grows —
+        # do not lower it to make a red build green.
+        run: pytest -v --cov=app --cov-report=term-missing --cov-fail-under=20
 
   frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4 # pin: resolve tag to full commit SHA
         with:
           node-version: "20" # matches frontend/Dockerfile's node:20-alpine
           cache: npm
@@ -114,6 +150,14 @@ jobs:
 
       - working-directory: frontend
         run: npm ci
+
+      # Fails on HIGH+ vulnerabilities in the dependency tree. Transitive-dep
+      # findings that upstream hasn't patched yet should be handled via
+      # package.json "overrides" or a documented `.nsprc`/audit allowlist —
+      # not by lowering --audit-level.
+      - name: Dependency audit (npm audit)
+        working-directory: frontend
+        run: npm audit --audit-level=high
 
       - working-directory: frontend
         run: npm run lint
@@ -133,23 +177,79 @@ jobs:
           NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: medconnect-frontend
         run: npm run build
 
+  # Builds every image the CD pipeline ships (plus postgres, built only for
+  # local docker-compose) so a Dockerfile breakage fails here, on the PR —
+  # not during a deploy. push: false; scanning/signing stays in cd.yml.
+  docker-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - context: backend
+            scope: backend
+          - context: frontend
+            scope: frontend
+          - context: keycloak
+            scope: keycloak
+          - context: postgres
+            scope: postgres
+    steps:
+      - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA
+
+      - uses: docker/setup-buildx-action@v3 # pin: resolve tag to full commit SHA
+
+      - name: Build ${{ matrix.context }} (no push)
+        if: matrix.context != 'frontend'
+        uses: docker/build-push-action@v6 # pin: resolve tag to full commit SHA
+        with:
+          context: ${{ matrix.context }}
+          push: false
+          tags: medconnect-${{ matrix.context }}:ci
+          cache-from: type=gha,scope=${{ matrix.scope }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.scope }}
+
+      # Frontend gets its own step because only its build consumes the
+      # NEXT_PUBLIC_* build-args. Placeholder values — same role as the
+      # frontend job's env block: proves the build compiles, bakes nothing
+      # real. NOTE: these only take effect once frontend/Dockerfile declares
+      # matching `ARG NEXT_PUBLIC_*` / `ENV` lines (tracked as a follow-up —
+      # without them the args are accepted but unused).
+      - name: Build frontend (no push)
+        if: matrix.context == 'frontend'
+        uses: docker/build-push-action@v6 # pin: resolve tag to full commit SHA
+        with:
+          context: frontend
+          push: false
+          tags: medconnect-frontend:ci
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+          build-args: |
+            NEXT_PUBLIC_API_URL=https://placeholder.invalid/api
+            NEXT_PUBLIC_KEYCLOAK_URL=https://placeholder.invalid
+            NEXT_PUBLIC_KEYCLOAK_REALM=medconnect
+            NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=medconnect-frontend
+
   terraform-fmt:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA
+      - uses: hashicorp/setup-terraform@v3 # pin: resolve tag to full commit SHA
         with:
           terraform_version: "1.9.8"
       - run: terraform fmt -check -recursive infra/terraform
 
   terraform-validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       matrix:
         environment: [shared, staging, prod]
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA
+      - uses: hashicorp/setup-terraform@v3 # pin: resolve tag to full commit SHA
         with:
           terraform_version: "1.9.8"
       - name: terraform init (no backend — syntax/type checking only, no AWS access)
@@ -161,14 +261,40 @@ jobs:
 
   kustomize:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       matrix:
         overlay: [staging, prod]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA
 
       - name: Render overlay
         run: kubectl kustomize infra/k8s/overlays/${{ matrix.overlay }} > /tmp/rendered.yaml
+
+      # The rendered overlay intentionally still contains a small, fixed set
+      # of PLACEHOLDER_* / ENVIRONMENT_PLACEHOLDER tokens — deploy.yml
+      # substitutes them from GitHub environment vars immediately before
+      # `kubectl apply` (see the "Substitute environment placeholders" step
+      # there). This lint fails the build if any OTHER placeholder token
+      # appears in the render — i.e. one the deploy step does not know how
+      # to substitute — instead of letting it reach a live cluster.
+      - name: Placeholder lint (only known, deploy-substituted tokens allowed)
+        run: |
+          allowed="PLACEHOLDER_ACM_CERT_ARN_STAGING PLACEHOLDER_ACM_CERT_ARN_PROD PLACEHOLDER_WAF_ACL_ARN_STAGING PLACEHOLDER_WAF_ACL_ARN_PROD PLACEHOLDER_NAMESPACE PLACEHOLDER_AWS_REGION PLACEHOLDER_SECRET_STORE_NAME ENVIRONMENT_PLACEHOLDER"
+          found=$(grep -oE '[A-Z_]*PLACEHOLDER[A-Z_]*' /tmp/rendered.yaml | sort -u)
+          unexpected=""
+          for token in $found; do
+            case " $allowed " in
+              *" $token "*) ;;
+              *) unexpected="$unexpected $token" ;;
+            esac
+          done
+          if [ -n "$unexpected" ]; then
+            echo "::error::Rendered manifests contain placeholder tokens deploy.yml does not substitute:$unexpected"
+            echo "Either add substitution for them in deploy.yml or give them real values in the overlay."
+            exit 1
+          fi
+          echo "Rendered placeholders (all deploy-substituted): $found"
 
       - name: Install kubeconform
         run: |

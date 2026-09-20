@@ -1,0 +1,82 @@
+name: Security scan
+
+on:
+  pull_request:
+  schedule:
+    # Weekly, Monday 06:00 UTC. Covers dependencies + the latest deployed
+    # image even when no code has changed (new CVEs against old artifacts).
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # Required for CodeQL to upload results to the Security tab. Forked-PR
+  # runs get a read-only token automatically — scans still run, results
+  # just can't be published from forks.
+  security-events: write
+  actions: read
+  id-token: write # needed by the ECR rescan's OIDC role assumption
+
+jobs:
+  codeql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # Backend is Python, frontend is TypeScript (analyzed under the
+        # 'javascript' CodeQL language — there is no separate 'typescript').
+        language: [javascript, python]
+    steps:
+      - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3 # pin: resolve tag to full commit SHA
+        with:
+          languages: ${{ matrix.language }}
+          # Both languages are interpreted — no build step needed, so no
+          # `build-mode`/autobuild is configured.
+
+      - name: CodeQL analyze
+        uses: github/codeql-action/analyze@v3 # pin: resolve tag to full commit SHA
+        with:
+          category: /language:${{ matrix.language }}
+
+  # Re-scan the most recently built/deployed image set. ECR tags are the
+  # commit SHA (immutable) — on a scheduled run github.sha is the default
+  # branch head, i.e. the commit the latest successful CD run shipped.
+  # Best-effort by design: if master head was never deployed (e.g. a CI
+  # failure blocked CD), that tag won't exist in ECR and this job reports
+  # the miss in the step log. Querying ECR for the newest tag
+  # (`aws ecr describe-images ... | sort_by(imagePushedAt)`) would be the
+  # upgrade if the miss proves noisy — skipped here because the workflow's
+  # IAM role would then also need ecr:DescribeImages, not just pull.
+  ecr-rescan:
+    # Only meaningful on the schedule/dispatch path — a PR has no deployed
+    # image to rescan, and PR-time source scanning is CodeQL's job above.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        repo: [medconnect-backend, medconnect-frontend, medconnect-keycloak]
+    steps:
+      - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA
+        # checkout only for .trivyignore
+
+      - uses: aws-actions/configure-aws-credentials@v4 # pin: resolve tag to full commit SHA
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2 # pin: resolve tag to full commit SHA
+
+      - name: Trivy rescan ${{ matrix.repo }}@${{ github.sha }}
+        uses: aquasecurity/trivy-action@0.28.0 # pin: resolve tag to full commit SHA
+        with:
+          image-ref: ${{ steps.ecr-login.outputs.registry }}/${{ matrix.repo }}:${{ github.sha }}
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          trivyignores: .trivyignore

@@ -34,11 +34,12 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment: ${{ inputs.environment }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v4 # pin: resolve tag to full commit SHA
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
@@ -69,6 +70,45 @@ jobs:
       - name: Render manifests
         run: kubectl kustomize ${{ inputs.overlay_path }} > /tmp/rendered.yaml
 
+      # The overlays deliberately ship PLACEHOLDER_* tokens (ACM/WAF ARNs
+      # can't be committed; the ExternalSecret names/region/namespace aren't
+      # resolvable by kustomize). Substitute them from GitHub variables here,
+      # at deploy time — the ACM_CERT_ARN_* / WAF_ACL_ARN_* repository
+      # variables must exist per environment or this step fails fast rather
+      # than applying an Ingress with literal "PLACEHOLDER_" annotations.
+      - name: Substitute environment placeholders
+        env:
+          ACM_CERT_ARN: ${{ vars[format('ACM_CERT_ARN_{0}', inputs.environment == 'production' && 'PROD' || 'STAGING')] }}
+          WAF_ACL_ARN: ${{ vars[format('WAF_ACL_ARN_{0}', inputs.environment == 'production' && 'PROD' || 'STAGING')] }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          NAMESPACE: ${{ inputs.namespace }}
+          # Secrets Manager key prefix used in the ExternalSecrets'
+          # `medconnect/<env>/...` paths.
+          ENV_SLUG: ${{ inputs.environment == 'production' && 'prod' || 'staging' }}
+        run: |
+          : "${ACM_CERT_ARN:?ACM_CERT_ARN_STAGING/ACM_CERT_ARN_PROD repository variable is not set}"
+          : "${WAF_ACL_ARN:?WAF_ACL_ARN_STAGING/WAF_ACL_ARN_PROD repository variable is not set}"
+          : "${AWS_REGION:?AWS_REGION repository variable is not set}"
+          # The ClusterSecretStore name is defined in the base manifests —
+          # read it back out of the render instead of duplicating it here.
+          SECRET_STORE_NAME=$(yq eval 'select(.kind == "ClusterSecretStore") | .metadata.name' /tmp/rendered.yaml | head -1)
+          : "${SECRET_STORE_NAME:?could not read ClusterSecretStore name from rendered manifests}"
+          sed -i \
+            -e "s|PLACEHOLDER_ACM_CERT_ARN_[A-Z]*|${ACM_CERT_ARN}|g" \
+            -e "s|PLACEHOLDER_WAF_ACL_ARN_[A-Z]*|${WAF_ACL_ARN}|g" \
+            -e "s|PLACEHOLDER_NAMESPACE|${NAMESPACE}|g" \
+            -e "s|PLACEHOLDER_AWS_REGION|${AWS_REGION}|g" \
+            -e "s|PLACEHOLDER_SECRET_STORE_NAME|${SECRET_STORE_NAME}|g" \
+            -e "s|ENVIRONMENT_PLACEHOLDER|${ENV_SLUG}|g" \
+            /tmp/rendered.yaml
+          # Fail fast on ANY residual placeholder — applying a manifest that
+          # still says "PLACEHOLDER_" to a live cluster is strictly worse
+          # than a failed deploy.
+          if grep -n "PLACEHOLDER" /tmp/rendered.yaml; then
+            echo "::error::Rendered manifests still contain PLACEHOLDER tokens after substitution — refusing to apply."
+            exit 1
+          fi
+
       # infra/k8s/base/migrations/job.yaml documents why this Job must be
       # deleted before every re-apply: Job specs are immutable, and
       # `kubectl apply` on an unchanged one is a no-op — neither works for
@@ -77,10 +117,32 @@ jobs:
       # finish before new backend/frontend pods start taking traffic.
       - name: Run database migrations
         run: |
+          NS="${{ inputs.namespace }}"
           yq eval-all 'select(.kind == "Job")' /tmp/rendered.yaml > /tmp/migration-job.yaml
           kubectl delete -f /tmp/migration-job.yaml --ignore-not-found
           kubectl apply -f /tmp/migration-job.yaml
-          kubectl wait --for=condition=complete --timeout=300s -n ${{ inputs.namespace }} job/alembic-migrate
+          # Poll BOTH terminal conditions — `kubectl wait --for=condition=
+          # complete` alone keeps polling until the full timeout even when
+          # the Job has already gone Failed (a Failed Job never becomes
+          # Complete), so a broken migration would burn 300s and then report
+          # "timed out" instead of "failed".
+          complete=""
+          failed=""
+          for i in $(seq 1 150); do
+            complete=$(kubectl get job alembic-migrate -n "$NS" -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null)
+            failed=$(kubectl get job alembic-migrate -n "$NS" -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null)
+            [ "$complete" = "True" ] && break
+            [ "$failed" = "True" ] && break
+            sleep 2
+          done
+          if [ "$complete" != "True" ]; then
+            echo "::error::Migration job alembic-migrate failed or did not complete within 300s — pod logs:"
+            kubectl describe job alembic-migrate -n "$NS" || true
+            kubectl logs -n "$NS" -l job-name=alembic-migrate --all-containers --tail=200 --prefix=true || true
+            exit 1
+          fi
+          kubectl logs -n "$NS" -l job-name=alembic-migrate --all-containers --tail=50 --prefix=true || true
+          echo "Migrations completed."
 
       - name: Apply manifests
         run: kubectl apply -f /tmp/rendered.yaml
@@ -98,7 +160,7 @@ jobs:
       # and / (frontend catch-all), so a public https://<host>/health or
       # /api/health request would not reach either service's actual health
       # route. Internal check: hits each Service's real health route
-      # directly over cluster DNS from an ephemeral pod, bypassing that
+      # directly over cluster DNS from an ephemeral Job, bypassing that
       # routing gap entirely.
       - name: Smoke test — external (frontend via ALB)
         id: smoke_external
@@ -115,15 +177,30 @@ jobs:
         id: smoke_internal
         if: success()
         run: |
-          kubectl run smoke-test-${{ github.run_id }} \
-            --image=curlimages/curl:8.10.1 --restart=Never -n ${{ inputs.namespace }} \
-            --command -- sh -c \
-            "curl -fsS http://backend/health && curl -fsS http://frontend/api/health"
-          kubectl wait --for=condition=Ready --timeout=60s -n ${{ inputs.namespace }} pod/smoke-test-${{ github.run_id }} || true
-          kubectl logs -n ${{ inputs.namespace }} smoke-test-${{ github.run_id }}
-          exit_code=$(kubectl get pod smoke-test-${{ github.run_id }} -n ${{ inputs.namespace }} -o jsonpath='{.status.containerStatuses[0].state.terminated.exitCode}')
-          kubectl delete pod smoke-test-${{ github.run_id }} -n ${{ inputs.namespace }} --ignore-not-found
-          exit "$exit_code"
+          NS="${{ inputs.namespace }}"
+          JOB="smoke-test-${{ github.run_id }}-${{ github.run_attempt }}"
+          # A run-to-completion Job, not `kubectl run` pod: `kubectl wait
+          # --for=condition=Ready` never fires on a pod that runs to
+          # completion (it transitions straight to Succeeded), and parsing
+          # the exit code back out of terminated container state is brittle.
+          # Job status conditions carry the result directly.
+          kubectl create job "$JOB" -n "$NS" --image=curlimages/curl:8.10.1 \
+            --dry-run=client -o yaml \
+            -- sh -c "curl -fsS http://backend/health && curl -fsS http://frontend/api/health" \
+            | yq eval '.spec.backoffLimit = 1' - \
+            | kubectl apply -f -
+          complete=""
+          failed=""
+          for i in $(seq 1 60); do
+            complete=$(kubectl get job "$JOB" -n "$NS" -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null)
+            failed=$(kubectl get job "$JOB" -n "$NS" -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null)
+            [ "$complete" = "True" ] && break
+            [ "$failed" = "True" ] && break
+            sleep 2
+          done
+          kubectl logs -n "$NS" -l job-name="$JOB" --all-containers --tail=50 --prefix=true || true
+          kubectl delete job "$JOB" -n "$NS" --ignore-not-found
+          [ "$complete" = "True" ]
 
       - name: Roll back on failure
         if: failure() && (steps.rollout.outcome == 'failure' || steps.smoke_external.outcome == 'failure' || steps.smoke_internal.outcome == 'failure')
