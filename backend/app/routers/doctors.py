@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
+from app.database import get_db, get_medicine_db
 from app.dependencies import get_active_clinic, get_current_doctor, get_verified_doctor
 from app.models.clinic import ClinicMembership
 from app.models.doctor import Doctor
@@ -14,9 +14,16 @@ from app.models.medical_record import MedicalRecord
 from app.models.patient_link import PatientClinicLink
 from app.models.user import User
 from app.schemas.common import PaginatedResponse, PaginationMeta
-from app.schemas.prescription import PrescriptionCreate, PrescriptionMedicineItem, PrescriptionResponse
+from app.schemas.prescription import (
+    PrescriptionCreate,
+    PrescriptionMedicineItem,
+    PrescriptionResponse,
+    SafetyAlert,
+    SafetyResult,
+)
 from app.schemas.record import RecordCreate, RecordResponse
 from app.schemas.user import DoctorProfileCreate, DoctorProfileResponse
+from app.services.clinical_safety_service import run_safety_gate, write_prescription_audit
 from app.services.prescription_service import create_prescription
 from app.services.record_service import create_record, get_doctor_patients, get_patient_timeline
 
@@ -43,6 +50,15 @@ class PrescriptionTemplateResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class PrescriptionTemplateUpdate(BaseModel):
+    """PATCH body — all fields optional; mirrors PrescriptionTemplateCreate shape
+    (medicines use PrescriptionMedicineItem, same as template create)."""
+    name: Optional[str] = None
+    medicines: Optional[list[PrescriptionMedicineItem]] = None
+    diagnosis: Optional[str] = None
+    notes: Optional[str] = None
 
 router = APIRouter(prefix="/api/v1/doctors", tags=["doctors"])
 
@@ -165,7 +181,7 @@ async def search_patients(
 @router.get("/patients/{patient_id}/profile")
 async def get_patient_profile(
     patient_id: UUID,
-    doctor_info: tuple = Depends(get_current_doctor),
+    doctor_info: tuple = Depends(get_verified_doctor),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -386,7 +402,7 @@ async def _get_active_record_access_consent(
 @router.get("/patients/{patient_id}/prescriptions")
 async def get_patient_prescriptions(
     patient_id: UUID,
-    doctor_info: tuple[User, Doctor] = Depends(get_current_doctor),
+    doctor_info: tuple[User, Doctor] = Depends(get_verified_doctor),
     db: AsyncSession = Depends(get_db),
     limit: int = Query(50, ge=1, le=100),
     clinic_context: tuple | None = Depends(get_active_clinic),
@@ -478,7 +494,7 @@ async def patient_records(
     type: str | None = Query(None),
     cursor: UUID | None = Query(None),
     limit: int = Query(20, ge=1, le=100),
-    doctor_info: tuple[User, Doctor] = Depends(get_current_doctor),
+    doctor_info: tuple[User, Doctor] = Depends(get_verified_doctor),
     db: AsyncSession = Depends(get_db),
     clinic_context: tuple | None = Depends(get_active_clinic),
 ):
@@ -595,7 +611,7 @@ async def create_medical_record(
 @router.get("/records/{record_id}/amendments")
 async def list_record_amendments(
     record_id: UUID,
-    doctor_info: tuple = Depends(get_current_doctor),
+    doctor_info: tuple = Depends(get_verified_doctor),
     db: AsyncSession = Depends(get_db),
     clinic_context: tuple | None = Depends(get_active_clinic),
 ):
@@ -787,6 +803,7 @@ async def create_rx(
     req: PrescriptionCreate,
     doctor_info: tuple[User, Doctor] = Depends(get_verified_doctor),
     db: AsyncSession = Depends(get_db),
+    medicine_db: AsyncSession = Depends(get_medicine_db),
     clinic_context: tuple | None = Depends(get_active_clinic),
 ):
     user, doctor = doctor_info
@@ -823,6 +840,71 @@ async def create_rx(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={"error": {"code": "PATIENT_ACCESS_DENIED", "message": "No relationship with this patient"}},
             )
+
+    # --- Clinical safety gate (runs after authz, before persistence) ---
+    # Enforcement: contraindicated -> hard block; major -> requires
+    # safety_override_reason; moderate/minor -> warn-only in the response.
+    gate = await run_safety_gate(
+        db=db,
+        medicine_db=medicine_db,
+        patient_id=req.patient_id,
+        medicines=[m.model_dump() for m in req.medicines],
+    )
+
+    blocking = [a for a in gate.alerts if a["severity"] == "contraindicated"]
+    majors = [a for a in gate.alerts if a["severity"] == "major"]
+    override_reason = (req.safety_override_reason or "").strip() or None
+    overrides_applied = bool(majors) and override_reason is not None
+
+    if blocking:
+        # Persist the blocked attempt for forensics. prescription_id is a
+        # generated attempt UUID — no prescription row exists. The medicine-DB
+        # session is committed explicitly because raising below rolls it back.
+        await write_prescription_audit(
+            medicine_db=medicine_db,
+            prescription_id=_uuid.uuid4(),
+            doctor_id=doctor.id,
+            patient_id=req.patient_id,
+            resolved=gate.resolved,
+            alerts=gate.alerts,
+            blocked=True,
+        )
+        await medicine_db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": {
+                    "code": "SAFETY_GATE_BLOCKED",
+                    "message": "Prescription blocked: contraindicated clinical safety alert(s)",
+                    "alerts": gate.alerts,
+                    "conflicts": blocking,
+                }
+            },
+        )
+
+    if majors and override_reason is None:
+        await write_prescription_audit(
+            medicine_db=medicine_db,
+            prescription_id=_uuid.uuid4(),
+            doctor_id=doctor.id,
+            patient_id=req.patient_id,
+            resolved=gate.resolved,
+            alerts=gate.alerts,
+            blocked=True,
+        )
+        await medicine_db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": {
+                    "code": "SAFETY_OVERRIDE_REQUIRED",
+                    "message": "Major safety alert(s) require safety_override_reason to proceed",
+                    "alerts": gate.alerts,
+                    "conflicts": majors,
+                }
+            },
+        )
+
     try:
         prescription = await create_prescription(
             db=db,
@@ -841,7 +923,26 @@ async def create_rx(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"error": {"code": "VALIDATION_ERROR", "message": str(e)}},
         )
-    return prescription
+
+    # Audit trail: one PrescriptionAudit row per (item, salt) — committed with
+    # the request via the get_medicine_db dependency.
+    await write_prescription_audit(
+        medicine_db=medicine_db,
+        prescription_id=prescription.id,
+        doctor_id=doctor.id,
+        patient_id=req.patient_id,
+        resolved=gate.resolved,
+        alerts=gate.alerts,
+        override_reason=override_reason if overrides_applied else None,
+    )
+
+    response = PrescriptionResponse.model_validate(prescription)
+    response.safety = SafetyResult(
+        checked=True,
+        alerts=[SafetyAlert(**a) for a in gate.alerts],
+        overrides_applied=overrides_applied,
+    )
+    return response
 
 
 @router.get("/prescriptions")
@@ -1089,6 +1190,49 @@ async def list_prescription_templates(
             }
             for t in templates
         ]
+    }
+
+
+@router.patch("/prescription-templates/{template_id}", response_model=PrescriptionTemplateResponse)
+async def update_prescription_template(
+    template_id: UUID,
+    req: PrescriptionTemplateUpdate,
+    doctor_info: tuple = Depends(get_current_doctor),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update an existing prescription template (partial; only sent fields change)."""
+    from sqlalchemy import select
+    from app.models.prescription_template import PrescriptionTemplate
+
+    _, doctor = doctor_info
+
+    stmt = select(PrescriptionTemplate).where(
+        PrescriptionTemplate.id == template_id,
+        PrescriptionTemplate.doctor_id == doctor.id,
+        PrescriptionTemplate.deleted_at.is_(None),
+    )
+    result = await db.execute(stmt)
+    template = result.scalar_one_or_none()
+
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "NOT_FOUND", "message": "Template not found"}},
+        )
+
+    # exclude_unset: PATCH semantics — absent fields untouched, explicit nulls clear
+    for field_name, value in req.model_dump(exclude_unset=True).items():
+        setattr(template, field_name, value)
+    await db.flush()
+
+    return {
+        "id": template.id,
+        "doctor_id": template.doctor_id,
+        "name": template.name,
+        "medicines": template.medicines,
+        "diagnosis": template.diagnosis,
+        "notes": template.notes,
+        "created_at": template.created_at.isoformat(),
     }
 
 
