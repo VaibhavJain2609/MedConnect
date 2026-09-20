@@ -42,6 +42,10 @@ _redis_settings = RedisSettings.from_dsn(settings.REDIS_URL)
 # no separate socket_timeout field on RedisSettings in this version.
 _redis_settings.conn_timeout = 5
 _redis_settings.conn_retry_delay = 1
+# arq's from_dsn ignores the ?ssl_cert_reqs= query param — ElastiCache uses an
+# AWS-internal CA, so disable cert verification explicitly for rediss:// URLs.
+if settings.REDIS_URL.startswith("rediss://"):
+    _redis_settings.ssl_cert_reqs = "none"
 
 
 class WorkerSettings:
