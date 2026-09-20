@@ -31,6 +31,15 @@ import {
 import {
   listSalts,
   listBrands,
+  listManufacturers,
+  createManufacturer,
+  updateManufacturer,
+  deleteManufacturer,
+  createSalt,
+  updateSalt,
+  deleteSalt,
+  deleteBrand,
+  getApiErrorMessage,
   getMedicineStats,
   getSalt,
   getBrandsForSalt,
@@ -42,94 +51,28 @@ import {
   type BrandForSalt,
   type DrugInteraction,
 } from "@/lib/api/medicines-emr";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast";
 
-// API functions for Manufacturers
-async function listManufacturers(params: { search?: string }) {
-  const queryParams = new URLSearchParams();
-  if (params.search) queryParams.append("search", params.search);
-  queryParams.append("limit", "50");
-
-  const res = await fetch(`/api/v1/manufacturers?${queryParams}`);
-  if (!res.ok) throw new Error("Failed to fetch manufacturers");
-  return res.json();
-}
-
-async function createManufacturer(data: any) {
-  const res = await fetch("/api/v1/admin/manufacturers", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.detail || "Failed to create manufacturer");
-  }
-  return res.json();
-}
-
-async function updateManufacturer(id: string, data: any) {
-  const res = await fetch(`/api/v1/admin/manufacturers/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.detail || "Failed to update manufacturer");
-  }
-  return res.json();
-}
-
-async function deleteManufacturer(id: string) {
-  const res = await fetch(`/api/v1/admin/manufacturers/${id}`, {
-    method: "DELETE",
-  });
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.detail || "Failed to delete manufacturer");
-  }
-}
-
-// API functions for Salts CRUD
-async function createSalt(data: any) {
-  const res = await fetch("/api/v1/admin/salts", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.detail || "Failed to create salt");
-  }
-  return res.json();
-}
-
-async function updateSalt(id: string, data: any) {
-  const res = await fetch(`/api/v1/admin/salts/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.detail || "Failed to update salt");
-  }
-  return res.json();
-}
-
-async function deleteSalt(id: string) {
-  const res = await fetch(`/api/v1/admin/salts/${id}`, {
-    method: "DELETE",
-  });
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.detail || "Failed to delete salt");
-  }
-}
+type DeleteTarget = {
+  type: "manufacturer" | "salt" | "brand";
+  id: string;
+  name: string;
+};
 
 export default function MedicinesPageEMR() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [includeDiscontinued, setIncludeDiscontinued] = useState(false);
@@ -167,6 +110,9 @@ export default function MedicinesPageEMR() {
     pregnancy_category: "",
   });
 
+  // Shared delete confirmation target (manufacturer, salt, or brand)
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+
   const limit = 50;
 
   // Fetch manufacturers
@@ -176,7 +122,7 @@ export default function MedicinesPageEMR() {
     error: manufacturersError,
   } = useQuery({
     queryKey: ["admin-manufacturers-list", searchQuery],
-    queryFn: () => listManufacturers({ search: searchQuery || undefined }),
+    queryFn: () => listManufacturers(searchQuery || undefined, undefined, 50, 0),
     staleTime: 30000,
     enabled: activeTab === "manufacturers",
   });
@@ -223,6 +169,14 @@ export default function MedicinesPageEMR() {
     staleTime: 60000,
   });
 
+  const showMutationError = (action: string) => (err: unknown) => {
+    toast({
+      title: `Failed to ${action}`,
+      description: getApiErrorMessage(err),
+      variant: "destructive",
+    });
+  };
+
   // Manufacturer mutations
   const createManufacturerMutation = useMutation({
     mutationFn: createManufacturer,
@@ -231,7 +185,9 @@ export default function MedicinesPageEMR() {
       queryClient.invalidateQueries({ queryKey: ["medicine-stats-emr"] });
       setShowCreateManufacturer(false);
       resetManufacturerForm();
+      toast({ title: "Manufacturer created" });
     },
+    onError: showMutationError("create manufacturer"),
   });
 
   const updateManufacturerMutation = useMutation({
@@ -241,7 +197,9 @@ export default function MedicinesPageEMR() {
       setShowEditManufacturer(false);
       setEditingManufacturer(null);
       resetManufacturerForm();
+      toast({ title: "Manufacturer updated" });
     },
+    onError: showMutationError("update manufacturer"),
   });
 
   const deleteManufacturerMutation = useMutation({
@@ -249,7 +207,10 @@ export default function MedicinesPageEMR() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-manufacturers-list"] });
       queryClient.invalidateQueries({ queryKey: ["medicine-stats-emr"] });
+      setDeleteTarget(null);
+      toast({ title: "Manufacturer deleted" });
     },
+    onError: showMutationError("delete manufacturer"),
   });
 
   // Salt mutations
@@ -260,7 +221,9 @@ export default function MedicinesPageEMR() {
       queryClient.invalidateQueries({ queryKey: ["medicine-stats-emr"] });
       setShowCreateSalt(false);
       resetSaltForm();
+      toast({ title: "Salt created" });
     },
+    onError: showMutationError("create salt"),
   });
 
   const updateSaltMutation = useMutation({
@@ -270,7 +233,9 @@ export default function MedicinesPageEMR() {
       setShowEditSalt(false);
       setEditingSalt(null);
       resetSaltForm();
+      toast({ title: "Salt updated" });
     },
+    onError: showMutationError("update salt"),
   });
 
   const deleteSaltMutation = useMutation({
@@ -278,7 +243,22 @@ export default function MedicinesPageEMR() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-salts"] });
       queryClient.invalidateQueries({ queryKey: ["medicine-stats-emr"] });
+      setDeleteTarget(null);
+      toast({ title: "Salt deleted" });
     },
+    onError: showMutationError("delete salt"),
+  });
+
+  // Brand delete mutation
+  const deleteBrandMutation = useMutation({
+    mutationFn: (id: string) => deleteBrand(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-brands"] });
+      queryClient.invalidateQueries({ queryKey: ["medicine-stats-emr"] });
+      setDeleteTarget(null);
+      toast({ title: "Brand deleted" });
+    },
+    onError: showMutationError("delete brand"),
   });
 
   // Fetch selected salt details
@@ -358,9 +338,7 @@ export default function MedicinesPageEMR() {
   };
 
   const handleDeleteManufacturer = (id: string, name: string) => {
-    if (confirm(`Delete manufacturer "${name}"? This will fail if the manufacturer has any brands.`)) {
-      deleteManufacturerMutation.mutate(id);
-    }
+    setDeleteTarget({ type: "manufacturer", id, name });
   };
 
   // Salt handlers
@@ -398,10 +376,41 @@ export default function MedicinesPageEMR() {
   };
 
   const handleDeleteSalt = (id: string, name: string) => {
-    if (confirm(`Delete salt "${name}"? This will fail if the salt has any strengths.`)) {
-      deleteSaltMutation.mutate(id);
+    setDeleteTarget({ type: "salt", id, name });
+  };
+
+  // Brand handlers
+  const handleEditBrand = (brandId: string) => {
+    router.push(`/admin/medicines/${brandId}/edit`);
+  };
+
+  const handleDeleteBrand = (id: string, name: string) => {
+    setDeleteTarget({ type: "brand", id, name });
+  };
+
+  const handleConfirmDelete = () => {
+    if (!deleteTarget) return;
+    if (deleteTarget.type === "manufacturer") {
+      deleteManufacturerMutation.mutate(deleteTarget.id);
+    } else if (deleteTarget.type === "salt") {
+      deleteSaltMutation.mutate(deleteTarget.id);
+    } else {
+      deleteBrandMutation.mutate(deleteTarget.id);
     }
   };
+
+  const deleteInFlight =
+    deleteManufacturerMutation.isPending ||
+    deleteSaltMutation.isPending ||
+    deleteBrandMutation.isPending;
+
+  const deleteDescription = deleteTarget
+    ? {
+        manufacturer: `Delete manufacturer "${deleteTarget.name}"? This will fail if the manufacturer has any brands.`,
+        salt: `Delete salt "${deleteTarget.name}"? This will fail if the salt has any strengths.`,
+        brand: `Delete brand "${deleteTarget.name}"? This action cannot be undone.`,
+      }[deleteTarget.type]
+    : "";
 
   const handleViewSalt = (saltId: string) => {
     setSelectedSaltId(saltId);
@@ -661,6 +670,8 @@ export default function MedicinesPageEMR() {
             onPageChange={setCurrentPage}
             onViewBrand={handleViewBrand}
             onViewAlternatives={handleViewBrandAlternatives}
+            onEditBrand={handleEditBrand}
+            onDeleteBrand={handleDeleteBrand}
           />
         </TabsContent>
       </Tabs>
@@ -972,6 +983,36 @@ export default function MedicinesPageEMR() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation (manufacturer / salt / brand) */}
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete{" "}
+              {deleteTarget?.type === "brand"
+                ? "Brand"
+                : deleteTarget?.type === "salt"
+                  ? "Salt"
+                  : "Manufacturer"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>{deleteDescription}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteInFlight}
+            >
+              {deleteInFlight ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -1579,6 +1620,8 @@ function BrandsTable({
   onPageChange,
   onViewBrand,
   onViewAlternatives,
+  onEditBrand,
+  onDeleteBrand,
 }: {
   brands: Brand[];
   total: number;
@@ -1589,6 +1632,8 @@ function BrandsTable({
   onPageChange: (page: number) => void;
   onViewBrand: (brandId: string) => void;
   onViewAlternatives: (brandId: string) => void;
+  onEditBrand: (brandId: string) => void;
+  onDeleteBrand: (brandId: string, name: string) => void;
 }) {
   if (error) {
     return (
@@ -1692,6 +1737,20 @@ function BrandsTable({
                           >
                             <List className="h-4 w-4 mr-1" />
                             Alternatives
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onEditBrand(brand.brand_id)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onDeleteBrand(brand.brand_id, brand.brand_name)}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
                         </div>
                       </td>

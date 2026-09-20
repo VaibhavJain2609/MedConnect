@@ -770,6 +770,9 @@ const TYPE_LABELS: Record<string, string> = {
 export default function AdminAppointmentsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [clinicFilter, setClinicFilter] = useState("all");
   const [showModal, setShowModal] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [cancellingAppointment, setCancellingAppointment] = useState<Appointment | null>(null);
@@ -786,15 +789,27 @@ export default function AdminAppointmentsPage() {
 
   const allAppointments: Appointment[] = data?.data ?? [];
 
-  // Client-side search filter
-  const appointments = searchQuery
-    ? allAppointments.filter(
-        (a) =>
-          (a.patient_name ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (a.doctor_name ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-          a.id.includes(searchQuery)
-      )
-    : allAppointments;
+  // Distinct clinic names for the filter dropdown
+  const clinicOptions = Array.from(
+    new Set(allAppointments.map((a) => a.clinic_name).filter(Boolean) as string[])
+  ).sort();
+
+  // Client-side filters (the admin list endpoint does not support
+  // server-side date-range or clinic filtering)
+  const appointments = allAppointments.filter((a) => {
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const matches =
+        (a.patient_name ?? "").toLowerCase().includes(q) ||
+        (a.doctor_name ?? "").toLowerCase().includes(q) ||
+        a.id.toLowerCase().includes(q);
+      if (!matches) return false;
+    }
+    if (clinicFilter !== "all" && a.clinic_name !== clinicFilter) return false;
+    if (fromDate && a.scheduled_at.slice(0, 10) < fromDate) return false;
+    if (toDate && a.scheduled_at.slice(0, 10) > toDate) return false;
+    return true;
+  });
 
   const columns: ColumnDef<Appointment>[] = [
     {
@@ -976,8 +991,8 @@ export default function AdminAppointmentsPage() {
       </div>
 
       {/* Search and Filters */}
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-md">
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="relative flex-1 min-w-[200px] max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <input
             type="text"
@@ -1001,15 +1016,60 @@ export default function AdminAppointmentsPage() {
           <option value="cancelled">Cancelled</option>
           <option value="no-show">No Show</option>
         </select>
+
+        {clinicOptions.length > 0 && (
+          <select
+            value={clinicFilter}
+            onChange={(e) => setClinicFilter(e.target.value)}
+            className="h-10 px-4 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
+          >
+            <option value="all">All Clinics</option>
+            {clinicOptions.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        )}
+
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-dreams-textSecondary">From</label>
+          <input
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            className="h-10 px-3 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-dreams-textSecondary">To</label>
+          <input
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            className="h-10 px-3 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
+          />
+        </div>
+
+        {(fromDate || toDate || clinicFilter !== "all") && (
+          <button
+            onClick={() => {
+              setFromDate("");
+              setToDate("");
+              setClinicFilter("all");
+            }}
+            className="h-10 px-3 rounded-lg border border-dreams-border bg-white text-sm text-dreams-textSecondary hover:bg-dreams-lightBg transition-colors"
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
-      {/* Data Table */}
+      {/* Data Table — client-side paginated over the filtered result set */}
       <DataTable
         columns={columns}
         data={appointments}
         pageSize={10}
-        searchColumn="patient_name"
-        searchPlaceholder="Search appointments..."
       />
     </div>
   );

@@ -181,7 +181,7 @@ export default function AdminPatientsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
-  const [limit] = useState(viewMode === "table" ? 10 : 12);
+  const limit = viewMode === "table" ? 10 : 12;
   const [showModal, setShowModal] = useState(false);
 
   const { activeClinicId } = useClinicStore();
@@ -337,7 +337,10 @@ export default function AdminPatientsPage() {
             type="text"
             placeholder="Search by name or ID..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setPage(1);
+            }}
             className="w-full h-10 pl-10 pr-4 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
           />
         </div>
@@ -345,7 +348,10 @@ export default function AdminPatientsPage() {
         {/* Status Filter */}
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+          onChange={(e) => {
+            setStatusFilter(e.target.value);
+            setPage(1);
+          }}
           className="h-10 px-4 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
         >
           <option value="all">All Status</option>
@@ -384,15 +390,39 @@ export default function AdminPatientsPage() {
         </div>
       )}
 
-      {/* Table View */}
+      {/* Table View — server-paginated; internal pager hidden */}
       {viewMode === "table" && patients && (
         <DataTable
           columns={columns}
           data={patients}
           pageSize={limit}
-          searchColumn="name"
-          searchPlaceholder="Search patients..."
+          hidePagination
         />
+      )}
+
+      {/* Server-side pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-dreams-textSecondary">
+            Page {page} of {totalPages} · {data?.total ?? 0} patients
+          </p>
+          <div className="flex gap-2">
+            <button
+              disabled={page === 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="px-4 py-2 text-sm rounded-lg border border-dreams-border bg-white disabled:opacity-40 hover:bg-dreams-lightBg transition-colors"
+            >
+              Previous
+            </button>
+            <button
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              className="px-4 py-2 text-sm rounded-lg border border-dreams-border bg-white disabled:opacity-40 hover:bg-dreams-lightBg transition-colors"
+            >
+              Next
+            </button>
+          </div>
+        </div>
       )}
 
       <CreatePatientModal

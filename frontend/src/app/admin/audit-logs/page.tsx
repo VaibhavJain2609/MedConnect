@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck, Download, ChevronDown, ChevronRight } from "lucide-react";
 import api from "@/lib/api";
+import { exportReport, downloadReport } from "@/lib/api/stats";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
 
@@ -59,22 +60,78 @@ interface AuditLogsResponse {
   totalPages: number;
 }
 
+function ValuesDiff({
+  oldValues,
+  newValues,
+}: {
+  oldValues: Record<string, any> | null;
+  newValues: Record<string, any> | null;
+}) {
+  const keys = Array.from(
+    new Set([...Object.keys(oldValues ?? {}), ...Object.keys(newValues ?? {})])
+  );
+  if (keys.length === 0) {
+    return <p className="text-xs text-dreams-textSecondary">No field-level values recorded.</p>;
+  }
+  const fmt = (v: any) =>
+    v === null || v === undefined
+      ? "—"
+      : typeof v === "object"
+        ? JSON.stringify(v)
+        : String(v);
+  return (
+    <div className="rounded-lg border border-dreams-border overflow-hidden">
+      <table className="w-full text-xs">
+        <thead className="bg-dreams-lightBg">
+          <tr>
+            <th className="px-3 py-2 text-left font-semibold text-dreams-textSecondary w-1/4">Field</th>
+            <th className="px-3 py-2 text-left font-semibold text-dreams-textSecondary">Old Value</th>
+            <th className="px-3 py-2 text-left font-semibold text-dreams-textSecondary">New Value</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-dreams-border">
+          {keys.map((k) => {
+            const oldV = oldValues?.[k];
+            const newV = newValues?.[k];
+            const changed = fmt(oldV) !== fmt(newV);
+            return (
+              <tr key={k} className={changed ? "bg-amber-50/40" : ""}>
+                <td className="px-3 py-1.5 font-mono text-dreams-textPrimary">{k}</td>
+                <td className="px-3 py-1.5 text-dreams-textSecondary break-all max-w-md">
+                  {fmt(oldV)}
+                </td>
+                <td className="px-3 py-1.5 text-dreams-textPrimary break-all max-w-md">
+                  {fmt(newV)}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function AuditLogsPage() {
   const [tableFilter, setTableFilter] = useState("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [userSearch, setUserSearch] = useState("");
+  const [recordSearch, setRecordSearch] = useState("");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   const [page, setPage] = useState(1);
   const limit = 50;
 
   const { data, isLoading, error } = useQuery<AuditLogsResponse>({
-    queryKey: ["admin-audit", tableFilter, fromDate, toDate, userSearch, page],
+    queryKey: ["admin-audit", tableFilter, fromDate, toDate, userSearch, recordSearch, page],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (tableFilter !== "all") params.set("table_name", tableFilter);
       if (fromDate) params.set("from_date", new Date(fromDate).toISOString());
       if (toDate) params.set("to_date", new Date(toDate).toISOString());
       if (userSearch) params.set("changed_by_name", userSearch);
+      if (recordSearch) params.set("record_id", recordSearch);
       params.set("page", String(page));
       params.set("limit", String(limit));
       const res = await api.get(`/api/v1/admin/audit?${params}`);
@@ -82,8 +139,67 @@ export default function AuditLogsPage() {
     },
   });
 
-  const logs = data?.data ?? [];
+  // record_id is also filtered client-side as a fallback in case the API
+  // does not support the record_id query param.
+  const logs = (data?.data ?? []).filter(
+    (log) =>
+      !recordSearch ||
+      log.record_id.toLowerCase().includes(recordSearch.toLowerCase())
+  );
   const totalPages = data?.totalPages ?? 1;
+
+  // Client-side CSV fallback for the rows currently loaded
+  const exportLocalCsv = () => {
+    const escape = (v: unknown) => {
+      const s = v === null || v === undefined ? "" : String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const header = [
+      "changed_at",
+      "action",
+      "table_name",
+      "record_id",
+      "changed_by_name",
+      "changes_summary",
+    ];
+    const lines = [
+      header.join(","),
+      ...logs.map((log) =>
+        [
+          log.changed_at,
+          log.action,
+          log.table_name,
+          log.record_id,
+          log.changed_by_name ?? "System",
+          log.changes_summary ?? "",
+        ]
+          .map(escape)
+          .join(",")
+      ),
+    ];
+    downloadReport(
+      new Blob([lines.join("\n")], { type: "text/csv" }),
+      `audit-logs-${new Date().toISOString().slice(0, 10)}.csv`
+    );
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const blob = await exportReport("csv", {
+        start_date: fromDate || undefined,
+        end_date: toDate || undefined,
+      });
+      downloadReport(blob, `audit-report-${new Date().toISOString().slice(0, 10)}.csv`);
+    } catch (err) {
+      // reports/export endpoint may not exist yet — fall back to a
+      // client-side CSV of the currently loaded audit rows.
+      console.warn("Report export endpoint unavailable, using local CSV:", err);
+      exportLocalCsv();
+    } finally {
+      setExporting(false);
+    }
+  };
 
   if (error) {
     return (
@@ -105,14 +221,24 @@ export default function AuditLogsPage() {
         ]}
       />
 
-      <div className="flex items-center gap-3">
-        <ShieldCheck className="h-7 w-7 text-dreams-blue" />
-        <div>
-          <h1 className="text-3xl font-bold text-dreams-textPrimary">Audit Trail</h1>
-          <p className="text-dreams-textSecondary mt-0.5">
-            Immutable log of all data changes in the system
-          </p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <ShieldCheck className="h-7 w-7 text-dreams-blue" />
+          <div>
+            <h1 className="text-3xl font-bold text-dreams-textPrimary">Audit Trail</h1>
+            <p className="text-dreams-textSecondary mt-0.5">
+              Immutable log of all data changes in the system
+            </p>
+          </div>
         </div>
+        <button
+          onClick={handleExport}
+          disabled={exporting}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg border border-dreams-border bg-white text-sm font-medium text-dreams-textPrimary hover:bg-dreams-lightBg transition-colors disabled:opacity-50"
+        >
+          <Download className="h-4 w-4" />
+          {exporting ? "Exporting..." : "Export CSV"}
+        </button>
       </div>
 
       {/* Filters */}
@@ -169,13 +295,25 @@ export default function AuditLogsPage() {
           className="h-10 px-3 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue min-w-[200px]"
         />
 
-        {(tableFilter !== "all" || fromDate || toDate || userSearch) && (
+        <input
+          type="text"
+          placeholder="Filter by record ID..."
+          value={recordSearch}
+          onChange={(e) => {
+            setRecordSearch(e.target.value);
+            setPage(1);
+          }}
+          className="h-10 px-3 rounded-lg border border-dreams-border bg-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-dreams-blue min-w-[200px]"
+        />
+
+        {(tableFilter !== "all" || fromDate || toDate || userSearch || recordSearch) && (
           <button
             onClick={() => {
               setTableFilter("all");
               setFromDate("");
               setToDate("");
               setUserSearch("");
+              setRecordSearch("");
               setPage(1);
             }}
             className="h-10 px-3 rounded-lg border border-dreams-border bg-white text-sm text-dreams-textSecondary hover:bg-dreams-lightBg transition-colors"
@@ -195,6 +333,7 @@ export default function AuditLogsPage() {
           <table className="w-full text-sm">
             <thead className="bg-dreams-lightBg border-b border-dreams-border">
               <tr>
+                <th className="w-8 px-2 py-3" />
                 <th className="px-5 py-3 text-left font-semibold text-dreams-textSecondary">
                   When
                 </th>
@@ -219,39 +358,72 @@ export default function AuditLogsPage() {
               {logs.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="px-5 py-12 text-center text-dreams-textSecondary"
                   >
                     No audit logs found
                   </td>
                 </tr>
               ) : (
-                logs.map((log) => (
-                  <tr key={log.id} className="hover:bg-dreams-lightBg transition-colors">
-                    <td className="px-5 py-3 text-dreams-textSecondary whitespace-nowrap">
-                      {formatRelativeTime(log.changed_at)}
-                    </td>
-                    <td className="px-5 py-3">
-                      <Badge variant={ACTION_VARIANTS[log.action] as any}>
-                        {log.action}
-                      </Badge>
-                    </td>
-                    <td className="px-5 py-3 font-mono text-xs text-dreams-textSecondary">
-                      {log.table_name}
-                    </td>
-                    <td className="px-5 py-3 font-mono text-xs text-dreams-textSecondary">
-                      {log.record_id_short}…
-                    </td>
-                    <td className="px-5 py-3 text-dreams-textPrimary">
-                      {log.changed_by_name ?? (
-                        <span className="text-dreams-textSecondary italic">System</span>
+                logs.map((log) => {
+                  const isExpanded = expandedId === log.id;
+                  const hasDiff = !!(log.old_values || log.new_values);
+                  return (
+                    <Fragment key={log.id}>
+                      <tr
+                        className="hover:bg-dreams-lightBg transition-colors cursor-pointer"
+                        onClick={() =>
+                          hasDiff && setExpandedId(isExpanded ? null : log.id)
+                        }
+                      >
+                        <td className="px-2 py-3 text-dreams-textSecondary">
+                          {hasDiff ? (
+                            isExpanded ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" />
+                            )
+                          ) : null}
+                        </td>
+                        <td className="px-5 py-3 text-dreams-textSecondary whitespace-nowrap">
+                          {formatRelativeTime(log.changed_at)}
+                        </td>
+                        <td className="px-5 py-3">
+                          <Badge variant={ACTION_VARIANTS[log.action] as any}>
+                            {log.action}
+                          </Badge>
+                        </td>
+                        <td className="px-5 py-3 font-mono text-xs text-dreams-textSecondary">
+                          {log.table_name}
+                        </td>
+                        <td
+                          className="px-5 py-3 font-mono text-xs text-dreams-textSecondary"
+                          title={log.record_id}
+                        >
+                          {log.record_id_short}…
+                        </td>
+                        <td className="px-5 py-3 text-dreams-textPrimary">
+                          {log.changed_by_name ?? (
+                            <span className="text-dreams-textSecondary italic">System</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3 text-dreams-textSecondary text-xs max-w-xs truncate">
+                          {log.changes_summary ?? "—"}
+                        </td>
+                      </tr>
+                      {isExpanded && hasDiff && (
+                        <tr className="bg-dreams-lightBg/40">
+                          <td colSpan={7} className="px-5 py-4">
+                            <ValuesDiff
+                              oldValues={log.old_values}
+                              newValues={log.new_values}
+                            />
+                          </td>
+                        </tr>
                       )}
-                    </td>
-                    <td className="px-5 py-3 text-dreams-textSecondary text-xs max-w-xs truncate">
-                      {log.changes_summary ?? "—"}
-                    </td>
-                  </tr>
-                ))
+                    </Fragment>
+                  );
+                })
               )}
             </tbody>
           </table>

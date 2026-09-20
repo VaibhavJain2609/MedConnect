@@ -7,6 +7,17 @@ import { Building2, MapPin, Phone, Mail, Users, FileText, Pill, ArrowLeft, Setti
 import { getAdminClinic, updateAdminClinic, deleteAdminClinic } from "@/lib/api/clinics";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export default function AdminClinicDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -78,16 +89,31 @@ export default function AdminClinicDetailPage() {
             <Settings className="h-4 w-4" />
             {editMode ? "Cancel" : "Edit"}
           </button>
-          <button
-            onClick={() => {
-              if (confirm(`Delete clinic "${clinic.name}"? This cannot be undone.`)) {
-                deleteMutation.mutate();
-              }
-            }}
-            className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600 hover:bg-red-100"
-          >
-            Delete
-          </button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <button className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600 hover:bg-red-100">
+                Delete
+              </button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Clinic</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Delete clinic &quot;{clinic.name}&quot;? This cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => deleteMutation.mutate()}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  disabled={deleteMutation.isPending}
+                >
+                  {deleteMutation.isPending ? "Deleting..." : "Delete"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
 
