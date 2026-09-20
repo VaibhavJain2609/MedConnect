@@ -138,6 +138,32 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "protocol": "openid-connect"
+    },
+    {
+      "clientId": "medconnect-backend-admin",
+      "name": "MedConnect Backend Admin (service account)",
+      "description": "Dedicated service-account client (client_credentials grant) for backend Admin REST calls. Replaces the master-realm `admin-cli` password grant still used by backend/app/utils/keycloak_admin.py — the app-side migration to client_credentials is a tracked follow-up; until it lands, admin-cli remains in use. NOTE: this file is the docker-compose local-dev realm only (compose runs `start-dev` and the k8s Deployment mounts a hardened ConfigMap realm over /opt/keycloak/data/import), so its permissive settings — sslRequired=none, open registration, no verifyEmail, no brute-force protection — never reach staging/prod.",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "fullScopeAllowed": true,
+      "protocol": "openid-connect"
+    }
+  ],
+  "users": [
+    {
+      "username": "service-account-medconnect-backend-admin",
+      "enabled": true,
+      "emailVerified": false,
+      "serviceAccountClientId": "medconnect-backend-admin",
+      "clientRoles": {
+        "realm-management": [
+          "manage-users"
+        ]
+      }
     }
   ]
 }
