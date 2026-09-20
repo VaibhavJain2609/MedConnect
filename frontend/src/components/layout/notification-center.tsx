@@ -14,6 +14,13 @@ import { useAuthStore } from "@/stores/auth-store";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 
+// Only allow same-origin relative paths — blocks javascript:, data:,
+// and external/scheme-relative URLs from notification payloads.
+function safeActionUrl(url?: string): string | undefined {
+  if (!url || !url.startsWith("/") || url.startsWith("//")) return undefined;
+  return url;
+}
+
 /**
  * NotificationCenter Component
  *
@@ -71,7 +78,7 @@ export const NotificationCenter: React.FC = () => {
     },
   });
 
-  // Close dropdown when clicking outside
+  // Close dropdown when clicking outside or pressing Escape
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -81,9 +88,18 @@ export const NotificationCenter: React.FC = () => {
         setIsOpen(false);
       }
     };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+      }
+    };
 
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, []);
 
   const unreadCount = unreadCountFromAPI;
@@ -124,6 +140,8 @@ export const NotificationCenter: React.FC = () => {
         onClick={() => setIsOpen(!isOpen)}
         className="relative p-2 rounded-lg hover:bg-dreams-lightBg transition-colors"
         aria-label="Notifications"
+        aria-haspopup="true"
+        aria-expanded={isOpen}
       >
         <Bell className="h-5 w-5 text-dreams-textSecondary" />
         {unreadCount > 0 && (
@@ -172,8 +190,9 @@ export const NotificationCenter: React.FC = () => {
                     if (!notification.read) {
                       markAsReadMutation.mutate(notification.id);
                     }
-                    if (notification.action_url) {
-                      window.location.href = notification.action_url;
+                    const url = safeActionUrl(notification.action_url);
+                    if (url) {
+                      window.location.href = url;
                     }
                   }}
                 >

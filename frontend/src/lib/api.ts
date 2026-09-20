@@ -84,15 +84,15 @@ api.interceptors.response.use(
         error.userMessage = "Server error. Please try again later";
       }
 
-      // Extract error message from backend
-      if (data?.detail) {
-        if (typeof data.detail === "string") {
-          error.userMessage = data.detail;
-        } else if (data.detail.message) {
-          error.userMessage = data.detail.message;
-        }
-      } else if (data?.error?.message) {
-        error.userMessage = data.error.message;
+      // Extract error message from backend error envelope.
+      // FastAPI handlers wrap errors as detail: { error: { code, message } }.
+      const backendMessage =
+        data?.detail?.error?.message ??
+        data?.error?.message ??
+        (typeof data?.detail === "string" ? data.detail : undefined) ??
+        (typeof data?.detail?.message === "string" ? data.detail.message : undefined);
+      if (backendMessage) {
+        error.userMessage = backendMessage;
       }
     } else if (error.request) {
       // Request made but no response received

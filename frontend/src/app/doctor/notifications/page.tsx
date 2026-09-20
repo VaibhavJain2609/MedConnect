@@ -49,6 +49,13 @@ function formatTimestamp(ts: string) {
   return date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
+// Only allow same-origin relative paths — blocks javascript:, data:,
+// and external/scheme-relative URLs from being rendered into href.
+function safeActionUrl(url?: string): string | undefined {
+  if (!url || !url.startsWith("/") || url.startsWith("//")) return undefined;
+  return url;
+}
+
 export default function DoctorNotificationsPage() {
   const queryClient = useQueryClient();
   const [unreadOnly, setUnreadOnly] = useState(false);
@@ -214,9 +221,9 @@ export default function DoctorNotificationsPage() {
                     </div>
                   </div>
                   <p className="text-sm text-dreams-textSecondary mt-0.5">{n.message}</p>
-                  {n.action_url && (
+                  {safeActionUrl(n.action_url) && (
                     <a
-                      href={n.action_url}
+                      href={safeActionUrl(n.action_url)}
                       className="mt-1 text-xs text-dreams-blue hover:underline"
                       onClick={() => !n.read && markReadMutation.mutate(n.id)}
                     >

@@ -2,7 +2,7 @@
   "name": "MedConnect Patient Portal",
   "short_name": "MedConnect",
   "description": "Your personal health companion",
-  "start_url": "/patient/timeline",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#F5F7FA",
   "theme_color": "#4169E1",
