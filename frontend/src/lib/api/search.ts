@@ -7,7 +7,7 @@ import api from "../api";
 
 export interface SearchResult {
   id: string;
-  type: "patient" | "doctor" | "appointment" | "medicine";
+  type: "patient" | "doctor" | "appointment" | "medicine" | "clinic" | "record";
   title: string;
   subtitle?: string;
   description?: string;
@@ -19,7 +19,14 @@ export interface SearchResult {
 
 export interface SearchParams {
   q: string;
-  type?: "patient" | "doctor" | "appointment" | "medicine" | "all";
+  type?:
+    | "patient"
+    | "doctor"
+    | "appointment"
+    | "medicine"
+    | "clinic"
+    | "record"
+    | "all";
   limit?: number;
   offset?: number;
 }

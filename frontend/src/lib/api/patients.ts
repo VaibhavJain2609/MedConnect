@@ -129,41 +129,81 @@ export async function getPatients(
 }
 
 /**
- * Get patient details by ID
+ * Get patient details by ID (admin view — backed by the admin user detail
+ * endpoint, mapped onto the Patient card shape).
  */
 export async function getPatient(id: string): Promise<Patient> {
-  const response = await api.get(`/api/v1/patients/${id}`);
-  return response.data;
+  const response = await api.get(`/api/v1/admin/users/${id}`);
+  const u = response.data;
+  return {
+    id: u.id,
+    name: u.full_name,
+    photo: null,
+    status: u.is_active ? "completed" : "pending",
+    statusLabel: u.is_active ? "Active" : "Inactive",
+    lastVisit: u.last_visit ?? "—",
+    gender: "—",
+    location: "—",
+    doctor: "—",
+    department: "—",
+    age: 0,
+    bloodType: u.blood_group ?? undefined,
+    phone: u.phone ?? undefined,
+    email: u.email ?? undefined,
+    emergencyContact: u.emergency_contact_name ?? undefined,
+    emergencyPhone: u.emergency_contact_phone ?? undefined,
+  };
 }
 
 /**
- * Get patient current vitals
+ * Get patient current vitals (admin read endpoint).
+ * Backend returns {data: [{id, vital_type, value, unit, recorded_at, ...}]}.
  */
 export async function getPatientVitals(id: string): Promise<PatientVital[]> {
-  const response = await api.get(`/api/v1/patients/${id}/vitals`);
-  return response.data;
+  const response = await api.get(`/api/v1/admin/patients/${id}/vitals`);
+  const rows = response.data?.data ?? [];
+  return rows.map(
+    (v: {
+      id: string;
+      vital_type: string;
+      value: number;
+      unit: string;
+      recorded_at: string;
+      abnormal_flag?: boolean;
+      normalRange?: { min: number; max: number };
+    }) => ({
+      id: v.id,
+      name: v.vital_type,
+      value: String(v.value),
+      unit: v.unit,
+      status: v.abnormal_flag ? "critical" : "normal",
+      lastUpdated: v.recorded_at,
+    })
+  );
 }
 
 /**
- * Get patient vitals history
+ * Get patient vitals history (admin read endpoint).
+ * Backend returns [{date, value}] directly.
  */
 export async function getPatientVitalsHistory(
   id: string,
   vitalType: string
 ): Promise<PatientVitalHistory[]> {
   const response = await api.get(
-    `/api/v1/patients/${id}/vitals/history?type=${vitalType}`
+    `/api/v1/admin/patients/${id}/vitals/history?type=${vitalType}`
   );
   return response.data;
 }
 
 /**
- * Get patient appointments
+ * Get patient appointments (admin read endpoint).
+ * Backend returns PatientAppointment-shaped items directly.
  */
 export async function getPatientAppointments(
   id: string
 ): Promise<PatientAppointment[]> {
-  const response = await api.get(`/api/v1/patients/${id}/appointments`);
+  const response = await api.get(`/api/v1/admin/patients/${id}/appointments`);
   return response.data;
 }
 

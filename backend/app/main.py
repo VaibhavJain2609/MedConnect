@@ -15,7 +15,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.config import settings
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.routers import auth, doctors, patients, notifications
-from app.routers import medicines_emr, interactions
+from app.routers import medicines_emr, interactions, search
 from app.routers.admin import brands as admin_brands
 from app.routers.admin import doctors as admin_doctors
 from app.routers.admin import manufacturers as admin_manufacturers
@@ -26,6 +26,7 @@ from app.routers.admin import clinics as admin_clinics
 from app.routers.admin import audit as admin_audit
 from app.routers.admin import lab_results as admin_lab_results
 from app.routers.admin import broadcast as admin_broadcast
+from app.routers.admin import patients as admin_patients
 from app.routers import clinics
 from app.routers import onboarding
 from app.routers import clinic_invites
@@ -216,6 +217,7 @@ app.include_router(auth.router)
 app.include_router(patients.router)
 app.include_router(doctors.router)
 app.include_router(notifications.router)
+app.include_router(search.router)
 
 # Medicine endpoints (EMR schema)
 app.include_router(medicines_emr.router, prefix="/api/v1")
@@ -230,8 +232,10 @@ app.include_router(admin_stats.router)
 app.include_router(admin_users.router)
 app.include_router(admin_clinics.router)
 app.include_router(admin_audit.router)
+app.include_router(admin_audit.reports_router)
 app.include_router(admin_lab_results.router)
 app.include_router(admin_broadcast.router)
+app.include_router(admin_patients.router)
 app.include_router(clinics.router)
 app.include_router(onboarding.router)
 app.include_router(clinic_invites.router)
