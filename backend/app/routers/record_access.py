@@ -232,6 +232,7 @@ async def act_on_record_access_request(
         )
 
     now = datetime.now(timezone.utc)
+    old_status = consent.status
 
     if body.action == "approved":
         consent.status = "approved"
@@ -248,6 +249,24 @@ async def act_on_record_access_request(
         consent.status = "revoked"
 
     await db.flush()
+
+    # Audit every consent decision — these writes gate access to PHI.
+    from app.services.audit_service import log_change
+    await log_change(
+        db=db,
+        table_name="record_access_consents",
+        record_id=consent.id,
+        action="UPDATE",
+        old_values={"status": old_status},
+        new_values={
+            "status": consent.status,
+            "patient_id": str(consent.patient_id),
+            "doctor_id": str(consent.doctor_id),
+            "clinic_id": str(consent.clinic_id),
+            "consented_at": consent.consented_at.isoformat() if consent.consented_at else None,
+            "expires_at": consent.expires_at.isoformat() if consent.expires_at else None,
+        },
+    )
 
     # Notify doctor
     doctor = await db.get(Doctor, consent.doctor_id)
