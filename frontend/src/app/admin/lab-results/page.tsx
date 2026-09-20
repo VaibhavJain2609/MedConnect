@@ -185,7 +185,10 @@ export default function AdminLabResultsPage() {
             type="text"
             placeholder="Search by patient, test, or ID..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setPage(1);
+            }}
             className="w-full h-10 pl-10 pr-4 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
           />
         </div>
@@ -193,7 +196,10 @@ export default function AdminLabResultsPage() {
         {/* Status Filter */}
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+          onChange={(e) => {
+            setStatusFilter(e.target.value);
+            setPage(1);
+          }}
           className="h-10 px-4 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
         >
           <option value="all">All Status</option>
@@ -204,15 +210,39 @@ export default function AdminLabResultsPage() {
         </select>
       </div>
 
-      {/* Data Table */}
+      {/* Data Table — server-paginated; internal pager hidden */}
       {labResults && (
         <DataTable
           columns={columns}
           data={labResults}
           pageSize={limit}
-          searchColumn="patient_name"
-          searchPlaceholder="Search lab results..."
+          hidePagination
         />
+      )}
+
+      {/* Server-side pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-dreams-textSecondary">
+            Page {page} of {totalPages} · {data?.total ?? 0} lab results
+          </p>
+          <div className="flex gap-2">
+            <button
+              disabled={page === 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="px-4 py-2 text-sm rounded-lg border border-dreams-border bg-white disabled:opacity-40 hover:bg-dreams-lightBg transition-colors"
+            >
+              Previous
+            </button>
+            <button
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              className="px-4 py-2 text-sm rounded-lg border border-dreams-border bg-white disabled:opacity-40 hover:bg-dreams-lightBg transition-colors"
+            >
+              Next
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

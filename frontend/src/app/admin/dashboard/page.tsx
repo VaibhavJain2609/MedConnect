@@ -1,7 +1,8 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
+import Link from "next/link";
 import {
   getDashboardStats,
   getPatientTrend,
@@ -10,6 +11,8 @@ import {
   getPrescriptionTrend,
   getPatientStatistics,
   getAppointmentRequests,
+  approveAppointmentRequest,
+  rejectAppointmentRequest,
 } from "@/lib/api/stats";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
@@ -20,6 +23,7 @@ import {
   ClipboardList,
   Clock,
   CheckCircle,
+  XCircle,
   AlertCircle,
 } from "lucide-react";
 import {
@@ -37,6 +41,7 @@ import { Badge } from "@/components/ui/badge";
 
 export default function AdminDashboardPage() {
   const [dateRange, setDateRange] = useState("30d");
+  const queryClient = useQueryClient();
 
   const dateParams = useMemo(() => {
     const end_date = new Date().toISOString().split("T")[0];
@@ -90,6 +95,22 @@ export default function AdminDashboardPage() {
   const { data: recentActivity, error: recentActivityError } = useQuery({
     queryKey: ["appointment-requests"],
     queryFn: () => getAppointmentRequests(5),
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: (id: string) => approveAppointmentRequest(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["appointment-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-appointments"] });
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: (id: string) => rejectAppointmentRequest(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["appointment-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-appointments"] });
+    },
   });
 
   const { data: patientStatsData, error: patientStatsError } = useQuery({
@@ -231,9 +252,17 @@ export default function AdminDashboardPage() {
             <h2 className="text-xl font-bold text-dreams-textPrimary">
               Recent Activity
             </h2>
-            <Badge variant="pending">
-              {recentActivity?.length || 0} Recent
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="pending">
+                {recentActivity?.length || 0} Recent
+              </Badge>
+              <Link
+                href="/admin/appointments"
+                className="text-xs font-medium text-dreams-blue hover:underline"
+              >
+                View all
+              </Link>
+            </div>
           </div>
 
           {recentActivityError ? (
@@ -265,7 +294,35 @@ export default function AdminDashboardPage() {
                         {item.requested_date} at {item.requested_time}
                       </p>
                     </div>
-                    <CheckCircle className="h-5 w-5 text-status-completed flex-shrink-0" />
+                    {item.status === "pending" ? (
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <button
+                          onClick={() => approveMutation.mutate(item.id)}
+                          disabled={approveMutation.isPending || rejectMutation.isPending}
+                          title="Approve request"
+                          className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-md hover:bg-green-100 transition-colors disabled:opacity-50"
+                        >
+                          <CheckCircle className="h-3.5 w-3.5" />
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => rejectMutation.mutate(item.id)}
+                          disabled={approveMutation.isPending || rejectMutation.isPending}
+                          title="Reject request"
+                          className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 transition-colors disabled:opacity-50"
+                        >
+                          <XCircle className="h-3.5 w-3.5" />
+                          Reject
+                        </button>
+                      </div>
+                    ) : (
+                      <Badge
+                        variant={item.status === "approved" ? "completed" : "overdue"}
+                        className="flex-shrink-0"
+                      >
+                        {item.status}
+                      </Badge>
+                    )}
                   </div>
                 ))
               ) : (

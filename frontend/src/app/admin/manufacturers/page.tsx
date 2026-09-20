@@ -25,60 +25,33 @@ import {
 } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-
-// API functions
-async function listManufacturers(params: { search?: string }) {
-  const queryParams = new URLSearchParams();
-  if (params.search) queryParams.append("search", params.search);
-  queryParams.append("limit", "50");
-
-  const res = await fetch(`/api/v1/manufacturers?${queryParams}`);
-  if (!res.ok) throw new Error("Failed to fetch manufacturers");
-  return res.json();
-}
-
-async function createManufacturer(data: any) {
-  const res = await fetch("/api/v1/admin/manufacturers", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.detail || "Failed to create manufacturer");
-  }
-  return res.json();
-}
-
-async function updateManufacturer(id: string, data: any) {
-  const res = await fetch(`/api/v1/admin/manufacturers/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.detail || "Failed to update manufacturer");
-  }
-  return res.json();
-}
-
-async function deleteManufacturer(id: string) {
-  const res = await fetch(`/api/v1/admin/manufacturers/${id}`, {
-    method: "DELETE",
-  });
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.detail || "Failed to delete manufacturer");
-  }
-}
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast";
+import {
+  listManufacturers,
+  createManufacturer,
+  updateManufacturer,
+  deleteManufacturer,
+  getApiErrorMessage,
+} from "@/lib/api/medicines-emr";
 
 export default function AdminManufacturersPage() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingManufacturer, setEditingManufacturer] = useState<any>(null);
+  const [deletingManufacturer, setDeletingManufacturer] = useState<{ id: string; name: string } | null>(null);
   const [formData, setFormData] = useState({
     manufacturer_name: "",
     country: "",
@@ -89,7 +62,7 @@ export default function AdminManufacturersPage() {
   // Fetch manufacturers
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin-manufacturers-list", searchQuery],
-    queryFn: () => listManufacturers({ search: searchQuery || undefined }),
+    queryFn: () => listManufacturers(searchQuery || undefined, undefined, 50, 0),
     staleTime: 30000,
   });
 
@@ -100,6 +73,14 @@ export default function AdminManufacturersPage() {
       queryClient.invalidateQueries({ queryKey: ["admin-manufacturers-list"] });
       setShowCreateDialog(false);
       resetForm();
+      toast({ title: "Manufacturer created" });
+    },
+    onError: (err) => {
+      toast({
+        title: "Failed to create manufacturer",
+        description: getApiErrorMessage(err),
+        variant: "destructive",
+      });
     },
   });
 
@@ -111,6 +92,14 @@ export default function AdminManufacturersPage() {
       setShowEditDialog(false);
       setEditingManufacturer(null);
       resetForm();
+      toast({ title: "Manufacturer updated" });
+    },
+    onError: (err) => {
+      toast({
+        title: "Failed to update manufacturer",
+        description: getApiErrorMessage(err),
+        variant: "destructive",
+      });
     },
   });
 
@@ -119,6 +108,15 @@ export default function AdminManufacturersPage() {
     mutationFn: deleteManufacturer,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-manufacturers-list"] });
+      setDeletingManufacturer(null);
+      toast({ title: "Manufacturer deleted" });
+    },
+    onError: (err) => {
+      toast({
+        title: "Failed to delete manufacturer",
+        description: getApiErrorMessage(err),
+        variant: "destructive",
+      });
     },
   });
 
@@ -152,9 +150,7 @@ export default function AdminManufacturersPage() {
   };
 
   const handleDelete = (id: string, name: string) => {
-    if (confirm(`Delete manufacturer "${name}"? This will fail if the manufacturer has any brands.`)) {
-      deleteMutation.mutate(id);
-    }
+    setDeletingManufacturer({ id, name });
   };
 
   return (
@@ -361,6 +357,34 @@ export default function AdminManufacturersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog
+        open={!!deletingManufacturer}
+        onOpenChange={(open) => !open && setDeletingManufacturer(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Manufacturer</AlertDialogTitle>
+            <AlertDialogDescription>
+              Delete manufacturer &quot;{deletingManufacturer?.name}&quot;? This will
+              fail if the manufacturer has any brands.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() =>
+                deletingManufacturer && deleteMutation.mutate(deletingManufacturer.id)
+              }
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

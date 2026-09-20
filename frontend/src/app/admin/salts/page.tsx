@@ -26,62 +26,34 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-
-// API functions
-async function listSalts(params: { search?: string; page?: number }) {
-  const queryParams = new URLSearchParams();
-  if (params.search) queryParams.append("search", params.search);
-  if (params.page) queryParams.append("page", params.page.toString());
-  queryParams.append("limit", "50");
-
-  const res = await fetch(`/api/v1/salts?${queryParams}`);
-  if (!res.ok) throw new Error("Failed to fetch salts");
-  return res.json();
-}
-
-async function createSalt(data: any) {
-  const res = await fetch("/api/v1/admin/salts", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.detail || "Failed to create salt");
-  }
-  return res.json();
-}
-
-async function updateSalt(id: string, data: any) {
-  const res = await fetch(`/api/v1/admin/salts/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.detail || "Failed to update salt");
-  }
-  return res.json();
-}
-
-async function deleteSalt(id: string) {
-  const res = await fetch(`/api/v1/admin/salts/${id}`, {
-    method: "DELETE",
-  });
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.detail || "Failed to delete salt");
-  }
-}
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast";
+import {
+  listSalts,
+  createSalt,
+  updateSalt,
+  deleteSalt,
+  getApiErrorMessage,
+} from "@/lib/api/medicines-emr";
 
 export default function AdminSaltsPage() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingSalt, setEditingSalt] = useState<any>(null);
+  const [deletingSalt, setDeletingSalt] = useState<{ id: string; name: string } | null>(null);
   const [formData, setFormData] = useState({
     salt_name: "",
     description: "",
@@ -94,7 +66,7 @@ export default function AdminSaltsPage() {
   // Fetch salts
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin-salts-list", searchQuery, page],
-    queryFn: () => listSalts({ search: searchQuery || undefined, page }),
+    queryFn: () => listSalts({ search: searchQuery || undefined, page, limit: 50 }),
     staleTime: 30000,
   });
 
@@ -105,6 +77,14 @@ export default function AdminSaltsPage() {
       queryClient.invalidateQueries({ queryKey: ["admin-salts-list"] });
       setShowCreateDialog(false);
       resetForm();
+      toast({ title: "Salt created", description: "The salt was added successfully." });
+    },
+    onError: (err) => {
+      toast({
+        title: "Failed to create salt",
+        description: getApiErrorMessage(err),
+        variant: "destructive",
+      });
     },
   });
 
@@ -116,6 +96,14 @@ export default function AdminSaltsPage() {
       setShowEditDialog(false);
       setEditingSalt(null);
       resetForm();
+      toast({ title: "Salt updated" });
+    },
+    onError: (err) => {
+      toast({
+        title: "Failed to update salt",
+        description: getApiErrorMessage(err),
+        variant: "destructive",
+      });
     },
   });
 
@@ -124,6 +112,15 @@ export default function AdminSaltsPage() {
     mutationFn: deleteSalt,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-salts-list"] });
+      setDeletingSalt(null);
+      toast({ title: "Salt deleted" });
+    },
+    onError: (err) => {
+      toast({
+        title: "Failed to delete salt",
+        description: getApiErrorMessage(err),
+        variant: "destructive",
+      });
     },
   });
 
@@ -161,9 +158,7 @@ export default function AdminSaltsPage() {
   };
 
   const handleDelete = (id: string, name: string) => {
-    if (confirm(`Delete salt "${name}"? This will fail if the salt has any strengths.`)) {
-      deleteMutation.mutate(id);
-    }
+    setDeletingSalt({ id, name });
   };
 
   return (
@@ -407,6 +402,32 @@ export default function AdminSaltsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog
+        open={!!deletingSalt}
+        onOpenChange={(open) => !open && setDeletingSalt(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Salt</AlertDialogTitle>
+            <AlertDialogDescription>
+              Delete salt &quot;{deletingSalt?.name}&quot;? This will fail if the salt
+              has any strengths.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deletingSalt && deleteMutation.mutate(deletingSalt.id)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

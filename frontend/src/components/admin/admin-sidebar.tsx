@@ -63,7 +63,17 @@ const navSections: NavSection[] = [
       { href: "/admin/revenue", label: "Revenue", icon: TrendingUp },
       { href: "/admin/visits", label: "Visits", icon: Activity },
       { href: "/admin/lab-results", label: "Lab Results", icon: TestTube },
-      { href: "/admin/medicines", label: "Pharmacy", icon: Pill },
+      {
+        label: "Catalog",
+        icon: Pill,
+        children: [
+          { href: "/admin/medicines", label: "Medicines", icon: Pill },
+          { href: "/admin/salts", label: "Salts (APIs)", icon: Activity },
+          { href: "/admin/manufacturers", label: "Manufacturers", icon: Building2 },
+          { href: "/admin/medicines/import", label: "Bulk Import", icon: TrendingUp },
+          { href: "/admin/medicines/new", label: "Add Medicine", icon: Pill },
+        ],
+      },
     ],
   },
   {
@@ -97,10 +107,12 @@ function SidebarNavItem({
   onMobileClose?: () => void;
   depth?: number;
 }) {
-  const [isExpanded, setIsExpanded] = useState(false);
   const Icon = item.icon;
   const hasChildren = item.children && item.children.length > 0;
   const isActive = item.href === pathname;
+  const childActive =
+    hasChildren && item.children!.some((c) => c.href === pathname);
+  const [isExpanded, setIsExpanded] = useState(childActive);
 
   if (hasChildren) {
     return (
@@ -109,7 +121,9 @@ function SidebarNavItem({
           onClick={() => setIsExpanded(!isExpanded)}
           className={cn(
             "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-            "text-gray-300 hover:bg-white/10",
+            childActive
+              ? "bg-dreams-blue/20 text-white"
+              : "text-gray-300 hover:bg-white/10",
             !isOpen && "justify-center"
           )}
         >

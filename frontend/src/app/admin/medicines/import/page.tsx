@@ -3,11 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
-import { ArrowLeft, Upload, FileText, CheckCircle, XCircle, AlertCircle, Download } from "lucide-react";
-import { getAccessToken } from "@/lib/auth";
+import { ArrowLeft, Upload, FileText, CheckCircle, XCircle, AlertCircle, Download, Loader2 } from "lucide-react";
+import api from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/api/medicines-emr";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -110,12 +110,74 @@ export default function BulkImportPage() {
     reader.readAsText(selectedFile);
   };
 
-  // Simple CSV parser
-  const parseCSV = (text: string): CSVRow[] => {
-    const lines = text.trim().split("\n");
-    if (lines.length < 2) throw new Error("CSV must have header and at least one data row");
+  // RFC-4180-style CSV parser: handles quoted fields, escaped quotes (""),
+  // commas inside quotes, CRLF/LF line endings and quoted multi-line fields.
+  const parseCSVText = (text: string): string[][] => {
+    const rows: string[][] = [];
+    let row: string[] = [];
+    let field = "";
+    let inQuotes = false;
+    let i = 0;
 
-    const headers = lines[0].split(",").map((h) => h.trim());
+    while (i < text.length) {
+      const ch = text[i];
+
+      if (inQuotes) {
+        if (ch === '"') {
+          if (text[i + 1] === '"') {
+            field += '"';
+            i += 2;
+            continue;
+          }
+          inQuotes = false;
+          i++;
+          continue;
+        }
+        field += ch;
+        i++;
+        continue;
+      }
+
+      if (ch === '"') {
+        inQuotes = true;
+        i++;
+        continue;
+      }
+      if (ch === ",") {
+        row.push(field);
+        field = "";
+        i++;
+        continue;
+      }
+      if (ch === "\n" || ch === "\r") {
+        if (ch === "\r" && text[i + 1] === "\n") i++; // consume \r\n
+        row.push(field);
+        field = "";
+        // skip fully-empty rows (e.g. trailing newline)
+        if (row.length > 1 || row[0].trim() !== "") rows.push(row);
+        row = [];
+        i++;
+        continue;
+      }
+      field += ch;
+      i++;
+    }
+    // Last field/row (file may not end with a newline)
+    if (field !== "" || row.length > 0) {
+      row.push(field);
+      if (row.length > 1 || row[0].trim() !== "") rows.push(row);
+    }
+
+    return rows;
+  };
+
+  // Parse CSV file contents into typed rows
+  const parseCSV = (text: string): CSVRow[] => {
+    const records = parseCSVText(text);
+    if (records.length < 2)
+      throw new Error("CSV must have header and at least one data row");
+
+    const headers = records[0].map((h) => h.trim());
     const requiredHeaders = ["brand_name", "manufacturer_name", "salt_compositions"];
 
     // Validate headers
@@ -126,8 +188,8 @@ export default function BulkImportPage() {
     }
 
     const rows: CSVRow[] = [];
-    for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(",").map((v) => v.trim());
+    for (let i = 1; i < records.length; i++) {
+      const values = records[i].map((v) => v.trim());
       const row: any = {};
 
       headers.forEach((header, index) => {
@@ -201,24 +263,9 @@ export default function BulkImportPage() {
   // Import mutation
   const importMutation = useMutation({
     mutationFn: async (data: CSVRow[]) => {
-      const token = getAccessToken() || "";
-      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
-      const response = await fetch(`${API_BASE_URL}/api/v1/admin/brands/bulk-import`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || "Failed to import data");
-      }
-
-      return response.json();
+      // axios api instance attaches the Bearer token automatically
+      const response = await api.post("/api/v1/admin/brands/bulk-import", data);
+      return response.data;
     },
     onSuccess: (data) => {
       setImportStats({
@@ -234,10 +281,10 @@ export default function BulkImportPage() {
         description: `${data.successful} brands imported, ${data.failed} failed, ${data.skipped} skipped`,
       });
     },
-    onError: (error: Error) => {
+    onError: (error: unknown) => {
       toast({
         title: "Import Failed",
-        description: error.message,
+        description: getApiErrorMessage(error, "Failed to import data"),
         variant: "destructive",
       });
     },
@@ -417,15 +464,22 @@ export default function BulkImportPage() {
         </Card>
       )}
 
-      {/* Import Progress */}
+      {/* Import Progress — indeterminate; the bulk endpoint is a single request */}
       {importMutation.isPending && (
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>Importing...</CardTitle>
-            <CardDescription>Processing {parsedData.length} rows</CardDescription>
+            <CardDescription>
+              Sending {parsedData.length} rows to the server — this may take a moment
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <Progress value={50} className="w-full" />
+            <div className="flex items-center gap-3">
+              <Loader2 className="h-5 w-5 animate-spin text-primary shrink-0" />
+              <div className="h-2 flex-1 overflow-hidden rounded-full bg-secondary">
+                <div className="h-full w-full bg-primary/60 animate-pulse" />
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}

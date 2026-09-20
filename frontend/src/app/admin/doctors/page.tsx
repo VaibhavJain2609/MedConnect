@@ -108,7 +108,10 @@ export default function AdminDoctorsPage() {
             type="text"
             placeholder="Search by name, ID, or specialty..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setPage(1);
+            }}
             className="w-full h-10 pl-10 pr-4 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
           />
         </div>
@@ -116,7 +119,10 @@ export default function AdminDoctorsPage() {
         {/* Specialty Filter */}
         <select
           value={specialtyFilter}
-          onChange={(e) => setSpecialtyFilter(e.target.value)}
+          onChange={(e) => {
+            setSpecialtyFilter(e.target.value);
+            setPage(1);
+          }}
           className="h-10 w-full sm:w-auto px-4 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
         >
           <option value="all">All Specialties</option>
@@ -215,6 +221,31 @@ export default function AdminDoctorsPage() {
           </div>
         )}
       </div>
+
+      {/* Server-side pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-dreams-textSecondary">
+            Page {page} of {totalPages} · {data?.total ?? 0} doctors
+          </p>
+          <div className="flex gap-2">
+            <button
+              disabled={page === 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="px-4 py-2 text-sm rounded-lg border border-dreams-border bg-white disabled:opacity-40 hover:bg-dreams-lightBg transition-colors"
+            >
+              Previous
+            </button>
+            <button
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              className="px-4 py-2 text-sm rounded-lg border border-dreams-border bg-white disabled:opacity-40 hover:bg-dreams-lightBg transition-colors"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -264,7 +264,7 @@ export async function getBrandAlternatives(brandId: string): Promise<Brand[]> {
  */
 export async function listManufacturers(
   search?: string,
-  isActive: boolean = true,
+  isActive?: boolean,
   limit: number = 50,
   offset: number = 0
 ): Promise<Manufacturer[]> {
@@ -385,6 +385,80 @@ export async function updateBrand(
  */
 export async function deleteBrand(brandId: string, _token?: string): Promise<void> {
   await api.delete(`/api/v1/admin/brands/${brandId}`);
+}
+
+// ============================================================================
+// ADMIN SALT & MANUFACTURER MUTATIONS
+// Shared by /admin/salts, /admin/manufacturers and /admin/medicines pages.
+// All go through the axios `api` instance so the Bearer token is attached.
+// ============================================================================
+
+export interface SaltMutationInput {
+  salt_name: string;
+  description?: string;
+  chemical_formula?: string;
+  habit_forming?: boolean;
+  prescription_required?: boolean;
+  pregnancy_category?: string;
+}
+
+/** Create a salt / API (Admin only) */
+export async function createSalt(data: SaltMutationInput): Promise<Salt> {
+  return (await api.post('/api/v1/admin/salts', data)).data;
+}
+
+/** Update a salt / API (Admin only) */
+export async function updateSalt(
+  saltId: string,
+  data: Partial<SaltMutationInput>
+): Promise<Salt> {
+  return (await api.put(`/api/v1/admin/salts/${saltId}`, data)).data;
+}
+
+/** Delete a salt / API (Admin only) */
+export async function deleteSalt(saltId: string): Promise<void> {
+  await api.delete(`/api/v1/admin/salts/${saltId}`);
+}
+
+export interface ManufacturerMutationInput {
+  manufacturer_name: string;
+  country?: string;
+  license_number?: string;
+  is_active?: boolean;
+}
+
+/** Create a manufacturer (Admin only) */
+export async function createManufacturer(
+  data: ManufacturerMutationInput
+): Promise<Manufacturer> {
+  return (await api.post('/api/v1/admin/manufacturers', data)).data;
+}
+
+/** Update a manufacturer (Admin only) */
+export async function updateManufacturer(
+  manufacturerId: string,
+  data: Partial<ManufacturerMutationInput>
+): Promise<Manufacturer> {
+  return (await api.put(`/api/v1/admin/manufacturers/${manufacturerId}`, data)).data;
+}
+
+/** Delete a manufacturer (Admin only) */
+export async function deleteManufacturer(manufacturerId: string): Promise<void> {
+  await api.delete(`/api/v1/admin/manufacturers/${manufacturerId}`);
+}
+
+/**
+ * Extract a human-readable message from an axios/API error.
+ * Backend errors use `{ detail: { error: { message } } }` or `{ detail: string }`.
+ */
+export function getApiErrorMessage(err: unknown, fallback = "Request failed"): string {
+  const anyErr = err as any;
+  const detail = anyErr?.response?.data?.detail;
+  if (typeof detail === "string") return detail;
+  if (detail?.error?.message) return detail.error.message;
+  if (detail?.message) return detail.message;
+  if (err instanceof Error && err.message) return err.message;
+  return fallback;
 }
 
 // ============================================================================

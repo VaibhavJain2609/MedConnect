@@ -269,25 +269,27 @@ export default function DoctorDetailPage() {
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setModal("reject")}
-            disabled={verifyMutation.isPending}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
-          >
-            <XCircle className="h-4 w-4" />
-            Reject
-          </button>
-          <button
-            onClick={() => setModal("approve")}
-            disabled={verifyMutation.isPending}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50"
-          >
-            <CheckCircle className="h-4 w-4" />
-            Approve
-          </button>
-        </div>
+        {/* Action Buttons — only for doctors not yet verified */}
+        {!doctor.verified && (
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setModal("reject")}
+              disabled={verifyMutation.isPending}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
+            >
+              <XCircle className="h-4 w-4" />
+              Reject
+            </button>
+            <button
+              onClick={() => setModal("approve")}
+              disabled={verifyMutation.isPending}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50"
+            >
+              <CheckCircle className="h-4 w-4" />
+              Approve
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -466,7 +468,8 @@ export default function DoctorDetailPage() {
               ))}
             </div>
             <p className="text-xs text-gray-400 mt-3">
-              Checklist is local — use as a review aid before approving.
+              Checklist state is session-local (not saved to the server) — use as a
+              review aid before approving.
             </p>
           </div>
 

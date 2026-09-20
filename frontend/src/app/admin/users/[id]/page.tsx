@@ -30,6 +30,17 @@ import { useAuthStore } from "@/stores/auth-store";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const roleBadgeVariant: Record<string, string> = {
   admin: "overdue",
@@ -162,21 +173,49 @@ export default function AdminUserDetailPage() {
         </div>
 
         {!isSelf && (
-          <button
-            onClick={() => toggleActive()}
-            disabled={isToggling}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
-              user.is_active
-                ? "bg-red-50 text-red-600 hover:bg-red-100 border border-red-200"
-                : "bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
-            }`}
-          >
-            {isToggling
-              ? "Updating..."
-              : user.is_active
-              ? "Deactivate User"
-              : "Activate User"}
-          </button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <button
+                disabled={isToggling}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
+                  user.is_active
+                    ? "bg-red-50 text-red-600 hover:bg-red-100 border border-red-200"
+                    : "bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
+                }`}
+              >
+                {isToggling
+                  ? "Updating..."
+                  : user.is_active
+                  ? "Deactivate User"
+                  : "Activate User"}
+              </button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  {user.is_active ? "Deactivate" : "Activate"} User
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {user.is_active
+                    ? `Deactivate ${user.full_name}? They will no longer be able to sign in or use the platform.`
+                    : `Reactivate ${user.full_name}? They will regain access to the platform.`}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => toggleActive()}
+                  className={
+                    user.is_active
+                      ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      : undefined
+                  }
+                >
+                  {user.is_active ? "Deactivate" : "Activate"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         )}
       </div>
 

@@ -22,6 +22,9 @@ export interface DataTableProps<TData, TValue> {
   searchColumn?: string;
   searchPlaceholder?: string;
   className?: string;
+  /** Hide the built-in client-side pager — use when the parent renders
+   *  server-side pagination controls instead. */
+  hidePagination?: boolean;
 }
 
 /**
@@ -62,6 +65,7 @@ export function DataTable<TData, TValue>({
   searchColumn,
   searchPlaceholder = "Search...",
   className,
+  hidePagination = false,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
@@ -163,6 +167,7 @@ export function DataTable<TData, TValue>({
       </div>
 
       {/* Pagination */}
+      {!hidePagination && (
       <div className="flex items-center justify-between px-2">
         <div className="text-sm text-dreams-textSecondary">
           Showing{" "}
@@ -209,6 +214,7 @@ export function DataTable<TData, TValue>({
           </button>
         </div>
       </div>
+      )}
     </div>
   );
 }
