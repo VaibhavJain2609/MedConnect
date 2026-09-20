@@ -25,13 +25,14 @@ permissions:
 jobs:
   rollback:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # workflow_dispatch's `environment:` choice input and the job's own
     # `environment:` gate are two different things — this line is what
     # actually applies the target GitHub Environment's required reviewers
     # (staging/production) to this manual run.
     environment: ${{ inputs.environment == 'production' && 'production' || 'staging' }}
     steps:
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v4 # pin: resolve tag to full commit SHA
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
@@ -54,15 +55,52 @@ jobs:
           fi
 
       - name: Roll back
+        env:
+          # inputs.* interpolated directly into `run:` is a script-injection
+          # vector — pass via env and validate. Revision must be a bare
+          # positive integer (kubectl rollout history revision numbers).
+          REVISION: ${{ inputs.revision }}
+          TARGETS: ${{ steps.resolve.outputs.targets }}
+          NAMESPACE: ${{ steps.resolve.outputs.namespace }}
         run: |
-          for d in ${{ steps.resolve.outputs.targets }}; do
-            if [ -n "${{ inputs.revision }}" ]; then
-              kubectl rollout undo "deployment/$d" -n ${{ steps.resolve.outputs.namespace }} --to-revision="${{ inputs.revision }}"
+          if [ -n "$REVISION" ] && ! [[ "$REVISION" =~ ^[0-9]+$ ]]; then
+            echo "::error::Invalid revision '$REVISION' — must be a positive integer from \`kubectl rollout history\`, or blank."
+            exit 1
+          fi
+          for d in $TARGETS; do
+            if [ -n "$REVISION" ]; then
+              kubectl rollout undo "deployment/$d" -n "$NAMESPACE" --to-revision="$REVISION"
             else
-              kubectl rollout undo "deployment/$d" -n ${{ steps.resolve.outputs.namespace }}
+              kubectl rollout undo "deployment/$d" -n "$NAMESPACE"
             fi
-            kubectl rollout status "deployment/$d" -n ${{ steps.resolve.outputs.namespace }} --timeout=300s
+            kubectl rollout status "deployment/$d" -n "$NAMESPACE" --timeout=300s
           done
+
+      # Same Job-based internal smoke check as deploy.yml — a rollback that
+      # leaves the pods up but the app dead is still a failed operation.
+      # Kept minimal: no backoffLimit tuning (default retries are fine for a
+      # health probe), just a hard 120s cap on the wait.
+      - name: Smoke test — internal (backend + frontend health routes)
+        run: |
+          NS="${{ steps.resolve.outputs.namespace }}"
+          JOB="rollback-smoke-${{ github.run_id }}-${{ github.run_attempt }}"
+          kubectl create job "$JOB" -n "$NS" --image=curlimages/curl:8.10.1 \
+            -- sh -c "curl -fsS http://backend/health && curl -fsS http://frontend/api/health"
+          complete=""
+          failed=""
+          for i in $(seq 1 60); do
+            complete=$(kubectl get job "$JOB" -n "$NS" -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null)
+            failed=$(kubectl get job "$JOB" -n "$NS" -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null)
+            [ "$complete" = "True" ] && break
+            [ "$failed" = "True" ] && break
+            sleep 2
+          done
+          kubectl logs -n "$NS" -l job-name="$JOB" --all-containers --tail=50 --prefix=true || true
+          kubectl delete job "$JOB" -n "$NS" --ignore-not-found
+          if [ "$complete" != "True" ]; then
+            echo "::error::Post-rollback smoke test failed — the rolled-back revision is not healthy. Manual intervention required."
+            exit 1
+          fi
 
       - name: Summary
         run: |

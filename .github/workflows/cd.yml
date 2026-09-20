@@ -1,11 +1,21 @@
 name: CD
 
 on:
-  push:
+  # Gate deploys on a green CI run of the exact same commit — previously this
+  # fired on every push to master regardless of CI state, so a commit whose
+  # tests/migrations/lint were still red could be built and deployed.
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [master]
+  # Manual escape hatch: rebuilds and deploys the commit this is dispatched
+  # against. Use when CI itself is broken but a hotfix must ship.
+  workflow_dispatch:
 
 concurrency:
-  group: cd-${{ github.ref }}
+  # For workflow_run, serialize on the CI-validated commit; for dispatch,
+  # on the checked-out commit.
+  group: cd-${{ github.event.workflow_run.head_sha || github.sha }}
   cancel-in-progress: false
 
 permissions:
@@ -14,64 +24,94 @@ permissions:
 
 jobs:
   build-and-push:
+    # workflow_run fires on ANY conclusion — only proceed on success.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     outputs:
       backend_image: ${{ steps.vars.outputs.backend_image }}
       frontend_image: ${{ steps.vars.outputs.frontend_image }}
       keycloak_image: ${{ steps.vars.outputs.keycloak_image }}
     steps:
-      - uses: actions/checkout@v4
+      # Check out the exact commit CI validated (workflow_run's head_sha);
+      # github.sha on a workflow_run event is the default-branch head, which
+      # can move past the commit that was actually tested.
+      - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v4 # pin: resolve tag to full commit SHA
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
       - id: ecr-login
-        uses: aws-actions/amazon-ecr-login@v2
+        uses: aws-actions/amazon-ecr-login@v2 # pin: resolve tag to full commit SHA
 
       - name: Set image tags
         id: vars
         # ECR repos are image_tag_mutability = IMMUTABLE (infra/terraform/modules/ecr) —
-        # every tag must be unique, so this uses the commit SHA, never `latest`.
+        # every tag must be unique, so this uses the CI-validated commit SHA,
+        # never `latest`.
         run: |
-          echo "backend_image=${{ steps.ecr-login.outputs.registry }}/medconnect-backend:${{ github.sha }}" >> "$GITHUB_OUTPUT"
-          echo "frontend_image=${{ steps.ecr-login.outputs.registry }}/medconnect-frontend:${{ github.sha }}" >> "$GITHUB_OUTPUT"
-          echo "keycloak_image=${{ steps.ecr-login.outputs.registry }}/medconnect-keycloak:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          deploy_sha="${{ github.event.workflow_run.head_sha || github.sha }}"
+          echo "backend_image=${{ steps.ecr-login.outputs.registry }}/medconnect-backend:${deploy_sha}" >> "$GITHUB_OUTPUT"
+          echo "frontend_image=${{ steps.ecr-login.outputs.registry }}/medconnect-frontend:${deploy_sha}" >> "$GITHUB_OUTPUT"
+          echo "keycloak_image=${{ steps.ecr-login.outputs.registry }}/medconnect-keycloak:${deploy_sha}" >> "$GITHUB_OUTPUT"
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v3 # pin: resolve tag to full commit SHA
 
-      - name: Build & push backend
-        uses: docker/build-push-action@v6
+      # ---- Stage 1: build all images into the local daemon (NO push) ----
+      # Trivy scans the local image below; nothing reaches the immutable ECR
+      # repos until every scan passes. `load: true` materializes the image
+      # into `docker images` so `trivy image <ref>` resolves it locally
+      # without a registry round-trip.
+
+      - name: Build backend (local only — scan gate before push)
+        uses: docker/build-push-action@v6 # pin: resolve tag to full commit SHA
         with:
           context: backend
-          push: true
+          load: true
           tags: ${{ steps.vars.outputs.backend_image }}
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
 
-      - name: Build & push frontend
-        uses: docker/build-push-action@v6
+      - name: Build frontend (local only — scan gate before push)
+        uses: docker/build-push-action@v6 # pin: resolve tag to full commit SHA
         with:
           context: frontend
-          push: true
+          load: true
           tags: ${{ steps.vars.outputs.frontend_image }}
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
+          # Next.js inlines NEXT_PUBLIC_* at `npm run build` time — without
+          # these the production bundle bakes in localhost/undefined URLs.
+          # All four are public-by-design (they ship in the client JS
+          # bundle), so they live in repo/environment *variables*, not
+          # secrets — nothing here is confidential.
+          # NOTE: frontend/Dockerfile must declare matching `ARG`/`ENV`
+          # lines for these to reach the build; see the comment in ci.yml's
+          # docker-build job.
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
+            NEXT_PUBLIC_KEYCLOAK_URL=${{ vars.NEXT_PUBLIC_KEYCLOAK_URL }}
+            NEXT_PUBLIC_KEYCLOAK_REALM=${{ vars.NEXT_PUBLIC_KEYCLOAK_REALM }}
+            NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=${{ vars.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID }}
 
-      - name: Build & push keycloak
-        uses: docker/build-push-action@v6
+      - name: Build keycloak (local only — scan gate before push)
+        uses: docker/build-push-action@v6 # pin: resolve tag to full commit SHA
         with:
           context: keycloak
-          push: true
+          load: true
           tags: ${{ steps.vars.outputs.keycloak_image }}
           cache-from: type=gha,scope=keycloak
           cache-to: type=gha,mode=max,scope=keycloak
 
+      # ---- Stage 2: scan every local image; any HIGH/CRITICAL aborts here ----
       # .trivyignore documents each accepted-risk CVE with a reason and a
       # recheck date — see that file for the current list.
       - name: Scan backend image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.28.0 # pin: resolve tag to full commit SHA
         with:
           image-ref: ${{ steps.vars.outputs.backend_image }}
           severity: CRITICAL,HIGH
@@ -79,7 +119,7 @@ jobs:
           trivyignores: .trivyignore
 
       - name: Scan frontend image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.28.0 # pin: resolve tag to full commit SHA
         with:
           image-ref: ${{ steps.vars.outputs.frontend_image }}
           severity: CRITICAL,HIGH
@@ -87,14 +127,54 @@ jobs:
           trivyignores: .trivyignore
 
       - name: Scan keycloak image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.28.0 # pin: resolve tag to full commit SHA
         with:
           image-ref: ${{ steps.vars.outputs.keycloak_image }}
           severity: CRITICAL,HIGH
           exit-code: "1"
           trivyignores: .trivyignore
 
-      - uses: sigstore/cosign-installer@v3
+      # ---- Stage 3: push only after every scan passed ----
+      # These rebuilds are fully cache-hit (same context, same args) so they
+      # re-emit the identical layers — but through build-push-action's push
+      # path, which is what attaches the SBOM + SLSA provenance attestations
+      # (a plain `docker push` of the loaded image would not carry them).
+      - name: Push backend (scan passed)
+        uses: docker/build-push-action@v6 # pin: resolve tag to full commit SHA
+        with:
+          context: backend
+          push: true
+          tags: ${{ steps.vars.outputs.backend_image }}
+          cache-from: type=gha,scope=backend
+          sbom: true
+          provenance: mode=max
+
+      - name: Push frontend (scan passed)
+        uses: docker/build-push-action@v6 # pin: resolve tag to full commit SHA
+        with:
+          context: frontend
+          push: true
+          tags: ${{ steps.vars.outputs.frontend_image }}
+          cache-from: type=gha,scope=frontend
+          sbom: true
+          provenance: mode=max
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
+            NEXT_PUBLIC_KEYCLOAK_URL=${{ vars.NEXT_PUBLIC_KEYCLOAK_URL }}
+            NEXT_PUBLIC_KEYCLOAK_REALM=${{ vars.NEXT_PUBLIC_KEYCLOAK_REALM }}
+            NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=${{ vars.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID }}
+
+      - name: Push keycloak (scan passed)
+        uses: docker/build-push-action@v6 # pin: resolve tag to full commit SHA
+        with:
+          context: keycloak
+          push: true
+          tags: ${{ steps.vars.outputs.keycloak_image }}
+          cache-from: type=gha,scope=keycloak
+          sbom: true
+          provenance: mode=max
+
+      - uses: sigstore/cosign-installer@v3 # pin: resolve tag to full commit SHA
 
       # Keyless signing — the signature is bound to this workflow's OIDC
       # identity (repo + workflow path + ref) via Sigstore Fulcio/Rekor, no
@@ -140,11 +220,19 @@ jobs:
     needs: [deploy-prod]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # DEPLOY_WEBHOOK_URL must be a repo/environment SECRET, not a variable:
+    # webhook URLs are bearer credentials — anyone with the URL can post to
+    # the channel. Moved from vars.* — repo admins must create the
+    # `DEPLOY_WEBHOOK_URL` secret for this step to fire. The secrets context
+    # can't be referenced in an `if:` directly, hence the job-level env.
+    env:
+      WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
     steps:
       - name: Notify deploy result
-        if: vars.DEPLOY_WEBHOOK_URL != ''
+        if: env.WEBHOOK_URL != ''
         run: |
           status="${{ needs.deploy-prod.result }}"
-          curl -fsS -X POST "${{ vars.DEPLOY_WEBHOOK_URL }}" \
+          curl -fsS -X POST "$WEBHOOK_URL" \
             -H 'Content-Type: application/json' \
-            -d "{\"text\": \"MedConnect prod deploy for ${{ github.sha }}: ${status}\"}"
+            -d "{\"text\": \"MedConnect prod deploy for ${{ github.event.workflow_run.head_sha || github.sha }}: ${status}\"}"
