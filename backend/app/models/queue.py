@@ -1,7 +1,7 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import Computed, Date, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -18,6 +18,14 @@ class QueueEntry(Base):
     doctor_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("doctors.id"), nullable=True)
     appointment_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("appointments.id"), nullable=True)
     queue_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Generated column: UTC calendar date of created_at — the same "day"
+    # boundary routers/queue.py uses when assigning queue_number. Backed by
+    # migration 024_db_constraint_races (GENERATED ALWAYS AS ... STORED).
+    queue_date: Mapped[date] = mapped_column(
+        Date,
+        Computed("(created_at AT TIME ZONE 'UTC')::date"),
+        nullable=False,
+    )
     status: Mapped[str] = mapped_column(
         String(20), default="waiting", nullable=False
     )  # waiting | in_consultation | completed | cancelled
@@ -33,6 +41,16 @@ class QueueEntry(Base):
     doctor: Mapped["Doctor"] = relationship(foreign_keys=[doctor_id])
 
     __table_args__ = (
+        # One queue_number per clinic per day among live rows — prevents
+        # duplicate numbers from concurrent check-ins (max()+1 race).
+        Index(
+            "uq_queue_entries_daily_number",
+            "clinic_id",
+            "queue_date",
+            "queue_number",
+            unique=True,
+            postgresql_where=(deleted_at.is_(None)),
+        ),
         Index(
             "idx_queue_entries_clinic_created_at",
             "clinic_id",
