@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import threading
 
@@ -55,3 +56,31 @@ def decode_keycloak_token(token: str) -> dict | None:
     except (PyJWKClientError, PyJWKClientConnectionError, requests.exceptions.RequestException) as e:
         logger.error("JWKS/network error validating token: %s: %s", type(e).__name__, e)
         return None
+
+
+async def decode_keycloak_token_async(token: str) -> dict | None:
+    """Async wrapper around :func:`decode_keycloak_token`.
+
+    The JWKS fetch and RSA verification are blocking, so they run in a
+    worker thread to avoid stalling the event loop. Prefer this in async
+    request handlers; the sync variant is kept for callers that cannot await.
+    """
+    return await asyncio.to_thread(decode_keycloak_token, token)
+
+
+def prewarm_jwks() -> None:
+    """Fetch the Keycloak JWKS at startup so the first authenticated request
+    doesn't pay the network round-trip.
+
+    Best-effort: failures are logged, not raised — Keycloak may still be
+    booting, and the client retries lazily on first use anyway.
+    """
+    try:
+        get_jwks_client().fetch_data()
+        logger.info("JWKS pre-warmed successfully")
+    except Exception as e:
+        logger.warning(
+            "JWKS pre-warm failed (%s: %s); will retry on first request",
+            type(e).__name__,
+            e,
+        )

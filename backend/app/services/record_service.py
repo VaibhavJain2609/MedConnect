@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -231,11 +231,22 @@ async def get_doctor_patients(
 
     combined = union(records_stmt, clinic_stmt).subquery()
 
-    stmt = (
-        select(combined.c.id, combined.c.full_name, combined.c.email, combined.c.phone)
-        .order_by(combined.c.full_name)
-        .limit(limit + 1)
-    )
+    stmt = select(combined.c.id, combined.c.full_name, combined.c.email, combined.c.phone)
+
+    # Keyset pagination. The emitted cursor (next_cursor below) is the last
+    # row's patient id; resolve it to its full_name, then take rows strictly
+    # after (full_name, id) in the sort order.
+    if cursor:
+        cursor_name = await db.scalar(
+            select(combined.c.full_name).where(combined.c.id == cursor)
+        )
+        if cursor_name is not None:
+            stmt = stmt.where(
+                tuple_(combined.c.full_name, combined.c.id)
+                > tuple_(cursor_name, cursor)
+            )
+
+    stmt = stmt.order_by(combined.c.full_name, combined.c.id).limit(limit + 1)
 
     result = await db.execute(stmt)
     rows = result.all()
