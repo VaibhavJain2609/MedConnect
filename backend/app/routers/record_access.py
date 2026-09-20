@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_active_clinic, get_current_doctor, require_active_clinic, require_patient
+from app.dependencies import get_active_clinic, get_verified_doctor, require_active_clinic, require_patient
 from app.models.clinic import Clinic
 from app.models.doctor import Doctor
 from app.models.patient_link import PatientClinicLink
@@ -68,7 +68,7 @@ def _serialize_consent(consent: RecordAccessConsent, **extras) -> dict:
 async def request_record_access(
     patient_id: uuid.UUID,
     body: RecordAccessRequest,
-    doctor_info: tuple[User, Doctor] = Depends(get_current_doctor),
+    doctor_info: tuple[User, Doctor] = Depends(get_verified_doctor),
     clinic_ctx: tuple = Depends(require_active_clinic),
     db: AsyncSession = Depends(get_db),
 ):
@@ -141,7 +141,7 @@ async def request_record_access(
 @router.get("/doctors/patients/{patient_id}/record-access")
 async def get_record_access_consent(
     patient_id: uuid.UUID,
-    doctor_info: tuple[User, Doctor] = Depends(get_current_doctor),
+    doctor_info: tuple[User, Doctor] = Depends(get_verified_doctor),
     db: AsyncSession = Depends(get_db),
 ):
     """Doctor checks their current consent status for a patient."""

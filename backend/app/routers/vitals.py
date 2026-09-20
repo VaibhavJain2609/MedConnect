@@ -15,7 +15,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_active_clinic, get_current_doctor, require_patient
+from app.dependencies import get_active_clinic, get_verified_doctor, require_patient
 from app.models.doctor import Doctor
 from app.models.user import User
 from app.models.vital import VITAL_TYPES, PatientVital
@@ -307,7 +307,7 @@ async def get_patient_vitals(
     type: Optional[str] = Query(None, description="Filter by vital_type"),
     days: int = Query(90, ge=1, le=365),
     limit: int = Query(200, ge=1, le=500),
-    doctor_info: tuple[User, Doctor] = Depends(get_current_doctor),
+    doctor_info: tuple[User, Doctor] = Depends(get_verified_doctor),
     db: AsyncSession = Depends(get_db),
     clinic_context: Optional[tuple] = Depends(get_active_clinic),
 ):
