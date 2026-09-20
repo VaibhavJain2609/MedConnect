@@ -48,9 +48,10 @@ async def _require_clinic_admin(db: AsyncSession, user: User, clinic_id: uuid.UU
 class InviteCreateRequest(BaseModel):
     invite_type: str = "code"  # code | email
     email: Optional[str] = None
-    # Whitelisted: clinic invites only ever grant the doctor role. Accepting
-    # arbitrary strings would let an invite mint e.g. "owner"/"admin" members.
-    role: Literal["doctor"] = "doctor"
+    # Whitelisted: clinic invites only ever grant non-privileged staff roles
+    # (doctor | receptionist). Accepting arbitrary strings would let an invite
+    # mint e.g. "owner"/"admin" members.
+    role: Literal["doctor", "receptionist"] = "doctor"
     expires_days: int = 7
     max_uses: Optional[int] = None
 
@@ -166,15 +167,6 @@ async def redeem_invite(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    # Invites grant clinic membership in the doctor role — only doctors may
-    # redeem them. Role elevation itself goes through the gated
-    # POST /auth/set-role path (admin or valid invite code).
-    if user.role != "doctor":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"error": {"code": "FORBIDDEN", "message": "Doctor access required to redeem a clinic invite"}},
-        )
-
     result = await db.execute(
         select(ClinicInvite).where(
             ClinicInvite.code == data.code.upper(),
@@ -182,6 +174,18 @@ async def redeem_invite(
         )
     )
     invite = result.scalar_one_or_none()
+
+    # Doctor invites may only be redeemed by users with the doctor role (role
+    # elevation itself goes through the gated POST /auth/set-role path).
+    # Receptionist invites grant a non-clinical staff membership, so any
+    # authenticated user may redeem them — the membership role, not the
+    # account role, scopes their access. Non-doctors get a uniform 403 for
+    # missing/doctor invites so they cannot probe code validity.
+    if user.role != "doctor" and (invite is None or invite.role != "receptionist"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": {"code": "FORBIDDEN", "message": "Doctor access required to redeem a clinic invite"}},
+        )
 
     if not invite:
         raise HTTPException(
@@ -348,6 +352,9 @@ async def list_join_requests(
 
 class ReviewRequestBody(BaseModel):
     action: str  # approved | rejected
+    # Whitelisted staff roles only — approving a join request must never mint
+    # owner/admin memberships.
+    role: Literal["doctor", "receptionist"] = "doctor"
 
 
 @router.put("/clinics/{clinic_id}/join-requests/{request_id}")
@@ -392,7 +399,7 @@ async def review_join_request(
             id=uuid.uuid4(),
             clinic_id=cid,
             user_id=req.user_id,
-            role="doctor",
+            role=data.role,
             is_active=True,
             joined_at=datetime.now(timezone.utc),
         )
@@ -400,7 +407,7 @@ async def review_join_request(
 
     await db.flush()
 
-    # Notify the doctor who submitted the join request
+    # Notify the user who submitted the join request
     clinic_result = await db.execute(
         select(Clinic).where(Clinic.id == cid, Clinic.deleted_at.is_(None))
     )

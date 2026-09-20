@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -21,6 +22,9 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/auth";
+import { useAuthStore } from "@/stores/auth-store";
+import { useClinicStore } from "@/stores/clinic-store";
+import { getClinicMembers } from "@/lib/api/clinics";
 
 interface DoctorSidebarProps {
   isOpen: boolean;
@@ -33,6 +37,9 @@ interface NavItem {
   href: string;
   label: string;
   icon: any;
+  // Clinical-only items are hidden from receptionist memberships — they must
+  // not reach records, prescriptions, templates or patient-linking screens.
+  clinicalOnly?: boolean;
 }
 
 interface NavSection {
@@ -53,18 +60,18 @@ const navSections: NavSection[] = [
     label: "CLINICAL",
     items: [
       { href: "/doctor/patients", label: "My Patients", icon: Users },
-      { href: "/doctor/prescriptions", label: "My Prescriptions", icon: Pill },
-      { href: "/doctor/prescriptions/templates", label: "Templates", icon: BookOpen },
+      { href: "/doctor/prescriptions", label: "My Prescriptions", icon: Pill, clinicalOnly: true },
+      { href: "/doctor/prescriptions/templates", label: "Templates", icon: BookOpen, clinicalOnly: true },
       { href: "/doctor/queue", label: "Queue", icon: ListOrdered },
       { href: "/doctor/clinic", label: "My Clinic", icon: Building2 },
-      { href: "/doctor/patients/link", label: "Link Patient", icon: UserPlus },
+      { href: "/doctor/patients/link", label: "Link Patient", icon: UserPlus, clinicalOnly: true },
     ],
   },
   {
     label: "ACTIONS",
     items: [
-      { href: "/doctor/prescriptions/new", label: "New Prescription", icon: FilePlus },
-      { href: "/doctor/records/new", label: "New Record", icon: FileText },
+      { href: "/doctor/prescriptions/new", label: "New Prescription", icon: FilePlus, clinicalOnly: true },
+      { href: "/doctor/records/new", label: "New Record", icon: FileText, clinicalOnly: true },
     ],
   },
 ];
@@ -122,6 +129,28 @@ export function DoctorSidebar({
   onMobileClose,
 }: DoctorSidebarProps) {
   const pathname = usePathname();
+  const { user } = useAuthStore();
+  const { activeClinicId } = useClinicStore();
+
+  // Resolve the current user's membership role for the active clinic so
+  // receptionist memberships get a scoped nav (no clinical items).
+  const { data: membersData } = useQuery({
+    queryKey: ["clinic-members", activeClinicId],
+    queryFn: () => getClinicMembers(activeClinicId!),
+    enabled: !!activeClinicId && !!user,
+    staleTime: 60_000,
+  });
+  const membershipRole = membersData?.data.find((m) => m.user_id === user?.id)?.role;
+  const isReceptionist = membershipRole === "receptionist";
+
+  const visibleSections = navSections
+    .map((section) => ({
+      ...section,
+      items: isReceptionist
+        ? section.items.filter((item) => !item.clinicalOnly)
+        : section.items,
+    }))
+    .filter((section) => section.items.length > 0);
 
   const SidebarContent = ({ mobile = false }: { mobile?: boolean }) => (
     <>
@@ -170,7 +199,7 @@ export function DoctorSidebar({
 
       {/* Navigation */}
       <nav className="flex-1 space-y-6 p-4 overflow-y-auto">
-        {navSections.map((section) => (
+        {visibleSections.map((section) => (
           <div key={section.label}>
             {(isOpen || mobile) && (
               <h3 className="mb-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">

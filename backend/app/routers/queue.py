@@ -1,3 +1,11 @@
+"""
+Clinic queue endpoints.
+
+Access: any active clinic member (owner | admin | doctor | receptionist) via
+`require_active_clinic`. Receptionists handle front-desk queue operations —
+patient check-in (add_to_queue) and status advancement — so no endpoint here
+may assume the member is a doctor.
+"""
 import uuid
 from datetime import date, datetime, timezone
 from uuid import UUID
