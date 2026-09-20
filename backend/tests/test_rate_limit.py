@@ -77,13 +77,18 @@ class TestGetUserKey:
         key = _get_user_key(request)
         assert key.startswith("token:")
 
-    def test_uses_x_forwarded_for_when_present(self):
+    def test_ignores_x_forwarded_for_from_untrusted_peer(self):
+        # XFF is only honored when the immediate peer is in TRUSTED_PROXY_IPS;
+        # an untrusted client cannot spoof its rate-limit identity.
         request = self._make_request(forwarded_for="10.0.0.5, 10.0.0.1")
         key = _get_user_key(request)
-        assert key == "ip:10.0.0.5"
+        assert key == "ip:127.0.0.1"
 
-    def test_uses_first_ip_in_x_forwarded_for(self):
-        request = self._make_request(forwarded_for="192.168.1.1, 10.0.0.1, proxy")
+    def test_uses_x_forwarded_for_from_trusted_proxy(self, monkeypatch):
+        from app.middleware import rate_limit
+
+        monkeypatch.setattr(rate_limit, "_TRUSTED_PROXIES", {"127.0.0.1"})
+        request = self._make_request(forwarded_for="192.168.1.1, 10.0.0.1")
         key = _get_user_key(request)
         assert key == "ip:192.168.1.1"
 
