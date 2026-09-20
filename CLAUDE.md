@@ -26,8 +26,7 @@ A healthcare platform integrating patient management, doctor portals, prescripti
 Two separate PostgreSQL databases:
 
 1. **Main Application DB** (`medconnect`):
-   - Users, doctors, patients, medical records, prescriptions, notifications, clinics, appointments, vitals
-   - Also contains `Medicine`, `Component`, `MedicineComponent` models (denormalized medicine references used by prescriptions)
+   - Users, doctors, patients, medical records, prescriptions, notifications, clinics, appointments, vitals, billing, queue
    - Session: `get_db()` → `async_session`
    - Models inherit from `Base` (in `app.database`)
 
@@ -37,7 +36,7 @@ Two separate PostgreSQL databases:
    - Session: `get_medicine_db()` → `medicine_async_session`
    - Models inherit from `MedicineBase` (in `app.database`)
 
-**Critical:** `app/models/medicine.py` (the `Medicine` class) uses `Base` (main DB), not `MedicineBase`. The medicine DB models are exclusively in `app/models/medicine/` (subdirectory).
+**Critical:** A legacy `app/models/medicine.py` module (main-DB `Medicine`/`Component`/`MedicineComponent` on `Base`) used to exist alongside the `app/models/medicine/` package — the package always shadowed it at import time (`from app.models.medicine import ...` resolved to the package), and the dead file has been deleted. All medicine models now live exclusively in `app/models/medicine/` and inherit `MedicineBase`, including the admin-catalog `Medicine`/`Component`/`MedicineComponent` in `catalog.py`.
 
 ### Authentication & Authorization
 
@@ -91,15 +90,20 @@ All active routers in `backend/app/routers/`:
 | `onboarding.py` | `/api/v1/onboarding` | `get_current_doctor` |
 | `clinic_invites.py` | `/api/v1/clinic-invites` | `get_current_user` |
 | `patient_links.py` | `/api/v1/patient-links` | `get_current_user` |
+| `record_access.py` | `/api/v1` | `get_current_doctor` + `require_active_clinic` |
 | `appointments.py` | `/api/v1/appointments` | mixed |
 | `uploads.py` | `/api/v1/uploads` | `get_current_user` |
 | `vitals.py` | `/api/v1/vitals` | `get_current_user` |
+| `prescriptions_pdf.py` | `/api/v1/prescriptions` | `get_current_user` |
+| `billing.py` | `/api/v1/billing` | `get_current_user` |
+| `revenue.py` | `/api/v1/revenue` | `get_current_user` |
+| `queue.py` | `/api/v1/queue` | `require_active_clinic` |
 | `medicines_emr.py` | `/api/v1` | — |
 | `interactions.py` | `/api/v1` | — |
 | `admin/brands.py`, `admin/manufacturers.py`, `admin/salts.py` | `/api/v1` | `require_admin` |
 | `admin/stats.py`, `admin/users.py`, `admin/clinics.py`, `admin/doctors.py`, `admin/audit.py`, `admin/lab_results.py` | (own prefixes) | `require_admin` |
 
-**Commented out in `main.py`** (missing service modules): `admin/medicines.py`, `admin/components.py`.
+**Removed:** `admin/medicines.py` and `admin/components.py` were deleted — they queried the `medicines`/`components`/`medicine_components` tables dropped by migration `8e7b`, so every endpoint 500'd. The unmounted legacy `routers/medicines.py` and `routers/prescriptions.py` were deleted along with their sole consumers (`services/medicine_service.py`, `services/component_service.py`, `services/pdf_service.py`, `services/template_service.py`).
 
 ### Doctor Onboarding Flow
 
@@ -115,18 +119,18 @@ Three portals, each with its own layout (AuthGuard + sidebar):
 | Doctor | `components/layout/doctor-layout.tsx` | `AuthGuard("doctor")` | `/doctor/*` |
 | Patient | `components/layout/patient-layout.tsx` | `AuthGuard("patient")` | `/patient/*` |
 
-**Admin routes:** `/admin/dashboard`, `/admin/patients`, `/admin/doctors`, `/admin/doctors/[id]`, `/admin/doctors/pending`, `/admin/appointments`, `/admin/visits`, `/admin/lab-results`, `/admin/medicines`, `/admin/salts`, `/admin/manufacturers`, `/admin/clinics`, `/admin/clinics/[id]`, `/admin/users`, `/admin/users/[id]`, `/admin/audit-logs`, `/admin/notifications`, `/admin/settings`
+**Admin routes:** `/admin/dashboard`, `/admin/patients`, `/admin/doctors`, `/admin/doctors/[id]`, `/admin/doctors/pending`, `/admin/appointments`, `/admin/visits`, `/admin/lab-results`, `/admin/medicines`, `/admin/salts`, `/admin/manufacturers`, `/admin/clinics`, `/admin/clinics/[id]`, `/admin/users`, `/admin/users/[id]`, `/admin/audit-logs`, `/admin/notifications`, `/admin/settings`, `/admin/billing`, `/admin/revenue`
 
-**Doctor routes:** `/doctor/dashboard`, `/doctor/prescriptions`, `/doctor/prescriptions/new`, `/doctor/prescriptions/[id]`, `/doctor/records/new`, `/doctor/patients`, `/doctor/patients/[id]`, `/doctor/patients/[id]/prescriptions`, `/doctor/appointments`, `/doctor/clinic`, `/doctor/clinic/invites`, `/doctor/onboarding`
+**Doctor routes:** `/doctor/dashboard`, `/doctor/prescriptions`, `/doctor/prescriptions/new`, `/doctor/prescriptions/[id]`, `/doctor/prescriptions/templates`, `/doctor/records/new`, `/doctor/patients`, `/doctor/patients/[id]`, `/doctor/patients/[id]/prescriptions`, `/doctor/appointments`, `/doctor/queue`, `/doctor/clinic`, `/doctor/clinic/invites`, `/doctor/onboarding`, `/doctor/notifications`
 
-**Patient routes:** `/patient/timeline`, `/patient/records`, `/patient/records/[id]`, `/patient/records/new`, `/patient/appointments`, `/patient/vitals`, `/patient/profile`, `/patient/medical-history`, `/patient/clinics`
+**Patient routes:** `/patient/timeline`, `/patient/records`, `/patient/records/[id]`, `/patient/records/new`, `/patient/appointments`, `/patient/vitals`, `/patient/profile`, `/patient/medical-history`, `/patient/clinics`, `/patient/notifications`
 
 **Page convention:** Pages no longer wrap in `<AuthGuard>` or `<Navbar>` — the route `layout.tsx` handles that. Pages return `<div className="space-y-6">` with content only.
 
 ### Frontend Key Files
 
 - `src/lib/api.ts` — Axios instance with auto-token refresh interceptor
-- `src/lib/api/` — Typed API sub-modules: `users.ts`, `admin-users.ts`, `patients.ts`, `doctors.ts`, `medicines.ts`, `medicines-emr.ts`, `prescriptions.ts`, `notifications.ts`, `appointments.ts`, `clinics.ts`, `vitals.ts`, `visits.ts`, `lab-results.ts`, `stats.ts`, `search.ts`
+- `src/lib/api/` — Typed API sub-modules: `users.ts`, `admin-users.ts`, `patients.ts`, `doctors.ts`, `medicines-emr.ts`, `prescriptions.ts`, `notifications.ts`, `appointments.ts`, `clinics.ts`, `vitals.ts`, `visits.ts`, `lab-results.ts`, `stats.ts`, `search.ts`
 - `src/lib/auth.ts` — `initKeycloak()`, `loginRedirect()`, `signupRedirect()`, `logout()`, `getMe()`
 - `src/stores/auth-store.ts` — Zustand store with `useAuthStore`; `initAuth()` initializes Keycloak and fetches user
 - `src/components/layout/auth-guard.tsx` — Wraps protected portals; checks role
@@ -231,7 +235,7 @@ JWKS validation is mocked via `patch("app.utils.security.get_jwks_client", ...)`
 # Correct DB session selection
 from app.database import get_db, get_medicine_db
 
-# Main DB (users, doctors, prescriptions, records, Medicine model)
+# Main DB (users, doctors, prescriptions, records, etc.)
 async def endpoint(db: AsyncSession = Depends(get_db)): ...
 
 # Medicine DB (Salt, Brand, Manufacturer, DrugInteraction, etc.)

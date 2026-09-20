@@ -11,8 +11,6 @@ All items below are tracked as Jira tickets in the MD project.
 | Ticket | File | Description |
 |--------|------|-------------|
 | MD-345 | `backend/app/routers/appointments.py:149-189` | **N+1 query pattern** in `_load_appointment_with_names()` — 4 separate DB queries per appointment; batch with JOINs |
-| MD-346 | `frontend/src/app/patient/records/page.tsx` | **Missing page** — patient sidebar links to `/patient/records` which 404s; create a records list page |
-| MD-347 | `frontend/src/app/patient/[id]/page.tsx:99,123,187` | **Hardcoded mock data** — 3 TODO comments; replace with real API calls to `/api/v1/patients/{id}`, `/vitals`, `/appointments` |
 
 ---
 
@@ -61,6 +59,8 @@ All items below are tracked as Jira tickets in the MD project.
 
 | Ticket | Description |
 |--------|-------------|
+| MD-346 | Patient records page exists at `frontend/src/app/patient/records/page.tsx` — `/patient/records` no longer 404s |
+| MD-347 | Patient detail page uses real API calls (`/api/v1/patients/profile`, `/prescriptions`, `/billing`, `/records`, `/medical-history`) — no mock data remains |
 | MD-348 | Fixed NameError `uuid.uuid4()` in onboarding.py (imported as `_uuid_mod`) |
 | MD-349 | Added `deleted_at` filter to both NotificationPreferences queries |
 | MD-351 | Dead admin buttons: New Doctor navigates to pending; New Visit/Test disabled with tooltip |
