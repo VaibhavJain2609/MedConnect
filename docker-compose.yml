@@ -1,3 +1,19 @@
+# docker-compose.yml — production-shaped base stack for MedConnect.
+#
+# For local development, `docker compose` automatically layers
+# docker-compose.override.yml on top of this file (dev frontend stage,
+# source bind mounts, uvicorn --reload, permissive nginx.dev.conf).
+# To run ONLY this base stack:
+#   docker compose -f docker-compose.yml up --build
+#
+# Port-binding policy: every published port is bound to 127.0.0.1 so no
+# service is reachable off-host. Real traffic enters through the nginx
+# service (or an external LB/ingress in deployed environments).
+#
+# Image-pinning policy: images are pinned to a specific patch/minor tag
+# (never `latest` or a bare major). Bump deliberately after reviewing
+# upstream changelogs.
+
 services:
   postgres:
     build:
@@ -10,7 +26,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     restart: unless-stopped
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER}" ]
@@ -19,15 +35,15 @@ services:
       retries: 5
 
   redis:
-    image: redis:7-alpine
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    image: redis:7.4.6-alpine
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD} --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD-SHELL", "redis-cli -a ${REDIS_PASSWORD} ping" ]
+      test: [ "CMD-SHELL", "redis-cli -a ${REDIS_PASSWORD} --no-auth-warning ping" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -46,13 +62,16 @@ services:
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
     command: start-dev --import-realm --health-enabled=true
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080" ]
+      # The upstream Keycloak image deliberately ships no curl/wget, so this
+      # uses bash's /dev/tcp to issue a real HTTP HEAD request against the
+      # management-port readiness endpoint — not just a TCP connect.
+      test: [ "CMD-SHELL", "bash -c '{ printf \"HEAD /health/ready HTTP/1.1\\r\\nconnection: close\\r\\n\\r\\n\" >&0; grep -q \"HTTP/1.1 200\"; } 0<>/dev/tcp/localhost/9000'" ]
       interval: 10s
       timeout: 5s
       retries: 15
@@ -62,7 +81,6 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    user: root
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/medconnect
       DATABASE_URL_SYNC: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/medconnect
@@ -75,11 +93,8 @@ services:
       KEYCLOAK_CLIENT_ID: medconnect-backend
       APP_ENV: development
       DEBUG: "false"
-    volumes:
-      - ./backend:/app
-      - ./Dataset:/app/Dataset
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -97,7 +112,7 @@ services:
     command: >
       sh -c "alembic upgrade head &&
              alembic -c alembic_medicine.ini upgrade head &&
-             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+             uvicorn app.main:app --host 0.0.0.0 --port 8000"
 
   reminder-worker:
     build:
@@ -114,8 +129,6 @@ services:
       KEYCLOAK_REALM: medconnect
       KEYCLOAK_CLIENT_ID: medconnect-backend
       APP_ENV: development
-    volumes:
-      - ./backend:/app
     depends_on:
       postgres:
         condition: service_healthy
@@ -123,35 +136,41 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "python3 -c \"import os; os.kill(1, 0)\" 2>/dev/null || exit 1"]
+      # `arq --check` reads the worker's health-check sentinel in Redis
+      # (written by the running worker) and exits 0 only if it's fresh.
+      test: ["CMD-SHELL", "arq --check app.workers.reminder_worker.WorkerSettings"]
       interval: 30s
-      timeout: 5s
+      timeout: 10s
       retries: 3
+      start_period: 30s
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    command: npm run dev
-    environment:
-      NODE_ENV: development
-      NEXT_PUBLIC_API_URL: http://localhost:8000
-      NEXT_PUBLIC_KEYCLOAK_URL: http://localhost:8080
-      NEXT_PUBLIC_KEYCLOAK_REALM: medconnect
-      NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: medconnect-frontend
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      args:
+        # NEXT_PUBLIC_* vars are baked into the client bundle at build time
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+        NEXT_PUBLIC_KEYCLOAK_URL: http://localhost:8080
+        NEXT_PUBLIC_KEYCLOAK_REALM: medconnect
+        NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: medconnect-frontend
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       - backend
     restart: unless-stopped
+    healthcheck:
+      # manifest.json is a static asset always served by Next.js
+      test: [ "CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/manifest.json || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   nginx:
-    image: nginx:alpine
+    image: nginx:1.28.0-alpine
     ports:
-      - "80:80"
+      - "127.0.0.1:80:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
@@ -159,7 +178,8 @@ services:
       - frontend
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD-SHELL", "nginx -t && curl -f http://localhost/health || exit 1" ]
+      # nginx:alpine ships busybox wget, not curl
+      test: [ "CMD-SHELL", "nginx -t && wget -q -O /dev/null http://127.0.0.1/health || exit 1" ]
       interval: 30s
       timeout: 10s
       retries: 3

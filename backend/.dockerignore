@@ -1,0 +1,40 @@
+# Backend build context (. / backend). The Dockerfile does `COPY . .`, so
+# anything not listed here ends up inside the signed image.
+
+# Secrets / local env — must never enter a signed image
+.env
+.env.*
+!.env.example
+
+# Python caches & virtualenvs
+.venv
+venv
+**/__pycache__
+*.py[cod]
+*.egg-info
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+coverage.xml
+htmlcov
+
+# Tests are dev-only — keep them out of production images
+tests
+
+# Docs not needed at runtime
+docs
+
+# Repo/build metadata
+.git
+.gitignore
+.dockerignore
+Dockerfile
+
+# OS / editor noise
+.DS_Store
+.idea
+.vscode
+*.swp
+*.swo
+*.log

@@ -1,4 +1,8 @@
-FROM quay.io/keycloak/keycloak:24.0
+# Pinned to a specific patch release — the previous tag (24.0) is EOL.
+# Latest 26.x at time of pinning; bump deliberately after reviewing
+# https://www.keycloak.org/docs/latest/release_notes/
+FROM quay.io/keycloak/keycloak:26.7.4
+
 COPY realm-export.json /opt/keycloak/data/import/realm-export.json
 
 # `kc.sh build` bakes these feature toggles and the DB driver choice into the
