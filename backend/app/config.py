@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     BACKEND_URL: str = "http://localhost:8000"
     FRONTEND_URL: str = "http://localhost:3000"
 
+    # Teleconsultation — base URL for generated Jitsi meeting rooms
+    JITSI_BASE_URL: str = "https://meet.jit.si"
+
     # File storage
     STORAGE_BACKEND: str = "local"  # "local" | "s3"
     UPLOADS_DIR: str = "/tmp/medconnect-uploads"

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Calendar, Clock, User, FileText, FilePlus, CheckCircle, XCircle, UserCheck, Plus, X, Pencil } from "lucide-react";
+import { Calendar, Clock, User, FileText, FilePlus, CheckCircle, XCircle, UserCheck, Plus, X, Pencil, Video } from "lucide-react";
 import Link from "next/link";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ import {
   createAppointment,
   createGuestAppointment,
   linkProvisionalPatient,
+  generateMeetingLink,
   type Appointment,
   type UpdateAppointmentData,
 } from "@/lib/api/appointments";
@@ -954,6 +955,13 @@ export default function DoctorAppointmentsPage() {
     },
   });
 
+  const meetingLinkMutation = useMutation({
+    mutationFn: (id: string) => generateMeetingLink(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["doctor-appointments", selectedDate] });
+    },
+  });
+
   const appointments: Appointment[] = data?.data ?? [];
 
   const isToday = selectedDate === today;
@@ -1157,6 +1165,28 @@ export default function DoctorAppointmentsPage() {
                     {STATUS_LABELS[appt.status] ?? appt.status}
                   </Badge>
                   <div className="flex flex-wrap items-center justify-end gap-1.5">
+                    {appt.type === "teleconsult" &&
+                      ["scheduled", "arrived", "in-progress"].includes(appt.status) &&
+                      (appt.meeting_url ? (
+                        <a
+                          href={appt.meeting_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 rounded-md bg-dreams-blue px-2 py-1 text-xs font-medium text-white hover:opacity-90 transition-opacity"
+                        >
+                          <Video className="h-3 w-3" />
+                          Join Call
+                        </a>
+                      ) : (
+                        <button
+                          onClick={() => meetingLinkMutation.mutate(appt.id)}
+                          disabled={meetingLinkMutation.isPending}
+                          className="flex items-center gap-1 rounded-md border border-dreams-blue px-2 py-1 text-xs text-dreams-blue hover:bg-dreams-blue/10 transition-colors disabled:opacity-50"
+                        >
+                          <Video className="h-3 w-3" />
+                          {meetingLinkMutation.isPending ? "Generating…" : "Get Link"}
+                        </button>
+                      ))}
                     {appt.is_provisional && (
                       <button
                         onClick={() => setLinkingAppt({ provisionalPatientId: appt.patient_id, patientName: appt.patient_name ?? "Patient" })}

@@ -23,6 +23,7 @@ export interface Appointment {
   chief_complaint: string | null;
   notes: string | null;
   cancelled_reason: string | null;
+  meeting_url: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -159,6 +160,15 @@ export async function cancelAppointment(id: string, reason?: string): Promise<vo
     status: "cancelled",
     cancelled_reason: reason || null,
   });
+}
+
+/**
+ * (Re)generate the teleconsult meeting link for an appointment.
+ * Only the appointment's patient or doctor participant may call this.
+ */
+export async function generateMeetingLink(id: string): Promise<Appointment> {
+  const response = await api.post(`/api/v1/appointments/${id}/meeting-link`);
+  return response.data;
 }
 
 export interface CreateGuestAppointmentData {

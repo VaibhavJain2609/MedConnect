@@ -128,11 +128,20 @@ async def _process_reminder(
         f"Reminder: {patient_name}, your appointment with {doctor_name} "
         f"is in {hours_before} hour(s) — {scheduled_local}."
     )
+    doctor_message = (
+        f"Reminder: your appointment with {patient_name} "
+        f"is in {hours_before} hour(s) — {scheduled_local}."
+    )
+    if appt.type == "teleconsult" and appt.meeting_url:
+        message += f" Join the video call: {appt.meeting_url}"
+        doctor_message += f" Join the video call: {appt.meeting_url}"
 
     notif_meta = {
         "appointment_id": str(appt.id),
         "reminder_type": reminder_type,
     }
+    if appt.meeting_url:
+        notif_meta["meeting_url"] = appt.meeting_url
 
     # In-app notification for the patient
     await notification_service.create_notification(
@@ -152,10 +161,7 @@ async def _process_reminder(
             user_id=doctor_user_id,
             notif_type=NotificationType.APPOINTMENT.value,
             title=f"Appointment in {hours_before} hour(s)",
-            body=(
-                f"Reminder: your appointment with {patient_name} "
-                f"is in {hours_before} hour(s) — {scheduled_local}."
-            ),
+            body=doctor_message,
             action_url="/doctor/appointments",
             metadata=notif_meta,
         )
