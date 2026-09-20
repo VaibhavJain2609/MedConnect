@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import require_patient
 from app.models.doctor import Doctor
+from app.models.lab_result import LabResult
 from app.models.user import User
 from app.schemas.common import PaginatedResponse, PaginationMeta
 from app.schemas.record import RecordResponse, VALID_RECORD_TYPES, _validate_document_url
@@ -79,6 +80,18 @@ async def prescriptions(
     items, next_cursor, has_more = await get_patient_prescriptions(
         db=db, patient_id=user.id, cursor=cursor, limit=limit
     )
+
+    # Batch-load prescriber names (Prescription.doctor_id -> Doctor -> User)
+    doctor_ids = list({p.doctor_id for p in items})
+    doctor_names: dict[UUID, str] = {}
+    if doctor_ids:
+        dr = await db.execute(
+            select(Doctor.id, User.full_name)
+            .join(User, Doctor.user_id == User.id)
+            .where(Doctor.id.in_(doctor_ids))
+        )
+        doctor_names = {row.id: row.full_name for row in dr.all()}
+
     return PaginatedResponse(
         data=[
             {
@@ -87,6 +100,8 @@ async def prescriptions(
                 "medicines": p.medicines,
                 "diagnosis": p.diagnosis,
                 "notes": p.notes,
+                "doctor_id": str(p.doctor_id),
+                "doctor_name": doctor_names.get(p.doctor_id),
                 "valid_until": p.valid_until.isoformat() if p.valid_until else None,
                 "created_at": p.created_at.isoformat(),
             }
@@ -94,6 +109,112 @@ async def prescriptions(
         ],
         pagination=PaginationMeta(next_cursor=next_cursor, has_more=has_more, limit=limit),
     )
+
+
+# ─── Lab results (patient-facing) ────────────────────────────────────────────
+
+
+def _serialize_lab_result(lr: LabResult, doctor_name: str | None = None) -> dict:
+    return {
+        "id": str(lr.id),
+        "test_id": lr.test_id,
+        "test_name": lr.test_name,
+        "test_category": lr.test_category,
+        "appointment_date": lr.appointment_date.isoformat(),
+        "status": lr.status,
+        "result_value": lr.result_value,
+        "result_unit": lr.result_unit,
+        "normal_range": lr.normal_range,
+        "abnormal_flag": lr.abnormal_flag,
+        "notes": lr.notes,
+        "doctor_id": str(lr.doctor_id) if lr.doctor_id else None,
+        "doctor_name": doctor_name,
+        "created_at": lr.created_at.isoformat(),
+    }
+
+
+@router.get("/lab-results")
+async def list_lab_results(
+    category: str | None = Query(None, description="Filter by test category"),
+    cursor: UUID | None = Query(None),
+    limit: int = Query(20, ge=1, le=100),
+    user: User = Depends(require_patient),
+    db: AsyncSession = Depends(get_db),
+):
+    """List the current patient's lab results, newest first."""
+    stmt = (
+        select(LabResult)
+        .where(LabResult.patient_id == user.id, LabResult.deleted_at.is_(None))
+        .order_by(LabResult.appointment_date.desc(), LabResult.id.desc())
+        .limit(limit + 1)
+    )
+
+    if category:
+        stmt = stmt.where(LabResult.test_category == category)
+
+    if cursor:
+        cursor_result = await db.execute(
+            select(LabResult.appointment_date).where(
+                LabResult.id == cursor, LabResult.patient_id == user.id
+            )
+        )
+        cursor_time = cursor_result.scalar_one_or_none()
+        if cursor_time:
+            stmt = stmt.where(
+                LabResult.appointment_date <= cursor_time, LabResult.id != cursor
+            )
+
+    result = await db.execute(stmt)
+    items = list(result.scalars().all())
+
+    has_more = len(items) > limit
+    results = items[:limit]
+    next_cursor = str(results[-1].id) if results and has_more else None
+
+    # Batch-load ordering-doctor names (LabResult.doctor_id -> users.id)
+    doctor_ids = list({lr.doctor_id for lr in results if lr.doctor_id})
+    doctor_names: dict[UUID, str] = {}
+    if doctor_ids:
+        dr = await db.execute(select(User.id, User.full_name).where(User.id.in_(doctor_ids)))
+        doctor_names = {row.id: row.full_name for row in dr.all()}
+
+    return PaginatedResponse(
+        data=[
+            _serialize_lab_result(lr, doctor_names.get(lr.doctor_id))
+            for lr in results
+        ],
+        pagination=PaginationMeta(next_cursor=next_cursor, has_more=has_more, limit=limit),
+    )
+
+
+@router.get("/lab-results/{lab_result_id}")
+async def get_lab_result(
+    lab_result_id: UUID,
+    user: User = Depends(require_patient),
+    db: AsyncSession = Depends(get_db),
+):
+    """Retrieve a single lab result owned by the current patient."""
+    result = await db.execute(
+        select(LabResult).where(
+            LabResult.id == lab_result_id,
+            LabResult.patient_id == user.id,
+            LabResult.deleted_at.is_(None),
+        )
+    )
+    lr = result.scalar_one_or_none()
+    if not lr:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "NOT_FOUND", "message": "Lab result not found"}},
+        )
+
+    doctor_name: str | None = None
+    if lr.doctor_id:
+        doctor_name = await db.scalar(
+            select(User.full_name).where(User.id == lr.doctor_id)
+        )
+
+    return _serialize_lab_result(lr, doctor_name)
 
 
 @router.get("/profile")

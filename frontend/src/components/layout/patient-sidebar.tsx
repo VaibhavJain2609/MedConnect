@@ -15,6 +15,9 @@ import {
   Building2,
   Calendar,
   Bell,
+  FlaskConical,
+  Pill,
+  Receipt,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -51,6 +54,8 @@ const navSections: NavSection[] = [
     label: "HEALTH",
     items: [
       { href: "/patient/records", label: "My Records", icon: FileText },
+      { href: "/patient/lab-results", label: "Lab Results", icon: FlaskConical },
+      { href: "/patient/medications", label: "Medications", icon: Pill },
       { href: "/patient/vitals", label: "Vitals", icon: HeartPulse },
       { href: "/patient/medical-history", label: "Medical History", icon: ClipboardList },
     ],
@@ -64,6 +69,7 @@ const navSections: NavSection[] = [
   {
     label: "ACCOUNT",
     items: [
+      { href: "/patient/billing", label: "Billing", icon: Receipt },
       { href: "/patient/profile", label: "My Profile", icon: User },
     ],
   },
