@@ -16,7 +16,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = "024_platform_settings"
-down_revision = "024_add_meeting_url_to_appointments"
+down_revision = "024_appt_meeting_url"
 branch_labels = None
 depends_on = None
 

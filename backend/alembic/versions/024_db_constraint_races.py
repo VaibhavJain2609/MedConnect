@@ -74,15 +74,14 @@ def upgrade() -> None:
     op.execute("""
         WITH ranked AS (
             SELECT id,
+                   clinic_id,
+                   queue_date,
                    queue_number,
+                   created_at,
                    ROW_NUMBER() OVER (
                        PARTITION BY clinic_id, queue_date, queue_number
                        ORDER BY created_at, id
                    ) AS rn,
-                   ROW_NUMBER() OVER (
-                       PARTITION BY clinic_id, queue_date
-                       ORDER BY created_at, id
-                   ) AS day_seq,
                    MAX(queue_number) OVER (PARTITION BY clinic_id, queue_date) AS day_max
             FROM queue_entries
             WHERE deleted_at IS NULL
@@ -164,6 +163,19 @@ def upgrade() -> None:
         END $$;
     """)
 
+    # timestamptz + interval is marked STABLE (day-length intervals depend on
+    # TimeZone), which is rejected in index/constraint expressions. Minute
+    # intervals are timezone-independent, so an IMMUTABLE wrapper is correct
+    # and required for the exclusion constraint below.
+    op.execute("""
+        CREATE OR REPLACE FUNCTION appointment_end_at(
+            p_start timestamptz, p_minutes integer
+        )
+        RETURNS timestamptz
+        LANGUAGE sql IMMUTABLE PARALLEL SAFE
+        AS $$ SELECT p_start + make_interval(mins => p_minutes) $$
+    """)
+
     # Half-open [) ranges so back-to-back appointments (end == start) are
     # allowed, matching the strict-inequality overlap check in
     # _check_doctor_conflict.
@@ -174,7 +186,7 @@ def upgrade() -> None:
             doctor_id WITH =,
             tstzrange(
                 scheduled_at,
-                scheduled_at + (duration_minutes * interval '1 minute'),
+                appointment_end_at(scheduled_at, duration_minutes),
                 '[)'
             ) WITH &&
         )
@@ -190,6 +202,7 @@ def downgrade() -> None:
         "ALTER TABLE appointments "
         "DROP CONSTRAINT IF EXISTS excl_appointments_doctor_no_overlap"
     )
+    op.execute("DROP FUNCTION IF EXISTS appointment_end_at(timestamptz, integer)")
     op.execute("DROP INDEX IF EXISTS uq_queue_entries_daily_number")
     op.execute("ALTER TABLE queue_entries DROP COLUMN IF EXISTS queue_date")
     # btree_gist is left installed — harmless and possibly shared.

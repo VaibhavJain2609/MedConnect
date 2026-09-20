@@ -7,7 +7,7 @@ Create Date: 2026-04-03
 from alembic import op
 import sqlalchemy as sa
 
-revision = "024_add_meeting_url_to_appointments"
+revision = "024_appt_meeting_url"
 down_revision = "024_add_encounters"
 branch_labels = None
 depends_on = None

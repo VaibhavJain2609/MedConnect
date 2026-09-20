@@ -19,6 +19,7 @@ import {
   Pill,
   Receipt,
   X,
+  Ticket,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/auth";
@@ -64,6 +65,7 @@ const navSections: NavSection[] = [
     label: "CLINICS",
     items: [
       { href: "/patient/clinics", label: "My Clinics", icon: Building2 },
+      { href: "/invite", label: "Join a Clinic", icon: Ticket },
     ],
   },
   {

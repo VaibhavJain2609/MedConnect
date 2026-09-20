@@ -268,6 +268,15 @@ async def create_encounter(
     await db.flush()
     await db.refresh(enc)
 
+    from app.services.audit_service import log_change
+    await log_change(
+        db=db,
+        table_name="encounters",
+        record_id=enc.id,
+        action="INSERT",
+        new_values={"patient_id": str(enc.patient_id), "clinic_id": str(enc.clinic_id) if enc.clinic_id else None},
+    )
+
     return await _load_encounter_with_names(db, enc)
 
 
@@ -452,6 +461,16 @@ async def update_encounter(
         if field in update_fields:
             setattr(enc, field, update_fields[field])
 
+    if update_fields:
+        from app.services.audit_service import log_change
+        await log_change(
+            db=db,
+            table_name="encounters",
+            record_id=enc.id,
+            action="UPDATE",
+            new_values={"fields_changed": sorted(update_fields.keys())},
+        )
+
     enc.updated_at = datetime.now(timezone.utc)
     await db.flush()
     await db.refresh(enc)
@@ -493,4 +512,14 @@ async def delete_encounter(
 
     enc.deleted_at = datetime.now(timezone.utc)
     enc.updated_at = datetime.now(timezone.utc)
+
+    from app.services.audit_service import log_change
+    await log_change(
+        db=db,
+        table_name="encounters",
+        record_id=enc.id,
+        action="DELETE",
+        old_values={"patient_id": str(enc.patient_id)},
+        new_values={"deleted": True},
+    )
     await db.flush()
