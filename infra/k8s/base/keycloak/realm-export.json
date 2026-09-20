@@ -1,13 +1,22 @@
 {
   "realm": "medconnect",
   "enabled": true,
-  "registrationAllowed": true,
+  "registrationAllowed": false,
   "registrationEmailAsUsername": true,
+  "verifyEmail": true,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
   "resetPasswordAllowed": true,
   "editUsernameAllowed": false,
-  "sslRequired": "none",
+  "sslRequired": "external",
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "failureFactor": 5,
   "defaultSignatureAlgorithm": "RS256",
   "roles": {
     "realm": [
@@ -138,6 +147,32 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "protocol": "openid-connect"
+    },
+    {
+      "clientId": "medconnect-backend-admin",
+      "name": "MedConnect Backend Admin (service account)",
+      "description": "Dedicated service-account client (client_credentials grant) for backend Admin REST calls. Replaces the master-realm `admin-cli` password grant still used by backend/app/utils/keycloak_admin.py — the app-side migration to client_credentials is a tracked follow-up; until it lands, admin-cli remains in use. Client secret is provisioned out-of-band (Secrets Manager -> ExternalSecret), not stored in this export.",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "fullScopeAllowed": true,
+      "protocol": "openid-connect"
+    }
+  ],
+  "users": [
+    {
+      "username": "service-account-medconnect-backend-admin",
+      "enabled": true,
+      "emailVerified": false,
+      "serviceAccountClientId": "medconnect-backend-admin",
+      "clientRoles": {
+        "realm-management": [
+          "manage-users"
+        ]
+      }
     }
   ]
 }

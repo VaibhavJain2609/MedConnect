@@ -39,6 +39,20 @@ metadata:
     # WAFv2 ACL with rate-based rules is provisioned by Terraform, another
     # engineer's work — this only associates it once that ARN exists.
     alb.ingress.kubernetes.io/wafv2-acl-arn: PLACEHOLDER_WAF_ACL_ARN
+    # Keycloak admin-surface lockdown: the auth-host rule below used to forward
+    # every path ("/" Prefix) to Keycloak, which exposed the admin console
+    # (/admin/*) and the master realm's token/user endpoints
+    # (/realms/master/*) to the internet. The AWS ALB Ingress Controller can't
+    # drop paths by regex, but it supports fixed-response actions declared via
+    # `actions.<name>` annotations and referenced as a Service backend with
+    # `port.name: use-annotation` — that is the supported mechanism used here.
+    # The backend reaches Keycloak over the internal ClusterIP Service
+    # (KEYCLOAK_URL, not this ALB), so 403'ing these paths externally does NOT
+    # break the admin-cli/master-realm token grant keycloak_admin.py performs.
+    # ALB listener rules are evaluated in declaration order — the deny paths
+    # must stay BEFORE the catch-all "/" path on the auth host.
+    alb.ingress.kubernetes.io/actions.deny-keycloak-admin: |
+      {"type":"fixed-response","fixedResponseConfig":{"statusCode":"403","contentType":"text/plain","messageBody":"Forbidden"}}
 spec:
   ingressClassName: alb
   rules:
@@ -51,6 +65,21 @@ spec:
     - host: PLACEHOLDER_AUTH_HOSTNAME
       http:
         paths:
+          # Deny rules first — see the deny-keycloak-admin annotation above.
+          - path: /admin
+            pathType: Prefix
+            backend:
+              service:
+                name: deny-keycloak-admin
+                port:
+                  name: use-annotation
+          - path: /realms/master
+            pathType: Prefix
+            backend:
+              service:
+                name: deny-keycloak-admin
+                port:
+                  name: use-annotation
           - path: /
             pathType: Prefix
             backend:
