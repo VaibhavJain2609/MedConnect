@@ -6,6 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
 from app.database import get_medicine_db
+from app.dependencies import get_current_user, require_admin
+from app.models.user import User
 from app.services.interaction_service import InteractionService
 
 
@@ -26,13 +28,13 @@ class InteractionResponse(BaseModel):
 
 class CheckInteractionsRequest(BaseModel):
     """Request model for checking interactions between multiple salts."""
-    salt_ids: list[str]  # List of salt UUIDs as strings
+    salt_ids: list[UUID]  # List of salt UUIDs
 
 
 class CreateInteractionRequest(BaseModel):
     """Request model for creating a new interaction."""
-    salt_id_1: str
-    salt_id_2: str
+    salt_id_1: UUID
+    salt_id_2: UUID
     severity: str
     effect: str
     mechanism: str | None = None
@@ -44,6 +46,7 @@ class CreateInteractionRequest(BaseModel):
 async def check_interactions(
     request: CheckInteractionsRequest,
     db: AsyncSession = Depends(get_medicine_db),
+    user: User = Depends(get_current_user),
 ):
     """
     Check for drug interactions between multiple salts.
@@ -53,15 +56,7 @@ async def check_interactions(
 
     Returns interactions ordered by severity (most severe first).
     """
-    try:
-        salt_ids = [UUID(sid) for sid in request.salt_ids]
-    except ValueError as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid salt ID format: {str(e)}"
-        )
-
-    interactions = await InteractionService.check_interactions(db, salt_ids)
+    interactions = await InteractionService.check_interactions(db, request.salt_ids)
     return interactions
 
 
@@ -73,6 +68,7 @@ async def get_salt_interactions(
         description="Filter by severity: minor, moderate, major, contraindicated"
     ),
     db: AsyncSession = Depends(get_medicine_db),
+    user: User = Depends(get_current_user),
 ):
     """
     Get all known interactions for a specific salt.
@@ -85,7 +81,7 @@ async def get_salt_interactions(
     if severity and severity not in {"minor", "moderate", "major", "contraindicated"}:
         raise HTTPException(
             status_code=400,
-            detail="Severity must be one of: minor, moderate, major, contraindicated"
+            detail={"error": {"code": "VALIDATION_ERROR", "message": "Severity must be one of: minor, moderate, major, contraindicated"}},
         )
 
     interactions = await InteractionService.get_salt_interactions(
@@ -98,6 +94,7 @@ async def get_salt_interactions(
 async def create_interaction(
     request: CreateInteractionRequest,
     db: AsyncSession = Depends(get_medicine_db),
+    admin: User = Depends(require_admin),
 ):
     """
     Create a new drug interaction record.
@@ -116,13 +113,10 @@ async def create_interaction(
     - study-based: Proven in clinical studies
     """
     try:
-        salt_id_1 = UUID(request.salt_id_1)
-        salt_id_2 = UUID(request.salt_id_2)
-
         interaction = await InteractionService.create_interaction(
             db=db,
-            salt_id_1=salt_id_1,
-            salt_id_2=salt_id_2,
+            salt_id_1=request.salt_id_1,
+            salt_id_2=request.salt_id_2,
             severity=request.severity,
             effect=request.effect,
             mechanism=request.mechanism,
@@ -164,14 +158,18 @@ async def create_interaction(
             "evidence_level": interaction.evidence_level,
         }
 
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": {"code": "VALIDATION_ERROR", "message": "Invalid interaction request"}},
+        )
 
 
 @router.delete("/{interaction_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_interaction(
     interaction_id: UUID,
     db: AsyncSession = Depends(get_medicine_db),
+    admin: User = Depends(require_admin),
 ):
     """
     Delete a drug interaction record.
@@ -181,7 +179,10 @@ async def delete_interaction(
     deleted = await InteractionService.delete_interaction(db, interaction_id)
 
     if not deleted:
-        raise HTTPException(status_code=404, detail="Interaction not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "NOT_FOUND", "message": "Interaction not found"}},
+        )
 
     await db.commit()
     return None

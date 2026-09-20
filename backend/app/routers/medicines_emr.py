@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_medicine_db
+from app.dependencies import get_current_user
 from app.services.salt_service import SaltService
 from app.services.brand_service import BrandService, ManufacturerService
 from app.services.medicine_search_service import MedicineSearchService
@@ -21,7 +22,10 @@ from app.schemas.medicine_emr import (
     SaltContraindicationItem,
 )
 
-router = APIRouter(tags=["medicines"])
+router = APIRouter(
+    tags=["medicines"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 # ============================================================================
@@ -59,7 +63,7 @@ async def autocomplete_medicines(
 
     Prioritizes exact matches, then prefix matches, then contains matches.
     """
-    from sqlalchemy import select, case, func
+    from sqlalchemy import select, case
     from sqlalchemy.orm import selectinload, joinedload
     from app.models.medicine.commercial import Brand, BrandComposition, Manufacturer
     from app.models.medicine.salts import SaltStrength, Salt
@@ -68,12 +72,11 @@ async def autocomplete_medicines(
     # 1. Exact match (highest priority)
     # 2. Starts with query (prefix match)
     # 3. Contains query (lowest priority)
-    q_lower = q.lower()
-
-    # Ranking logic using CASE with LIKE for prefix matching
+    # ILIKE is used (not lower() + LIKE) so the pg_trgm GIN index on
+    # brand_name can be used instead of a sequential scan.
     rank_expr = case(
-        (func.lower(Brand.brand_name) == q_lower, 1),  # Exact match
-        (func.lower(Brand.brand_name).like(f"{q_lower}%"), 2),  # Prefix match
+        (Brand.brand_name.ilike(q), 1),  # Exact match (case-insensitive)
+        (Brand.brand_name.ilike(f"{q}%"), 2),  # Prefix match
         else_=3  # Contains match
     )
 
@@ -86,7 +89,7 @@ async def autocomplete_medicines(
             .joinedload(SaltStrength.salt),
         )
         .where(
-            func.lower(Brand.brand_name).like(f"%{q_lower}%"),
+            Brand.brand_name.ilike(f"%{q}%"),
             Brand.is_discontinued == False
         )
         .order_by(rank_expr, Brand.brand_name)
