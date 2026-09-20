@@ -22,14 +22,21 @@ _redis_pool: ArqRedis | None = None
 _pool_lock = asyncio.Lock()
 
 
+def _arq_redis_settings() -> RedisSettings:
+    rs = RedisSettings.from_dsn(settings.REDIS_URL)
+    # arq's from_dsn ignores ?ssl_cert_reqs= — ElastiCache uses an AWS-internal
+    # CA, so disable cert verification explicitly for rediss:// URLs.
+    if settings.REDIS_URL.startswith("rediss://"):
+        rs.ssl_cert_reqs = "none"
+    return rs
+
+
 async def _get_redis_pool() -> ArqRedis:
     global _redis_pool
     if _redis_pool is None:
         async with _pool_lock:
             if _redis_pool is None:
-                _redis_pool = await create_pool(
-                    RedisSettings.from_dsn(settings.REDIS_URL)
-                )
+                _redis_pool = await create_pool(_arq_redis_settings())
     return _redis_pool
 
 
