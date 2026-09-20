@@ -7,7 +7,7 @@ GET  /api/v1/patients/clinic-links           — list linked clinics (patient)
 PUT  /api/v1/patients/clinic-links/{id}/consent — approve/revoke consent (patient)
 GET  /api/v1/clinics/{id}/patients           — list linked patients (clinic member)
 """
-import random
+import secrets
 import string
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_active_clinic, get_current_user, require_patient
+from app.dependencies import get_verified_doctor, require_patient
 from app.models.clinic import Clinic, ClinicMembership
 from app.models.doctor import Doctor
 from app.models.patient_link import PatientClinicLink, PatientLinkCode
@@ -30,8 +30,9 @@ router = APIRouter(prefix="/api/v1", tags=["patient-links"])
 
 
 def _generate_code() -> str:
-    """Generate a 10-digit alphanumeric link code."""
-    return "".join(random.choices(string.ascii_uppercase + string.digits, k=10))
+    """Generate a 10-char alphanumeric link code using a CSPRNG."""
+    alphabet = string.ascii_uppercase + string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(10))
 
 
 def _next_sunday() -> datetime:
@@ -87,14 +88,11 @@ class LinkPatientRequest(BaseModel):
 async def link_patient(
     clinic_id: str,
     data: LinkPatientRequest,
-    user: User = Depends(get_current_user),
+    doctor_info: tuple[User, Doctor] = Depends(get_verified_doctor),
     db: AsyncSession = Depends(get_db),
 ):
-    if user.role != "doctor":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"error": {"code": "FORBIDDEN", "message": "Doctor access required"}},
-        )
+    # Requires a verified, fully-onboarded doctor (exposes patient identity).
+    user, _doctor = doctor_info
 
     try:
         cid = uuid.UUID(clinic_id)
@@ -102,16 +100,6 @@ async def link_patient(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"error": {"code": "INVALID_ID", "message": "Invalid clinic ID format"}},
-        )
-
-    # Verify the user has an active Doctor profile
-    doctor_result = await db.execute(
-        select(Doctor).where(Doctor.user_id == user.id, Doctor.deleted_at.is_(None))
-    )
-    if not doctor_result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"error": {"code": "NO_DOCTOR_PROFILE", "message": "No active doctor profile found"}},
         )
 
     # Verify doctor is a member of this clinic
@@ -180,6 +168,11 @@ async def link_patient(
             consent_status="pending",
         )
         db.add(link)
+
+    # Consume the code: each link code may only establish a single link.
+    # The patient can generate a fresh code on their next /link-code request.
+    link_code.deleted_at = datetime.now(timezone.utc)
+
     await db.flush()
 
     # Fetch patient name for response
@@ -269,6 +262,7 @@ async def update_consent(
             detail={"error": {"code": "NOT_FOUND", "message": "Clinic link not found"}},
         )
 
+    old_status = link.consent_status
     link.consent_status = data.action
     now = datetime.now(timezone.utc)
     if data.action == "approved":
@@ -276,6 +270,18 @@ async def update_consent(
         link.revoked_at = None
     elif data.action == "revoked":
         link.revoked_at = now
+
+    # Audit trail: consent grant/revocation changes who may read patient data.
+    from app.services.audit_service import log_change
+    await log_change(
+        db=db,
+        table_name="patient_clinic_links",
+        record_id=link.id,
+        action="UPDATE",
+        old_values={"consent_status": old_status},
+        new_values={"consent_status": data.action},
+    )
+
     await db.flush()
 
     # Notify the doctor who created the link
@@ -363,10 +369,12 @@ async def list_clinic_doctors(
 @router.get("/clinics/{clinic_id}/patients")
 async def list_clinic_patients(
     clinic_id: str,
-    user: User = Depends(get_current_user),
+    doctor_info: tuple[User, Doctor] = Depends(get_verified_doctor),
     db: AsyncSession = Depends(get_db),
     consent_only: bool = True,
 ):
+    # Patient PII — restricted to verified, fully-onboarded doctors.
+    user, _doctor = doctor_info
     try:
         cid = uuid.UUID(clinic_id)
     except ValueError:
@@ -400,18 +408,22 @@ async def list_clinic_patients(
     result = await db.execute(stmt)
     rows = result.all()
 
-    return {
-        "data": [
+    # Patient PII (identity, contact info) is only exposed for approved links.
+    # Pending/revoked entries still appear so the clinic can see link state,
+    # but their identifying fields are masked.
+    data = []
+    for link, patient in rows:
+        approved = link.consent_status == "approved"
+        data.append(
             {
                 "link_id": str(link.id),
-                "patient_id": str(patient.id),
-                "full_name": patient.full_name,
-                "email": patient.email,
-                "phone": patient.phone,
+                "patient_id": str(patient.id) if approved else None,
+                "full_name": patient.full_name if approved else None,
+                "email": patient.email if approved else None,
+                "phone": patient.phone if approved else None,
                 "consent_status": link.consent_status,
                 "linked_at": link.created_at.isoformat(),
             }
-            for link, patient in rows
-        ],
-        "total": len(rows),
-    }
+        )
+
+    return {"data": data, "total": len(rows)}

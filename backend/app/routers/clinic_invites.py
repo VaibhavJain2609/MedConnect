@@ -13,7 +13,7 @@ PUT    /api/v1/clinics/{id}/join-requests/{rid}  — approve/reject
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -48,7 +48,9 @@ async def _require_clinic_admin(db: AsyncSession, user: User, clinic_id: uuid.UU
 class InviteCreateRequest(BaseModel):
     invite_type: str = "code"  # code | email
     email: Optional[str] = None
-    role: str = "doctor"
+    # Whitelisted: clinic invites only ever grant the doctor role. Accepting
+    # arbitrary strings would let an invite mint e.g. "owner"/"admin" members.
+    role: Literal["doctor"] = "doctor"
     expires_days: int = 7
     max_uses: Optional[int] = None
 
@@ -164,6 +166,15 @@ async def redeem_invite(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # Invites grant clinic membership in the doctor role — only doctors may
+    # redeem them. Role elevation itself goes through the gated
+    # POST /auth/set-role path (admin or valid invite code).
+    if user.role != "doctor":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": {"code": "FORBIDDEN", "message": "Doctor access required to redeem a clinic invite"}},
+        )
+
     result = await db.execute(
         select(ClinicInvite).where(
             ClinicInvite.code == data.code.upper(),

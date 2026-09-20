@@ -1,6 +1,8 @@
+import asyncio
 import logging
 import time
 import uuid
+from typing import NamedTuple
 
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -12,6 +14,7 @@ from app.database import get_db
 from app.models.clinic import ClinicMembership
 from app.models.doctor import Doctor
 from app.models.user import User
+from app.services.audit_service import set_audit_user
 from app.utils.security import decode_keycloak_token
 
 security = HTTPBearer(auto_error=False)
@@ -19,10 +22,40 @@ security = HTTPBearer(auto_error=False)
 _logger = logging.getLogger(__name__)
 
 # MD-383: Short-lived in-process user cache keyed by Keycloak sub.
-# Avoids a DB round-trip on every request for already-provisioned users.
-# A role mismatch forces a cache miss so role changes propagate within TTL.
-_user_cache: dict[str, tuple[float, User]] = {}
+# Stores a minimal immutable snapshot (NOT the ORM instance) so that the
+# object returned to callers is always attached to the request's session —
+# mutations made by endpoints (e.g. role changes) actually persist.
+# A role/is_active mismatch forces a cache miss so changes propagate
+# within TTL, and the cached user_id is re-loaded via db.get() so a
+# deactivated/deleted account is rejected instead of served stale.
+class _CachedUser(NamedTuple):
+    expires_at: float  # time.monotonic() deadline
+    user_id: uuid.UUID
+    role: str
+    is_active: bool
+
+
+_user_cache: dict[str, _CachedUser] = {}
 _USER_CACHE_TTL = 30.0  # seconds
+_USER_CACHE_MAX = 2048  # bound the dict so it can't grow without limit
+
+
+def _user_cache_put(sub: str, entry: _CachedUser) -> None:
+    """Insert a cache entry, evicting expired entries (then the oldest) when full."""
+    if len(_user_cache) >= _USER_CACHE_MAX:
+        now = time.monotonic()
+        for key in [k for k, v in _user_cache.items() if v.expires_at <= now]:
+            _user_cache.pop(key, None)
+        if len(_user_cache) >= _USER_CACHE_MAX:
+            oldest = min(_user_cache, key=lambda k: _user_cache[k].expires_at)
+            _user_cache.pop(oldest, None)
+    _user_cache[sub] = entry
+
+
+def invalidate_user_cache(sub: str | None) -> None:
+    """Drop a cached user entry (e.g. after an admin role/deactivation change)."""
+    if sub:
+        _user_cache.pop(sub, None)
 
 
 async def get_current_user(
@@ -35,7 +68,8 @@ async def get_current_user(
             detail={"error": {"code": "UNAUTHORIZED", "message": "Authorization header missing"}},
             headers={"WWW-Authenticate": "Bearer"},
         )
-    payload = decode_keycloak_token(credentials.credentials)
+    # JWKS fetch + JWT verification is synchronous/blocking — run off the event loop.
+    payload = await asyncio.to_thread(decode_keycloak_token, credentials.credentials)
     if payload is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -61,20 +95,42 @@ async def get_current_user(
     else:
         role = "patient"
 
-    # MD-383: Fast path — return cached user when role matches (skips DB round-trip).
-    # A role change in Keycloak triggers a cache miss so sync still occurs within TTL.
+    # MD-383: Fast path — a cached snapshot lets us skip the claim-sync write
+    # path. The user row is re-loaded via db.get() so the returned ORM object
+    # is bound to this request's session (mutations persist) and stale
+    # deactivated/deleted accounts are not served from cache.
     _now = time.monotonic()
     _cached = _user_cache.get(sub)
-    if _cached is not None and _cached[0] > _now and _cached[1].role == role:
-        from app.services.audit_service import set_audit_user
-        set_audit_user(_cached[1].id)
-        return _cached[1]
+    if (
+        _cached is not None
+        and _cached.expires_at > _now
+        and _cached.role == role
+        and _cached.is_active
+    ):
+        user = await db.get(User, _cached.user_id)
+        if (
+            user is not None
+            and user.deleted_at is None
+            and user.is_active
+            and user.role == role
+        ):
+            set_audit_user(user.id)
+            return user
+        _user_cache.pop(sub, None)
 
-    # Lookup by keycloak_sub
+    # Lookup by keycloak_sub (any state, so we can distinguish a disabled or
+    # deleted account from a genuinely new user instead of auto-provisioning
+    # over an existing row).
     result = await db.execute(
-        select(User).where(User.keycloak_sub == sub, User.deleted_at.is_(None), User.is_active.is_(True))
+        select(User).where(User.keycloak_sub == sub)
     )
     user = result.scalar_one_or_none()
+
+    if user is not None and (user.deleted_at is not None or not user.is_active):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": {"code": "ACCOUNT_DISABLED", "message": "Account is deactivated"}},
+        )
 
     if not user:
         # Auto-provision: use INSERT ... ON CONFLICT DO NOTHING to avoid race conditions
@@ -96,7 +152,14 @@ async def get_current_user(
         result = await db.execute(
             select(User).where(User.keycloak_sub == sub, User.deleted_at.is_(None), User.is_active.is_(True))
         )
-        user = result.scalar_one()
+        user = result.scalar_one_or_none()
+        if user is None:
+            # A concurrent insert landed a deactivated/deleted row, or the row
+            # was removed between the conflict check and this read.
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "ACCOUNT_DISABLED", "message": "Account is deactivated"}},
+            )
 
         # Create Doctor profile if needed — INSERT ON CONFLICT to avoid race conditions
         if role == "doctor":
@@ -138,10 +201,18 @@ async def get_current_user(
         if changed:
             await db.flush()
 
-    from app.services.audit_service import set_audit_user
     set_audit_user(user.id)
-    # Populate cache for subsequent requests from the same token subject
-    _user_cache[sub] = (time.monotonic() + _USER_CACHE_TTL, user)
+    # Populate cache for subsequent requests from the same token subject.
+    # Only an immutable snapshot is stored — never the ORM instance.
+    _user_cache_put(
+        sub,
+        _CachedUser(
+            expires_at=time.monotonic() + _USER_CACHE_TTL,
+            user_id=user.id,
+            role=user.role,
+            is_active=user.is_active,
+        ),
+    )
     return user
 
 
@@ -149,6 +220,9 @@ async def get_current_doctor(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> tuple[User, Doctor]:
+    """Doctor role + Doctor profile. Does NOT require admin verification —
+    use `get_verified_doctor` for endpoints that expose patient data.
+    This unverified variant must remain available for onboarding flows."""
     if user.role != "doctor":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

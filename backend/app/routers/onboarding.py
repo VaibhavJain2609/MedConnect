@@ -192,6 +192,17 @@ async def onboarding_clinic(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={"error": {"code": "EXPIRED_CODE", "message": "Invite code expired"}},
             )
+        if invite.max_uses and invite.use_count >= invite.max_uses:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": {"code": "CODE_EXHAUSTED", "message": "Invite code has reached max uses"}},
+            )
+        existing_membership = await clinic_service.get_user_membership(db, user.id, invite.clinic_id)
+        if existing_membership:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"error": {"code": "ALREADY_MEMBER", "message": "Already a member of this clinic"}},
+            )
         membership = ClinicMembership(
             id=_uuid_mod.uuid4(),
             clinic_id=invite.clinic_id,

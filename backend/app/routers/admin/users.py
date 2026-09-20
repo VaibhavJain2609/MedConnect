@@ -3,13 +3,16 @@ import uuid as _uuid_mod
 from datetime import datetime, timezone
 from typing import Optional
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.config import settings
 from app.database import get_db
-from app.dependencies import require_admin
+from app.dependencies import invalidate_user_cache, require_admin
 from app.models.medical_record import MedicalRecord
 from app.models.patient_link import PatientClinicLink
 from app.models.prescription import Prescription
@@ -353,6 +356,86 @@ async def get_user_records(
 VALID_ROLES = {"patient", "doctor", "admin"}
 
 
+async def _sync_keycloak_role(keycloak_sub: str | None, new_role: str) -> None:
+    """Propagate a local role change to Keycloak realm-role mappings.
+
+    `users.role` is overwritten by token claims on every authenticated
+    request, so an admin role change that only touches the local row would be
+    silently reverted on the user's next request. Assigns `new_role` and
+    removes the other managed realm roles so stale claims don't linger.
+    """
+    if not keycloak_sub or keycloak_sub.startswith("walkin:"):
+        return  # local-only account (e.g. walk-in patient) — no Keycloak user
+
+    base = settings.KEYCLOAK_URL
+    realm = settings.KEYCLOAK_REALM
+
+    async with httpx.AsyncClient() as client:
+        token_resp = await client.post(
+            f"{base}/realms/master/protocol/openid-connect/token",
+            data={
+                "grant_type": "password",
+                "client_id": "admin-cli",
+                "username": settings.KEYCLOAK_ADMIN_USER,
+                "password": settings.KEYCLOAK_ADMIN_PASSWORD,
+            },
+        )
+        if token_resp.status_code != 200:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail={"error": {"code": "KEYCLOAK_ADMIN_AUTH_FAILED",
+                                  "message": "Failed to authenticate with Keycloak admin"}},
+            )
+        headers = {"Authorization": f"Bearer {token_resp.json()['access_token']}"}
+
+        async def _role_rep(role_name: str) -> dict | None:
+            resp = await client.get(
+                f"{base}/admin/realms/{realm}/roles/{role_name}", headers=headers
+            )
+            return resp.json() if resp.status_code == 200 else None
+
+        new_role_rep = await _role_rep(new_role)
+        if new_role_rep is None:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail={"error": {"code": "KEYCLOAK_ROLE_NOT_FOUND",
+                                  "message": f"Role '{new_role}' not found in Keycloak"}},
+            )
+
+        assign_resp = await client.post(
+            f"{base}/admin/realms/{realm}/users/{keycloak_sub}/role-mappings/realm",
+            headers=headers,
+            json=[new_role_rep],
+        )
+        if assign_resp.status_code not in (200, 204):
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail={"error": {"code": "KEYCLOAK_ROLE_ASSIGN_FAILED",
+                                  "message": "Failed to assign role in Keycloak"}},
+            )
+
+        # Remove the other managed realm roles (e.g. doctor → admin must drop
+        # 'doctor' so the token stops carrying it).
+        remove_reps = []
+        for other_role in VALID_ROLES - {new_role}:
+            rep = await _role_rep(other_role)
+            if rep:
+                remove_reps.append(rep)
+        if remove_reps:
+            del_resp = await client.request(
+                "DELETE",
+                f"{base}/admin/realms/{realm}/users/{keycloak_sub}/role-mappings/realm",
+                headers=headers,
+                json=remove_reps,
+            )
+            if del_resp.status_code not in (200, 204):
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail={"error": {"code": "KEYCLOAK_ROLE_REMOVE_FAILED",
+                                      "message": "Failed to remove old role in Keycloak"}},
+                )
+
+
 @router.put("/{user_id}", response_model=AdminUserUpdateResponse)
 async def update_user(
     user_id: str,
@@ -382,6 +465,7 @@ async def update_user(
             detail={"error": {"code": "INVALID_ROLE", "message": f"Role must be one of: {', '.join(VALID_ROLES)}"}},
         )
 
+    old_role = user.role
     updated = False
     if body.full_name is not None:
         user.full_name = body.full_name
@@ -402,8 +486,25 @@ async def update_user(
         user.language_pref = body.language_pref
         updated = True
 
+    # Propagate role changes to Keycloak — the token-claim sync in
+    # get_current_user would otherwise overwrite users.role on next request.
+    if body.role is not None and body.role != old_role:
+        await _sync_keycloak_role(user.keycloak_sub, body.role)
+        if body.role == "doctor":
+            # Ensure a Doctor profile exists so doctor endpoints don't 404.
+            doc_stmt = (
+                pg_insert(Doctor)
+                .values(id=_uuid_mod.uuid4(), user_id=user.id)
+                .on_conflict_do_nothing(
+                    index_elements=["user_id"],
+                    index_where=Doctor.deleted_at.is_(None),
+                )
+            )
+            await db.execute(doc_stmt)
+
     if updated:
         user.updated_at = datetime.now(timezone.utc)
+        invalidate_user_cache(user.keycloak_sub)
 
     from app.services.audit_service import log_change
     await log_change(
@@ -453,6 +554,7 @@ async def delete_user(
 
     user.deleted_at = datetime.now(timezone.utc)
     user.updated_at = datetime.now(timezone.utc)
+    invalidate_user_cache(user.keycloak_sub)
 
     from app.services.audit_service import log_change
     await log_change(

@@ -16,7 +16,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_doctor, get_current_user
+from app.models.doctor import Doctor
 from app.models.user import User
 from app.schemas.clinic import (
     ClinicBranchCreate,
@@ -68,9 +69,11 @@ async def _require_membership(db: AsyncSession, user: User, clinic_id: str, role
 @router.post("", response_model=ClinicResponse, status_code=status.HTTP_201_CREATED)
 async def create_clinic(
     data: ClinicCreate,
-    user: User = Depends(get_current_user),
+    doctor_info: tuple[User, Doctor] = Depends(get_current_doctor),
     db: AsyncSession = Depends(get_db),
 ):
+    # Only doctors may create clinics (they become the owner member).
+    user, _doctor = doctor_info
     clinic = await clinic_service.create_clinic(db, data, user.id)
     return ClinicResponse.model_validate(clinic)
 
