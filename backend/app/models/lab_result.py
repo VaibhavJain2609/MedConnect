@@ -36,4 +36,5 @@ class LabResult(Base):
         Index("idx_lab_results_doctor", "doctor_id", postgresql_where=(deleted_at.is_(None))),
         Index("idx_lab_results_status", "status", postgresql_where=(deleted_at.is_(None))),
         Index("idx_lab_results_deleted_at", "deleted_at"),
+        Index("idx_lab_results_category", "test_category", postgresql_where=(deleted_at.is_(None))),
     )

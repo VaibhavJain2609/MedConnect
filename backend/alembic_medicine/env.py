@@ -12,6 +12,11 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.config import settings
+from app.database import MedicineBase
+
+# Import all medicine-DB models so their tables register on
+# MedicineBase.metadata for autogenerate support.
+import app.models.medicine  # noqa: F401
 
 # this is the Alembic Config object
 config = context.config
@@ -23,8 +28,8 @@ config.set_main_option("sqlalchemy.url", settings.MEDICINE_DB_URL_SYNC)
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# No target_metadata - using raw SQL migrations
-target_metadata = None
+# Medicine DB models (MedicineBase) — enables `alembic revision --autogenerate`
+target_metadata = MedicineBase.metadata
 
 
 def run_migrations_offline() -> None:

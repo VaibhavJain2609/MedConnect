@@ -27,7 +27,7 @@ class PatientVital(Base):
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
     )
     recorded_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+        DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     vital_type: Mapped[str] = mapped_column(String(30), nullable=False)
     value: Mapped[float] = mapped_column(Numeric(8, 2), nullable=False)

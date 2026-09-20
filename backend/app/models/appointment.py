@@ -47,4 +47,7 @@ class Appointment(Base):
             "scheduled_at",
             postgresql_where=(deleted_at.is_(None)),
         ),
+        Index("idx_appointments_clinic", "clinic_id", postgresql_where=(deleted_at.is_(None))),
+        Index("idx_appointments_status", "status", postgresql_where=(deleted_at.is_(None))),
+        Index("idx_appointments_branch", "branch_id", postgresql_where=(deleted_at.is_(None))),
     )

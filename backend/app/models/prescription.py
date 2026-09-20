@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Index, String, Text, func
+from sqlalchemy import Date, DateTime, ForeignKey, Index, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -32,9 +32,11 @@ class Prescription(Base):
     appointment: Mapped["Appointment"] = relationship("Appointment", back_populates=None, lazy="select")
 
     __table_args__ = (
+        # record -> prescription is one-to-one (relationship is uselist=False)
+        UniqueConstraint("record_id", name="uq_prescriptions_record_id"),
         Index("idx_rx_patient", "patient_id", "created_at", postgresql_where=(deleted_at.is_(None))),
         Index("idx_rx_doctor", "doctor_id", postgresql_where=(deleted_at.is_(None))),
         Index("idx_rx_clinic", "clinic_id", postgresql_where=(deleted_at.is_(None))),
         Index("idx_rx_branch", "branch_id", postgresql_where=(deleted_at.is_(None))),
-        Index("idx_rx_appointment", "appointment_id"),
+        Index("idx_rx_appointment", "appointment_id", postgresql_where=(appointment_id.isnot(None))),
     )

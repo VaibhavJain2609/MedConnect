@@ -45,4 +45,11 @@ class QueueEntry(Base):
             "status",
             postgresql_where=(deleted_at.is_(None)),
         ),
+        Index("idx_queue_entries_doctor", "doctor_id", postgresql_where=(deleted_at.is_(None))),
+        Index("idx_queue_entries_patient", "patient_id", postgresql_where=(deleted_at.is_(None))),
+        Index(
+            "idx_queue_entries_appointment",
+            "appointment_id",
+            postgresql_where=(deleted_at.is_(None)),
+        ),
     )

@@ -1,6 +1,5 @@
 """Medicine models for EMR schema."""
 
-from .catalog import Component, Medicine, MedicineComponent
 from .classifications import ChemicalClass, TherapeuticClass, ActionClass
 from .salts import Salt, SaltStrength
 from .clinical_safety import SideEffect, Contraindication, DrugInteraction, SaltSideEffect, SaltContraindication, BrandSideEffect
@@ -12,10 +11,6 @@ from .dosing import DosingGuideline
 from .audit import MedicineSearchLog, PrescriptionAudit
 
 __all__ = [
-    # Catalog (admin-managed medicines and components)
-    "Medicine",
-    "Component",
-    "MedicineComponent",
     # Classifications
     "ChemicalClass",
     "TherapeuticClass",
