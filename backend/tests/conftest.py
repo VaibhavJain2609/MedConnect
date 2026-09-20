@@ -1,3 +1,4 @@
+import os
 import time
 import uuid
 from collections.abc import AsyncGenerator
@@ -10,6 +11,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 import app.dependencies as _dependencies
 from app.database import Base, MedicineBase, get_db, get_medicine_db
@@ -17,15 +19,23 @@ from app.main import app
 from app.models.doctor import Doctor
 from app.models.user import User
 
-TEST_DATABASE_URL = "postgresql+asyncpg://medconnect:medconnect@postgres:5432/medconnect_test"
+TEST_DATABASE_URL = os.environ.get(
+    "TEST_DATABASE_URL",
+    "postgresql+asyncpg://medconnect:medconnect@postgres:5432/medconnect_test",
+)
 # The medicine catalog lives on the same Postgres instance; init.sql creates
 # the medicine_db_test database alongside medconnect_test.
-TEST_MEDICINE_DATABASE_URL = "postgresql+asyncpg://medconnect:medconnect@postgres:5432/medicine_db_test"
+TEST_MEDICINE_DATABASE_URL = os.environ.get(
+    "TEST_MEDICINE_DATABASE_URL",
+    "postgresql+asyncpg://medconnect:medconnect@postgres:5432/medicine_db_test",
+)
 
-engine = create_async_engine(TEST_DATABASE_URL, echo=False)
+# NullPool: pytest-asyncio gives each test its own event loop; pooled asyncpg
+# connections bound to a dead loop raise "attached to a different loop".
+engine = create_async_engine(TEST_DATABASE_URL, echo=False, poolclass=NullPool)
 test_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
-medicine_engine = create_async_engine(TEST_MEDICINE_DATABASE_URL, echo=False)
+medicine_engine = create_async_engine(TEST_MEDICINE_DATABASE_URL, echo=False, poolclass=NullPool)
 test_medicine_session = async_sessionmaker(medicine_engine, class_=AsyncSession, expire_on_commit=False)
 
 # Generate RSA key pair for test tokens
@@ -120,6 +130,9 @@ def _isolated_security_state(monkeypatch):
         fake_redis = _PermissiveRedis()
 
     monkeypatch.setattr("app.middleware.rate_limit._get_redis", lambda: fake_redis)
+    # Upload-key registry also talks to Redis — share the same fake so presign/
+    # upload/serve tests exercise the real owner-binding logic without a server.
+    monkeypatch.setattr("app.services.storage_service._get_redis", lambda: fake_redis)
     yield fake_redis
     _dependencies._user_cache.clear()
 
@@ -273,6 +286,50 @@ async def doctor_client(
     )
     client.headers["Authorization"] = f"Bearer {token}"
     return client
+
+
+async def verify_provisioned_doctor(db: AsyncSession, doctor_sub: str) -> Doctor:
+    """Flip an auto-provisioned doctor (created via /auth/me) to verified +
+    onboarding complete. Required since PHI endpoints now need get_verified_doctor."""
+    from sqlalchemy import select as _select
+
+    user = (
+        await db.execute(_select(User).where(User.keycloak_sub == doctor_sub))
+    ).scalar_one()
+    doctor = (
+        await db.execute(_select(Doctor).where(Doctor.user_id == user.id))
+    ).scalar_one()
+    doctor.verified = True
+    doctor.onboarding_step = "completed"
+    await db.commit()
+    await db.refresh(doctor)
+    return doctor
+
+
+async def grant_doctor_patient_relationship(
+    db: AsyncSession, doctor_sub: str, patient_id: uuid.UUID | str
+) -> None:
+    """Give a provisioned doctor a relationship to a patient by authoring a
+    minimal medical record (satisfies _check_doctor_patient_relationship)."""
+    from sqlalchemy import select as _select
+
+    from app.models.medical_record import MedicalRecord
+
+    user = (
+        await db.execute(_select(User).where(User.keycloak_sub == doctor_sub))
+    ).scalar_one()
+    doctor = (
+        await db.execute(_select(Doctor).where(Doctor.user_id == user.id))
+    ).scalar_one()
+    db.add(
+        MedicalRecord(
+            patient_id=uuid.UUID(str(patient_id)),
+            doctor_id=doctor.id,
+            record_type="opd_note",
+            title="Relationship seed",
+        )
+    )
+    await db.commit()
 
 
 def make_auth_header(user: User, roles: list[str] | None = None) -> dict[str, str]:

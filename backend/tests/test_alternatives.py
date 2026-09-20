@@ -276,8 +276,8 @@ async def test_get_brand_alternatives_partial_match_excluded(medicine_db: AsyncS
 
 
 @pytest.mark.asyncio
-async def test_get_brand_alternatives_includes_discontinued(medicine_db: AsyncSession):
-    """Test that discontinued brands are included in alternatives."""
+async def test_get_brand_alternatives_excludes_discontinued(medicine_db: AsyncSession):
+    """Discontinued brands must not be suggested as alternatives."""
     # Create manufacturer
     mfr1 = Manufacturer(manufacturer_name="Pharma A", country="India")
     mfr2 = Manufacturer(manufacturer_name="Pharma B", country="India")
@@ -331,7 +331,5 @@ async def test_get_brand_alternatives_includes_discontinued(medicine_db: AsyncSe
         brand_active.brand_id,
     )
 
-    # Should include discontinued brand
-    assert len(alternatives) == 1
-    assert alternatives[0].brand_id == brand_discontinued.brand_id
-    assert alternatives[0].is_discontinued is True
+    # Discontinued brand is excluded — never suggest a withdrawn drug
+    assert len(alternatives) == 0

@@ -3,10 +3,10 @@ import uuid
 import pytest
 from httpx import AsyncClient
 
-from tests.conftest import create_test_token
+from tests.conftest import create_test_token, grant_doctor_patient_relationship, verify_provisioned_doctor
 
 
-async def setup_prescription(client: AsyncClient) -> tuple[str, str, str]:
+async def setup_prescription(client: AsyncClient, db) -> tuple[str, str, str]:
     """Create doctor, patient, and prescription for testing."""
     # Create patient
     patient_sub = str(uuid.uuid4())
@@ -28,6 +28,8 @@ async def setup_prescription(client: AsyncClient) -> tuple[str, str, str]:
         roles=["doctor"]
     )
     await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {doctor_token}"})
+    await verify_provisioned_doctor(db, doctor_sub)
+    await grant_doctor_patient_relationship(db, doctor_sub, patient_id)
 
     # Update doctor profile
     await client.put(
@@ -48,20 +50,19 @@ async def setup_prescription(client: AsyncClient) -> tuple[str, str, str]:
             "patient_id": patient_id,
             "medicines": [
                 {
-                    "name": "Amoxicillin 500mg",
-                    "salt": "Amoxicillin",
-                    "dosage": "500mg",
+                    "brand_name": "Amoxicillin 500mg",
+                    "dose": "500mg",
                     "frequency": "3 times daily",
                     "duration": "5 days",
-                    "timing": "after food",
+                    "instructions": "after food",
                     "notes": "Complete full course"
                 },
                 {
-                    "name": "Paracetamol 500mg",
-                    "dosage": "500mg",
+                    "brand_name": "Paracetamol 500mg",
+                    "dose": "500mg",
                     "frequency": "as needed",
                     "duration": "3 days",
-                    "timing": "after food"
+                    "instructions": "after food"
                 }
             ],
             "diagnosis": "Upper Respiratory Tract Infection",
@@ -75,9 +76,9 @@ async def setup_prescription(client: AsyncClient) -> tuple[str, str, str]:
 
 
 @pytest.mark.asyncio
-async def test_doctor_can_download_prescription_pdf(client: AsyncClient):
+async def test_doctor_can_download_prescription_pdf(client: AsyncClient, db):
     """Test that doctor can download PDF of their prescription."""
-    doctor_token, _, prescription_id = await setup_prescription(client)
+    doctor_token, _, prescription_id = await setup_prescription(client, db)
 
     response = await client.get(
         f"/api/v1/prescriptions/{prescription_id}/pdf",
@@ -86,14 +87,14 @@ async def test_doctor_can_download_prescription_pdf(client: AsyncClient):
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/pdf"
-    assert "attachment" in response.headers.get("content-disposition", "")
+    assert "filename=" in response.headers.get("content-disposition", "")  # served inline for in-browser viewing
     assert len(response.content) > 1000  # PDF should be reasonably sized
 
 
 @pytest.mark.asyncio
-async def test_patient_can_download_their_prescription_pdf(client: AsyncClient):
+async def test_patient_can_download_their_prescription_pdf(client: AsyncClient, db):
     """Test that patient can download PDF of their own prescription."""
-    _, patient_token, prescription_id = await setup_prescription(client)
+    _, patient_token, prescription_id = await setup_prescription(client, db)
 
     response = await client.get(
         f"/api/v1/prescriptions/{prescription_id}/pdf",
@@ -105,9 +106,9 @@ async def test_patient_can_download_their_prescription_pdf(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_unauthorized_user_cannot_download_pdf(client: AsyncClient):
+async def test_unauthorized_user_cannot_download_pdf(client: AsyncClient, db):
     """Test that unauthorized user cannot download someone else's prescription PDF."""
-    _, _, prescription_id = await setup_prescription(client)
+    _, _, prescription_id = await setup_prescription(client, db)
 
     # Create different user
     other_sub = str(uuid.uuid4())
@@ -128,9 +129,9 @@ async def test_unauthorized_user_cannot_download_pdf(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_pdf_download_for_nonexistent_prescription(client: AsyncClient):
+async def test_pdf_download_for_nonexistent_prescription(client: AsyncClient, db):
     """Test 404 for non-existent prescription."""
-    doctor_token, _, _ = await setup_prescription(client)
+    doctor_token, _, _ = await setup_prescription(client, db)
 
     fake_id = str(uuid.uuid4())
     response = await client.get(

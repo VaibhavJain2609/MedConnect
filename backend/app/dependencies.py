@@ -33,6 +33,8 @@ class _CachedUser(NamedTuple):
     user_id: uuid.UUID
     role: str
     is_active: bool
+    email: str | None
+    full_name: str | None
 
 
 _user_cache: dict[str, _CachedUser] = {}
@@ -101,11 +103,15 @@ async def get_current_user(
     # deactivated/deleted accounts are not served from cache.
     _now = time.monotonic()
     _cached = _user_cache.get(sub)
+    # A claim mismatch (name/email changed in Keycloak) forces a cache miss so
+    # the sync path below still propagates updated claims to the local row.
     if (
         _cached is not None
         and _cached.expires_at > _now
         and _cached.role == role
         and _cached.is_active
+        and _cached.email == payload.get("email")
+        and _cached.full_name == payload.get("name", payload.get("preferred_username"))
     ):
         user = await db.get(User, _cached.user_id)
         if (
@@ -211,6 +217,8 @@ async def get_current_user(
             user_id=user.id,
             role=user.role,
             is_active=user.is_active,
+            email=user.email,
+            full_name=user.full_name,
         ),
     )
     return user

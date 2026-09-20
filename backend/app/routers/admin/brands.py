@@ -280,13 +280,17 @@ async def update_brand(
             db.add(composition)
 
     await db.commit()
+    # The in-session compositions collection still holds the deleted rows
+    # (expire_on_commit=False in tests, and the identity map may serve stale
+    # data) — expire so the reload below reflects the new composition set.
+    db.expire(brand)
 
     # Reload with relationships for response
     result = await db.execute(
         select(Brand)
         .options(
             selectinload(Brand.manufacturer),
-            selectinload(Brand.compositions).selectinload(BrandComposition.salt_strength)
+            selectinload(Brand.compositions).selectinload(BrandComposition.salt_strength).selectinload(SaltStrength.salt)
         )
         .where(Brand.brand_id == brand_id)
     )

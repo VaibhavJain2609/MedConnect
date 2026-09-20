@@ -57,7 +57,7 @@ class TestCreateManufacturer:
         # Try exact duplicate
         response = await admin_client.post("/api/v1/admin/manufacturers", json=request_data)
         assert response.status_code == 409
-        assert "already exists" in response.json()["detail"].lower()
+        assert "already exists" in response.json()["error"]["message"].lower()
 
         # Try case-insensitive duplicate
         request_data["manufacturer_name"] = "gsk pharmaceuticals"
@@ -145,7 +145,7 @@ class TestUpdateManufacturer:
         )
 
         assert response.status_code == 409
-        assert "already exists" in response.json()["detail"].lower()
+        assert "already exists" in response.json()["error"]["message"].lower()
 
     async def test_update_manufacturer_not_found(self, admin_client, medicine_db):
         """Should return 404 for non-existent manufacturer."""
@@ -243,7 +243,7 @@ class TestDeleteManufacturer:
         )
 
         assert response.status_code == 409
-        assert "brand" in response.json()["detail"].lower()
+        assert "brand" in response.json()["error"]["message"].lower()
 
     async def test_delete_manufacturer_not_found(self, admin_client, medicine_db):
         """Should return 404 for non-existent manufacturer."""

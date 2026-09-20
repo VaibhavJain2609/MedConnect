@@ -88,7 +88,7 @@ async def _make_other_doctor(db: AsyncSession) -> tuple[User, Doctor, dict]:
     )
     db.add(user)
     await db.flush()
-    profile = Doctor(id=uuid.uuid4(), user_id=user.id)
+    profile = Doctor(id=uuid.uuid4(), user_id=user.id, verified=True, onboarding_step="completed")
     db.add(profile)
     await db.commit()
     token = create_test_token(
@@ -152,7 +152,7 @@ class TestClinicMembershipEnforcement:
             headers={**outsider_auth, "X-Clinic-Id": str(clinic.id)},
         )
         assert resp.status_code == 403
-        assert resp.json()["detail"]["error"]["code"] == "NOT_CLINIC_MEMBER"
+        assert resp.json()["error"]["code"] == "NOT_CLINIC_MEMBER"
 
     async def test_missing_x_clinic_id_rejected(self, doctor_client):
         """Endpoints requiring clinic context reject requests without the header."""
@@ -166,7 +166,7 @@ class TestClinicMembershipEnforcement:
             },
         )
         assert resp.status_code == 400
-        assert resp.json()["detail"]["error"]["code"] == "MISSING_CLINIC"
+        assert resp.json()["error"]["code"] == "MISSING_CLINIC"
 
     async def test_malformed_x_clinic_id_rejected(self, doctor_client):
         resp = await doctor_client.post(
@@ -218,6 +218,7 @@ class TestConsentVisibility:
         approved_link,
         doctor_user,
         patient_user,
+        doctor_profile,
     ):
         doctor_auth = make_auth_header(doctor_user, roles=["doctor"])
         patient_auth = make_auth_header(patient_user)
@@ -250,7 +251,8 @@ class TestConsentVisibility:
         ]
 
     async def test_pending_consent_hides_patient_from_clinic_list(
-        self, doctor_client, db, clinic, clinic_membership, doctor_user, patient_user
+        self, doctor_client, db, clinic, clinic_membership, doctor_user, patient_user,
+        doctor_profile,
     ):
         link = PatientClinicLink(
             id=uuid.uuid4(),
@@ -268,7 +270,8 @@ class TestConsentVisibility:
         assert str(patient_user.id) not in ids
 
     async def test_pending_link_visible_with_consent_only_false(
-        self, doctor_client, db, clinic, clinic_membership, doctor_user, patient_user
+        self, doctor_client, db, clinic, clinic_membership, doctor_user, patient_user,
+        doctor_profile,
     ):
         link = PatientClinicLink(
             id=uuid.uuid4(),
@@ -284,8 +287,9 @@ class TestConsentVisibility:
             f"/api/v1/clinics/{clinic.id}/patients?consent_only=false"
         )
         assert listing.status_code == 200
-        ids = [row["patient_id"] for row in listing.json()["data"]]
-        assert str(patient_user.id) in ids
+        rows = listing.json()["data"]
+        assert len(rows) == 1
+        assert rows[0]["patient_id"] is None  # identity masked until consent is approved
 
 
 # ---------------------------------------------------------------------------
@@ -352,7 +356,7 @@ class TestLinkCodes:
             f"/api/v1/clinics/{clinic.id}/link-patient", json={"code": "EXPIRED123"}
         )
         assert resp.status_code == 400
-        assert resp.json()["detail"]["error"]["code"] == "EXPIRED_CODE"
+        assert resp.json()["error"]["code"] == "EXPIRED_CODE"
 
     async def test_unknown_code_returns_404(
         self, doctor_client, clinic, clinic_membership
@@ -361,7 +365,7 @@ class TestLinkCodes:
             f"/api/v1/clinics/{clinic.id}/link-patient", json={"code": "NOSUCHCODE"}
         )
         assert resp.status_code == 404
-        assert resp.json()["detail"]["error"]["code"] == "INVALID_CODE"
+        assert resp.json()["error"]["code"] == "INVALID_CODE"
 
     async def test_non_member_cannot_link_patient(
         self, client, db, clinic, patient_user
@@ -382,4 +386,4 @@ class TestLinkCodes:
             headers=outsider_auth,
         )
         assert resp.status_code == 403
-        assert resp.json()["detail"]["error"]["code"] == "NOT_CLINIC_MEMBER"
+        assert resp.json()["error"]["code"] == "NOT_CLINIC_MEMBER"

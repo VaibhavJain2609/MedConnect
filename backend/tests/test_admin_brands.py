@@ -99,7 +99,7 @@ class TestCreateBrand:
         response = await admin_client.post("/api/v1/admin/brands", json=request_data)
 
         assert response.status_code == 404
-        assert "Manufacturer" in response.json()["detail"]
+        assert "Manufacturer" in response.json()["error"]["message"]
 
     async def test_create_brand_nonexistent_salt_strength(
         self, admin_client, sample_manufacturer
@@ -119,7 +119,7 @@ class TestCreateBrand:
         response = await admin_client.post("/api/v1/admin/brands", json=request_data)
 
         assert response.status_code == 404
-        assert "Salt strengths not found" in response.json()["detail"]
+        assert "Salt strengths not found" in response.json()["error"]["message"]
 
     async def test_create_brand_duplicate(
         self, admin_client, sample_brand, sample_manufacturer, sample_salt_strength
@@ -139,7 +139,7 @@ class TestCreateBrand:
         response = await admin_client.post("/api/v1/admin/brands", json=request_data)
 
         assert response.status_code == 409
-        assert "already exists" in response.json()["detail"]
+        assert "already exists" in response.json()["error"]["message"]
 
     async def test_create_brand_unauthorized(
         self, client, sample_manufacturer, sample_salt_strength

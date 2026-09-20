@@ -349,7 +349,7 @@ class TestBookingConflicts:
 
         resp2 = await patient_client.post("/api/v1/appointments", json=payload)
         assert resp2.status_code == 409
-        assert resp2.json()["detail"]["error"]["code"] == "DOCTOR_UNAVAILABLE"
+        assert resp2.json()["error"]["code"] == "DOCTOR_UNAVAILABLE"
 
     async def test_overlapping_slot_returns_409(
         self, patient_client, db, patient_user, doctor_profile

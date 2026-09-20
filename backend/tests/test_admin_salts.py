@@ -59,7 +59,7 @@ class TestCreateSalt:
         # Exact duplicate
         response = await admin_client.post("/api/v1/admin/salts", json=request_data)
         assert response.status_code == 409
-        assert "already exists" in response.json()["detail"].lower()
+        assert "already exists" in response.json()["error"]["message"].lower()
 
         # Case-insensitive duplicate
         request_data["salt_name"] = "ASPIRIN"
@@ -83,8 +83,8 @@ class TestCreateSalt:
         data = response.json()
         assert data["salt_name"] == "Amoxicillin"
         assert len(data["strengths"]) == 2
-        assert data["strengths"][0]["strength_value"] == 250
-        assert data["strengths"][1]["strength_value"] == 500
+        assert float(data["strengths"][0]["strength_value"]) == 250
+        assert float(data["strengths"][1]["strength_value"]) == 500
 
 
 class TestUpdateSalt:
@@ -165,7 +165,7 @@ class TestUpdateSalt:
         )
 
         assert response.status_code == 409
-        assert "already exists" in response.json()["detail"].lower()
+        assert "already exists" in response.json()["error"]["message"].lower()
 
     async def test_update_salt_not_found(self, admin_client, medicine_db):
         """Should return 404 for non-existent salt."""
@@ -224,7 +224,7 @@ class TestDeleteSalt:
         )
 
         assert response.status_code == 409
-        assert "strength" in response.json()["detail"].lower()
+        assert "strength" in response.json()["error"]["message"].lower()
 
     async def test_delete_salt_not_found(self, admin_client, medicine_db):
         """Should return 404 for non-existent salt."""

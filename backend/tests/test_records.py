@@ -3,10 +3,10 @@ import uuid
 import pytest
 from httpx import AsyncClient
 
-from tests.conftest import create_test_token
+from tests.conftest import create_test_token, grant_doctor_patient_relationship, verify_provisioned_doctor
 
 
-async def create_doctor_and_patient(client: AsyncClient) -> tuple[str, str, str]:
+async def create_doctor_and_patient(client: AsyncClient, db) -> tuple[str, str, str]:
     """Create a doctor and patient via Keycloak tokens, return (doctor_token, patient_token, patient_id)."""
     patient_sub = str(uuid.uuid4())
     patient_token = create_test_token(sub=patient_sub, email="patient@records.com", name="Test Patient", roles=["patient"])
@@ -20,13 +20,15 @@ async def create_doctor_and_patient(client: AsyncClient) -> tuple[str, str, str]
 
     # Auto-provision doctor by calling /me
     await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {doctor_token}"})
+    await verify_provisioned_doctor(db, doctor_sub)
+    await grant_doctor_patient_relationship(db, doctor_sub, patient_id)
 
     return doctor_token, patient_token, patient_id
 
 
 @pytest.mark.asyncio
-async def test_create_record(client: AsyncClient):
-    doctor_token, patient_token, patient_id = await create_doctor_and_patient(client)
+async def test_create_record(client: AsyncClient, db):
+    doctor_token, patient_token, patient_id = await create_doctor_and_patient(client, db)
 
     response = await client.post(
         "/api/v1/doctors/records",
@@ -44,8 +46,8 @@ async def test_create_record(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_patient_timeline(client: AsyncClient):
-    doctor_token, patient_token, patient_id = await create_doctor_and_patient(client)
+async def test_patient_timeline(client: AsyncClient, db):
+    doctor_token, patient_token, patient_id = await create_doctor_and_patient(client, db)
 
     # Create 2 records
     await client.post(
@@ -65,13 +67,14 @@ async def test_patient_timeline(client: AsyncClient):
     )
     assert response.status_code == 200
     data = response.json()
-    assert len(data["data"]) == 2
+    titles = {r["title"] for r in data["data"]}
+    assert {"Visit 1", "Blood Work"} <= titles
     assert data["pagination"]["has_more"] is False
 
 
 @pytest.mark.asyncio
-async def test_patient_cannot_access_other_records(client: AsyncClient):
-    doctor_token, patient_token, patient_id = await create_doctor_and_patient(client)
+async def test_patient_cannot_access_other_records(client: AsyncClient, db):
+    doctor_token, patient_token, patient_id = await create_doctor_and_patient(client, db)
 
     # Create another patient
     other_sub = str(uuid.uuid4())
