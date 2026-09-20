@@ -7,6 +7,7 @@ Limits per token hash or IP address:
 """
 import hashlib
 import logging
+import os
 import time
 
 import redis.asyncio as aioredis
@@ -31,6 +32,16 @@ _LIMITS: dict[str, int] = {
 }
 
 _redis_client: aioredis.Redis | None = None
+
+# IPs of trusted reverse proxies whose X-Forwarded-For header we honor.
+# Comma-separated list via TRUSTED_PROXY_IPS env var. Empty = never trust XFF;
+# the direct peer address is used instead (unauthenticated callers can
+# otherwise spoof XFF to evade per-IP rate limits).
+_TRUSTED_PROXIES = {
+    ip.strip()
+    for ip in os.environ.get("TRUSTED_PROXY_IPS", "").split(",")
+    if ip.strip()
+}
 
 
 def _get_redis() -> aioredis.Redis:
@@ -61,11 +72,14 @@ def _get_user_key(request: Request) -> str:
         token_hash = hashlib.sha256(token.encode()).hexdigest()[:32]
         return f"token:{token_hash}"
 
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return f"ip:{forwarded.split(',')[0].strip()}"
-    host = request.client.host if request.client else "unknown"
-    return f"ip:{host}"
+    host = request.client.host if request.client else None
+    # Only honor X-Forwarded-For when the immediate peer is a configured
+    # trusted proxy — the header is trivially spoofed by direct clients.
+    if host and host in _TRUSTED_PROXIES:
+        forwarded = request.headers.get("X-Forwarded-For")
+        if forwarded:
+            return f"ip:{forwarded.split(',')[0].strip()}"
+    return f"ip:{host or 'unknown'}"
 
 
 async def _check_limit(

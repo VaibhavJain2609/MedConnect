@@ -12,6 +12,7 @@ GET /api/v1/prescriptions/{prescription_id}/pdf
 import io
 from datetime import date as _date
 from uuid import UUID
+from xml.sax.saxutils import escape
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
@@ -136,10 +137,13 @@ def _build_pdf(
     # -----------------------------------------------------------------------
     # Header: facility / clinic name
     # -----------------------------------------------------------------------
+    # All user-controlled strings interpolated into Paragraph markup are
+    # XML-escaped to prevent markup injection (e.g. <img src=...> server-side
+    # file reads via ReportLab's paragraph parser).
     if facility_name:
-        story.append(Paragraph(facility_name, style_heading))
+        story.append(Paragraph(escape(str(facility_name)), style_heading))
     if facility_city:
-        story.append(Paragraph(facility_city, style_subheading))
+        story.append(Paragraph(escape(str(facility_city)), style_subheading))
     if facility_name or facility_city:
         story.append(Spacer(1, 3 * mm))
 
@@ -149,14 +153,14 @@ def _build_pdf(
     # -----------------------------------------------------------------------
     # Doctor info row
     # -----------------------------------------------------------------------
-    doctor_display = f"Dr. {doctor_name}" if doctor_name else "—"
+    doctor_display = f"Dr. {escape(str(doctor_name))}" if doctor_name else "—"
     doctor_left = f"<b>{doctor_display}</b>"
     if specialization:
-        doctor_left += f"<br/>{specialization}"
+        doctor_left += f"<br/>{escape(str(specialization))}"
 
     doctor_right = ""
     if license_number:
-        doctor_right = f"Reg. No.: {license_number}"
+        doctor_right = f"Reg. No.: {escape(str(license_number))}"
 
     doctor_table = Table(
         [[Paragraph(doctor_left, style_normal), Paragraph(doctor_right, style_label)]],
@@ -181,7 +185,7 @@ def _build_pdf(
     # -----------------------------------------------------------------------
     # Patient & Date row
     # -----------------------------------------------------------------------
-    patient_display = patient_name or "—"
+    patient_display = escape(str(patient_name)) if patient_name else "—"
     pt_date_table = Table(
         [[
             Paragraph(f'<font color="#6B7280">Patient: </font><b>{patient_display}</b>', style_normal),
@@ -224,17 +228,17 @@ def _build_pdf(
         med_rows = [med_header]
 
         for idx, med in enumerate(medicines, start=1):
-            brand = med.get("brand_name") or med.get("name") or "Unknown"
-            dose = med.get("dose") or med.get("dosage") or "—"
-            freq = med.get("frequency") or "—"
-            dur = med.get("duration") or "—"
+            brand = escape(str(med.get("brand_name") or med.get("name") or "Unknown"))
+            dose = escape(str(med.get("dose") or med.get("dosage") or "—"))
+            freq = escape(str(med.get("frequency") or "—"))
+            dur = escape(str(med.get("duration") or "—"))
             route = med.get("route") or ""
             instr_parts = []
             if route:
-                instr_parts.append(f"Route: {route}")
+                instr_parts.append(f"Route: {escape(str(route))}")
             raw_instr = med.get("instructions") or med.get("timing") or med.get("notes") or ""
             if raw_instr:
-                instr_parts.append(raw_instr)
+                instr_parts.append(escape(str(raw_instr)))
             instr = " | ".join(instr_parts) if instr_parts else "—"
 
             med_rows.append([
@@ -277,10 +281,10 @@ def _build_pdf(
     # Diagnosis & Notes
     # -----------------------------------------------------------------------
     if diagnosis:
-        story.append(Paragraph(f"<b>Diagnosis:</b> {diagnosis}", style_normal))
+        story.append(Paragraph(f"<b>Diagnosis:</b> {escape(str(diagnosis))}", style_normal))
         story.append(Spacer(1, 2 * mm))
     if notes:
-        story.append(Paragraph(f"<b>Notes:</b> {notes}", style_normal))
+        story.append(Paragraph(f"<b>Notes:</b> {escape(str(notes))}", style_normal))
         story.append(Spacer(1, 2 * mm))
     if valid_until:
         story.append(Paragraph(f"<b>Valid until:</b> {_fmt_date(valid_until)}", style_normal))
@@ -293,7 +297,7 @@ def _build_pdf(
     # -----------------------------------------------------------------------
     # Signature block (right-aligned)
     # -----------------------------------------------------------------------
-    sig_text = f"Dr. {doctor_name}" if doctor_name else ""
+    sig_text = f"Dr. {escape(str(doctor_name))}" if doctor_name else ""
     sig_table = Table(
         [[Paragraph(sig_text, style_bold)]],
         colWidths=[page_width],

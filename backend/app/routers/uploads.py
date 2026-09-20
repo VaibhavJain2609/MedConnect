@@ -6,20 +6,32 @@ Routes:
   PUT  /api/v1/uploads/{key}     — receive raw bytes (local backend only)
   GET  /api/v1/uploads/{key}     — serve file (local backend only)
 """
+import logging
 import mimetypes
 import os
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, field_validator
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.database import get_db
 from app.dependencies import get_current_user
+from app.models.clinic import ClinicMembership
+from app.models.doctor import Doctor
+from app.models.medical_record import MedicalRecord
+from app.models.patient_link import PatientClinicLink
 from app.models.user import User
 from app.services.storage_service import (
+    MAX_UPLOAD_BYTES,
     generate_presigned_upload,
     get_local_file_path,
+    get_upload_key_owner,
 )
+
+_logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/uploads", tags=["uploads"])
 
@@ -75,12 +87,13 @@ class PresignRequest(BaseModel):
 @router.post("/presign")
 async def presign(
     body: PresignRequest,
-    _user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Generate a presigned upload URL for any authenticated user."""
     result = await generate_presigned_upload(
         file_name=body.file_name,
         content_type=body.content_type,
+        owner_id=current_user.id,
     )
     return {
         "presigned_url": result["presigned_url"],
@@ -94,9 +107,14 @@ async def presign(
 async def upload_file(
     object_key: str,
     request: Request,
-    _user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    """Receive raw file bytes and save to local storage (local backend only)."""
+    """Receive raw file bytes and save to local storage (local backend only).
+
+    The key must have been issued to this user via POST /presign within the
+    last 15 minutes, the declared/actual size must not exceed 15 MB, and an
+    existing object is never overwritten.
+    """
     if settings.STORAGE_BACKEND != "local":
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -111,10 +129,57 @@ async def upload_file(
             detail={"error": {"code": "INVALID_KEY", "message": "Invalid object key"}},
         )
 
-    # Create parent directories
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    # The local PUT URL carries no signature/expiry, so the key must have been
+    # registered by this user at presign time.  Fail closed if the registry is
+    # unavailable — accepting unverifiable keys would defeat the binding.
+    try:
+        owner = await get_upload_key_owner(object_key)
+    except Exception as exc:
+        _logger.error("Upload-key registry error (%s: %s); rejecting upload", type(exc).__name__, exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"error": {"code": "UPLOAD_UNAVAILABLE", "message": "Upload service temporarily unavailable"}},
+        )
+    if owner is None or owner != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": {"code": "INVALID_UPLOAD_KEY", "message": "Upload key is unknown, expired, or was not issued to this user"}},
+        )
 
-    body_bytes = await request.body()
+    # Never overwrite an existing object.
+    if os.path.exists(file_path):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": {"code": "ALREADY_EXISTS", "message": "An object already exists at this key"}},
+        )
+
+    # Reject oversized uploads up front when the client declares a length.
+    content_length = request.headers.get("content-length")
+    if content_length is not None:
+        try:
+            declared = int(content_length)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": {"code": "INVALID_CONTENT_LENGTH", "message": "Invalid Content-Length header"}},
+            )
+        if declared > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail={"error": {"code": "FILE_TOO_LARGE", "message": f"File exceeds maximum size of {MAX_UPLOAD_BYTES // (1024 * 1024)} MB"}},
+            )
+
+    # Stream the body with a hard cap (covers chunked/missing Content-Length).
+    chunks = bytearray()
+    async for chunk in request.stream():
+        chunks.extend(chunk)
+        if len(chunks) > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail={"error": {"code": "FILE_TOO_LARGE", "message": f"File exceeds maximum size of {MAX_UPLOAD_BYTES // (1024 * 1024)} MB"}},
+            )
+    body_bytes = bytes(chunks)
+
     if not body_bytes:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -131,18 +196,124 @@ async def upload_file(
             detail={"error": {"code": "INVALID_FILE_TYPE", "message": "File content does not match declared type"}},
         )
 
-    with open(file_path, "wb") as f:
-        f.write(body_bytes)
+    # Create parent directories
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+    # "xb" = exclusive create: atomically refuses to overwrite an existing
+    # file, closing the race between the exists() check above and the write.
+    try:
+        with open(file_path, "xb") as f:
+            f.write(body_bytes)
+    except FileExistsError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": {"code": "ALREADY_EXISTS", "message": "An object already exists at this key"}},
+        )
 
     return {"status": "ok", "object_key": object_key}
+
+
+async def _doctor_has_patient_relationship(
+    db: AsyncSession, doctor: Doctor, patient_id, record_created_at=None
+) -> bool:
+    """Mirror of the doctor↔patient access rules used by the doctors router:
+    the doctor authored a record for the patient, or shares a clinic with an
+    approved PatientClinicLink (a revoked link still grants read access to
+    records created before revocation)."""
+    record_exists = await db.execute(
+        select(MedicalRecord.id)
+        .where(
+            MedicalRecord.doctor_id == doctor.id,
+            MedicalRecord.patient_id == patient_id,
+            MedicalRecord.deleted_at.is_(None),
+        )
+        .limit(1)
+    )
+    if record_exists.scalar_one_or_none():
+        return True
+
+    links = await db.execute(
+        select(PatientClinicLink.consent_status, PatientClinicLink.revoked_at)
+        .join(ClinicMembership, PatientClinicLink.clinic_id == ClinicMembership.clinic_id)
+        .where(
+            ClinicMembership.user_id == doctor.user_id,
+            ClinicMembership.is_active.is_(True),
+            ClinicMembership.deleted_at.is_(None),
+            PatientClinicLink.patient_id == patient_id,
+            PatientClinicLink.consent_status.in_(["approved", "revoked"]),
+            PatientClinicLink.deleted_at.is_(None),
+        )
+    )
+    for consent_status, revoked_at in links.all():
+        if consent_status == "approved":
+            return True
+        # Revoked consent: read-only access to data created before revocation.
+        if revoked_at is not None and record_created_at is not None:
+            if record_created_at <= revoked_at:
+                return True
+    return False
+
+
+async def _user_can_access_object(db: AsyncSession, user: User, object_key: str) -> bool:
+    """Authorize a download of *object_key* for *user*.
+
+    Access rules (same as for the MedicalRecord referencing the file):
+    - admin: always allowed
+    - patient: the record belongs to them
+    - doctor: they have a relationship with the record's patient
+      (authored a record, or share an approved/revoked clinic link)
+    - anyone: they uploaded the file themselves (covers the window between
+      upload and the record that references it being created)
+    """
+    # Uploader can fetch a file they just uploaded.
+    try:
+        owner = await get_upload_key_owner(object_key)
+    except Exception as exc:
+        _logger.error("Upload-key registry error (%s: %s); treating key as unknown", type(exc).__name__, exc)
+        owner = None
+    if owner is not None and owner == str(user.id):
+        return True
+
+    result = await db.execute(
+        select(MedicalRecord).where(
+            MedicalRecord.document_url == object_key,
+            MedicalRecord.deleted_at.is_(None),
+        )
+    )
+    records = result.scalars().all()
+    if not records:
+        return False
+
+    if user.role == "admin":
+        return True
+    if user.role == "patient":
+        return any(r.patient_id == user.id for r in records)
+    if user.role == "doctor":
+        doc_result = await db.execute(
+            select(Doctor).where(
+                Doctor.user_id == user.id,
+                Doctor.deleted_at.is_(None),
+            )
+        )
+        doctor = doc_result.scalar_one_or_none()
+        if not doctor:
+            return False
+        for record in records:
+            if await _doctor_has_patient_relationship(
+                db, doctor, record.patient_id, record.created_at
+            ):
+                return True
+        return False
+    return False
 
 
 @router.get("/{object_key:path}")
 async def serve_file(
     object_key: str,
-    _user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Serve a stored file (local backend only)."""
+    """Serve a stored file (local backend only) with object-level authorization."""
     if settings.STORAGE_BACKEND != "local":
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -155,6 +326,14 @@ async def serve_file(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"error": {"code": "INVALID_KEY", "message": "Invalid object key"}},
+        )
+
+    # Authorization is checked before file existence so a denied response does
+    # not reveal whether the key exists on disk.
+    if not await _user_can_access_object(db, current_user, object_key):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": {"code": "FORBIDDEN", "message": "Access denied"}},
         )
 
     if not os.path.isfile(file_path):
