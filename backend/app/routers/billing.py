@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_current_doctor, get_current_user, require_admin
 from app.models.billing import BILLING_STATUSES, PAYMENT_METHODS, Billing
-from app.models.clinic import Clinic
+from app.models.clinic import Clinic, ClinicMembership
 from app.models.user import User
 from app.schemas.billing import BillingCreate, BillingListResponse, BillingResponse, BillingUpdate
 
@@ -66,6 +66,31 @@ def _get_or_raise(bill: Billing | None) -> Billing:
     return bill
 
 
+async def _get_member_clinic_ids(db: AsyncSession, user_id: uuid.UUID) -> set[uuid.UUID]:
+    """Return IDs of clinics where the user holds an active membership."""
+    result = await db.execute(
+        select(ClinicMembership.clinic_id).where(
+            ClinicMembership.user_id == user_id,
+            ClinicMembership.is_active.is_(True),
+            ClinicMembership.deleted_at.is_(None),
+        )
+    )
+    return {row[0] for row in result.all()}
+
+
+async def _require_bill_clinic_access(db: AsyncSession, user: User, bill: Billing) -> None:
+    """
+    Doctors may only touch bills scoped to a clinic where they hold an active
+    membership. Bills without a clinic_id are inaccessible to doctors.
+    """
+    member_clinic_ids = await _get_member_clinic_ids(db, user.id)
+    if bill.clinic_id is None or bill.clinic_id not in member_clinic_ids:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": {"code": "FORBIDDEN", "message": "Access denied"}},
+        )
+
+
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -102,6 +127,20 @@ async def create_bill(
                 detail={"error": {"code": "NOT_FOUND", "message": "Clinic not found"}},
             )
 
+    # Doctors can only create bills for clinics where they hold a membership
+    if current_user.role == "doctor":
+        if req.clinic_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": {"code": "VALIDATION_ERROR", "message": "clinic_id is required"}},
+            )
+        member_clinic_ids = await _get_member_clinic_ids(db, current_user.id)
+        if req.clinic_id not in member_clinic_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "NOT_CLINIC_MEMBER", "message": "Not a member of this clinic"}},
+            )
+
     bill = Billing(
         id=uuid.uuid4(),
         patient_id=req.patient_id,
@@ -124,13 +163,14 @@ async def list_bills(
     bill_status: str | None = Query(None, alias="status"),
     date_from: str | None = Query(None),
     date_to: str | None = Query(None),
+    limit: int = Query(100, ge=1, le=100),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
     List bills with optional filters.
     - admin: can see all bills
-    - doctor: can see bills for patients in their clinic (uses clinic_id filter)
+    - doctor: can only see bills for clinics where they hold a membership
     - patient: can only see their own bills
     """
     if bill_status and bill_status not in BILLING_STATUSES:
@@ -149,8 +189,17 @@ async def list_bills(
     if current_user.role == "patient":
         stmt = stmt.where(Billing.patient_id == current_user.id)
     elif current_user.role == "doctor":
+        # Scope strictly to clinics where the doctor holds a membership
+        member_clinic_ids = await _get_member_clinic_ids(db, current_user.id)
         if clinic_id:
+            if clinic_id not in member_clinic_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={"error": {"code": "NOT_CLINIC_MEMBER", "message": "Not a member of this clinic"}},
+                )
             stmt = stmt.where(Billing.clinic_id == clinic_id)
+        else:
+            stmt = stmt.where(Billing.clinic_id.in_(member_clinic_ids))
         if patient_id:
             stmt = stmt.where(Billing.patient_id == patient_id)
     else:
@@ -187,7 +236,7 @@ async def list_bills(
                 detail={"error": {"code": "INVALID_DATE", "message": "date_to must be YYYY-MM-DD"}},
             )
 
-    stmt = stmt.order_by(Billing.created_at.desc())
+    stmt = stmt.order_by(Billing.created_at.desc()).limit(limit)
     result = await db.execute(stmt)
     bills = result.scalars().all()
 
@@ -234,6 +283,8 @@ async def get_bill(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"error": {"code": "FORBIDDEN", "message": "Access denied"}},
         )
+    elif current_user.role == "doctor":
+        await _require_bill_clinic_access(db, current_user, bill)
 
     return await _load_bill_with_names(db, bill)
 
@@ -256,6 +307,10 @@ async def update_bill(
         select(Billing).where(Billing.id == bill_id, Billing.deleted_at.is_(None))
     )
     bill = _get_or_raise(result.scalar_one_or_none())
+
+    # Doctors can only update bills scoped to their member clinics
+    if current_user.role == "doctor":
+        await _require_bill_clinic_access(db, current_user, bill)
 
     if req.status is not None:
         bill.status = req.status

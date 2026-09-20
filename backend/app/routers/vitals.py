@@ -312,7 +312,11 @@ async def get_patient_vitals(
     clinic_context: Optional[tuple] = Depends(get_active_clinic),
 ):
     """Read a patient's vital readings (doctor view)."""
-    from app.routers.doctors import _check_patient_consent, _check_doctor_patient_relationship
+    from app.routers.doctors import (
+        _check_patient_consent,
+        _check_doctor_patient_relationship,
+        _resolve_doctor_patient_link,
+    )
 
     _, doctor = doctor_info
 
@@ -326,6 +330,13 @@ async def get_patient_vitals(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={"error": {"code": "FORBIDDEN", "message": "No relationship with this patient"}},
             )
+        # Resolve the clinic link even without an X-Clinic-Id header: if the
+        # doctor's access rests solely on a revoked link (no approved link for
+        # any of their clinics), the revoked_at cutoff must still apply —
+        # otherwise post-revocation vitals would leak.
+        link = await _resolve_doctor_patient_link(db, doctor, patient_id)
+        if link is not None and link.consent_status == "revoked":
+            revoked_link = link
 
     since = datetime.now(timezone.utc) - timedelta(days=days)
 
@@ -334,8 +345,14 @@ async def get_patient_vitals(
         PatientVital.deleted_at.is_(None),
         PatientVital.recorded_at >= since,
     ]
-    # If clinic access was revoked, only show vitals recorded before revocation
-    if revoked_link is not None and revoked_link.revoked_at is not None:
+    # If clinic access was revoked, only show vitals recorded before revocation.
+    # A revoked link without a revoked_at timestamp is treated as fully denied.
+    if revoked_link is not None:
+        if revoked_link.revoked_at is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "ACCESS_REVOKED", "message": "Patient has revoked clinic access."}},
+            )
         conditions.append(PatientVital.recorded_at <= revoked_link.revoked_at)
 
     if type:

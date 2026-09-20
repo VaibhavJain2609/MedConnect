@@ -298,6 +298,70 @@ async def _check_doctor_patient_relationship(
     return shared_clinic.scalar_one_or_none() is not None
 
 
+def _clinic_scope_condition(clinic_id: UUID):
+    """
+    SQL filter limiting MedicalRecord rows to a clinic's scope:
+    records tagged with the clinic OR authored by its member doctors.
+    Used for revoked-link reads so pre-revocation data from other
+    clinics/doctors is not exposed.
+    """
+    from sqlalchemy import or_, select as _select
+
+    member_doctor_ids = (
+        _select(Doctor.id)
+        .join(ClinicMembership, ClinicMembership.user_id == Doctor.user_id)
+        .where(
+            ClinicMembership.clinic_id == clinic_id,
+            ClinicMembership.is_active.is_(True),
+            ClinicMembership.deleted_at.is_(None),
+            Doctor.deleted_at.is_(None),
+        )
+    )
+    return or_(
+        MedicalRecord.clinic_id == clinic_id,
+        MedicalRecord.doctor_id.in_(member_doctor_ids),
+    )
+
+
+async def _resolve_doctor_patient_link(
+    db: AsyncSession, doctor: "Doctor", patient_id: UUID
+) -> "PatientClinicLink | None":
+    """
+    Return the strongest PatientClinicLink between the patient and any clinic
+    where the doctor holds an active membership: an approved link if one
+    exists, otherwise the most recently revoked link. Used to apply revocation
+    cutoffs even when no X-Clinic-Id header is present.
+    """
+    from sqlalchemy import select as _select
+
+    base_conditions = [
+        ClinicMembership.user_id == doctor.user_id,
+        ClinicMembership.is_active.is_(True),
+        ClinicMembership.deleted_at.is_(None),
+        PatientClinicLink.patient_id == patient_id,
+        PatientClinicLink.deleted_at.is_(None),
+    ]
+
+    approved = await db.execute(
+        _select(PatientClinicLink)
+        .join(ClinicMembership, ClinicMembership.clinic_id == PatientClinicLink.clinic_id)
+        .where(*base_conditions, PatientClinicLink.consent_status == "approved")
+        .limit(1)
+    )
+    link = approved.scalar_one_or_none()
+    if link is not None:
+        return link
+
+    revoked = await db.execute(
+        _select(PatientClinicLink)
+        .join(ClinicMembership, ClinicMembership.clinic_id == PatientClinicLink.clinic_id)
+        .where(*base_conditions, PatientClinicLink.consent_status == "revoked")
+        .order_by(PatientClinicLink.revoked_at.desc().nullslast())
+        .limit(1)
+    )
+    return revoked.scalar_one_or_none()
+
+
 async def _get_active_record_access_consent(
     db: AsyncSession, doctor_id: UUID, patient_id: UUID
 ) -> bool:
@@ -361,8 +425,10 @@ async def get_patient_prescriptions(
             if has_full_access:
                 filter_conditions = []  # no doctor filter → all prescriptions for patient
         else:
-            # revoked — show all prescriptions created before revocation
-            filter_conditions = []
+            # revoked — only prescriptions scoped to the revoked clinic
+            # (tagged with the clinic or authored by its member doctors);
+            # the revoked_at cutoff is applied below.
+            filter_conditions = [_clinic_scope_condition(revoked_link.clinic_id)]
 
     stmt = (
         select(MedicalRecord, Prescription, User.full_name.label("doctor_name"))
@@ -434,7 +500,8 @@ async def patient_records(
             # approved link — check for full record-access consent
             has_full_access = await _get_active_record_access_consent(db, doctor.id, patient_id)
         else:
-            # revoked link — treat as full access but with date cutoff applied below
+            # revoked link — broad read with revoked_at cutoff, narrowed to the
+            # revoked clinic's scope by the post-filter below
             has_full_access = True
 
     cutoff_date = revoked_link.revoked_at if revoked_link is not None else None
@@ -443,6 +510,21 @@ async def patient_records(
         db=db, patient_id=patient_id, record_type=type, cursor=cursor, limit=limit,
         doctor_id=doctor_id_filter, created_before=cutoff_date,
     )
+
+    # Revoked access: restrict results to records scoped to the revoked clinic
+    # (tagged with the clinic or authored by its member doctors) so records from
+    # other clinics/doctors do not leak through the pre-revocation window.
+    if revoked_link is not None and records:
+        from sqlalchemy import select as _select
+        page_ids = [_uuid.UUID(r["id"]) for r in records]
+        scope_result = await db.execute(
+            _select(MedicalRecord.id).where(
+                MedicalRecord.id.in_(page_ids),
+                _clinic_scope_condition(revoked_link.clinic_id),
+            )
+        )
+        allowed_ids = {str(row[0]) for row in scope_result.all()}
+        records = [r for r in records if r["id"] in allowed_ids]
 
     # Annotate each record with whether this doctor can amend it
     from datetime import datetime, timedelta, timezone
@@ -515,12 +597,16 @@ async def list_record_amendments(
     record_id: UUID,
     doctor_info: tuple = Depends(get_current_doctor),
     db: AsyncSession = Depends(get_db),
+    clinic_context: tuple | None = Depends(get_active_clinic),
 ):
     """
     List all amendment records that point back to record_id via amended_from_id.
     Returns them in ascending created_at order (oldest amendment first).
+    Applies the same relationship/consent gating as patient_records.
     """
     from sqlalchemy import select
+
+    _, doctor = doctor_info
 
     # Verify original record exists
     original = await db.get(MedicalRecord, record_id)
@@ -530,6 +616,26 @@ async def list_record_amendments(
             detail={"error": {"code": "NOT_FOUND", "message": "Record not found"}},
         )
 
+    revoked_link = None
+    if clinic_context:
+        clinic_id, _ = clinic_context
+        revoked_link = await _check_patient_consent(db, original.patient_id, clinic_id)
+    else:
+        if not await _check_doctor_patient_relationship(db, doctor, original.patient_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "FORBIDDEN", "message": "No relationship with this patient"}},
+            )
+
+    has_full_access = False
+    if clinic_context:
+        if revoked_link is None:
+            # approved link — check for full record-access consent
+            has_full_access = await _get_active_record_access_consent(db, doctor.id, original.patient_id)
+        else:
+            # revoked link — scoped to the revoked clinic with cutoff below
+            has_full_access = True
+
     stmt = (
         select(MedicalRecord)
         .where(
@@ -538,6 +644,15 @@ async def list_record_amendments(
         )
         .order_by(MedicalRecord.created_at.asc())
     )
+    if not has_full_access:
+        # Without clinic-scoped full access, only this doctor's own amendments
+        stmt = stmt.where(MedicalRecord.doctor_id == doctor.id)
+    if revoked_link is not None:
+        # Revoked access: only amendments within the revoked clinic's scope
+        # created at or before the revocation timestamp.
+        stmt = stmt.where(_clinic_scope_condition(revoked_link.clinic_id))
+        if revoked_link.revoked_at is not None:
+            stmt = stmt.where(MedicalRecord.created_at <= revoked_link.revoked_at)
     result = await db.execute(stmt)
     amendments = result.scalars().all()
 
@@ -740,7 +855,7 @@ async def list_prescriptions(
     Get all prescriptions created by the logged-in doctor.
     Returns medical records of type 'prescription' with patient info.
     """
-    from sqlalchemy import select
+    from sqlalchemy import and_, select
     from sqlalchemy.orm import joinedload
     from app.models.medical_record import MedicalRecord
 
@@ -749,9 +864,14 @@ async def list_prescriptions(
     from app.models.prescription import Prescription as PrescriptionModel
 
     # Build query joining MedicalRecord → Prescription → Patient(User)
+    # deleted_at filter lives in the ON clause so soft-deleted prescriptions
+    # don't leak while prescription-less records still outer-join correctly.
     stmt = (
         select(MedicalRecord, PrescriptionModel, User.full_name.label("patient_name"))
-        .outerjoin(PrescriptionModel, PrescriptionModel.record_id == MedicalRecord.id)
+        .outerjoin(PrescriptionModel, and_(
+            PrescriptionModel.record_id == MedicalRecord.id,
+            PrescriptionModel.deleted_at.is_(None),
+        ))
         .outerjoin(User, User.id == MedicalRecord.patient_id)
         .where(
             MedicalRecord.doctor_id == doctor.id,
