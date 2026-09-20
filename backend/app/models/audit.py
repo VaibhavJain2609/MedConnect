@@ -14,7 +14,7 @@ class AuditLog(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     table_name: Mapped[str] = mapped_column(String(50), nullable=False)
     record_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-    action: Mapped[str] = mapped_column(String(10), nullable=False)  # INSERT | UPDATE | DELETE
+    action: Mapped[str] = mapped_column(String(10), nullable=False)  # INSERT | UPDATE | DELETE | READ
     changed_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
     )
