@@ -1,0 +1,24 @@
+# Copy to terraform.tfvars (gitignored) and fill in before `terraform apply`.
+# Apply environments/shared first — this environment reads its outputs via
+# terraform_remote_state.
+
+region = "ap-south-1"
+
+rds_instance_class        = "db.t4g.medium"
+rds_allocated_storage     = 50
+rds_max_allocated_storage = 100
+
+redis_node_type       = "cache.t4g.small"
+redis_num_cache_nodes = 1
+
+keycloak_admin_username = "admin"
+sentry_dsn              = ""
+
+# Real owned domain required — see infra/README.md for the ACM + DNS steps.
+auth_hostname       = "auth-staging.medconnect.example.com"
+app_hostname        = "staging.medconnect.example.com"
+acm_certificate_arn = "arn:aws:acm:ap-south-1:123456789012:certificate/REPLACE_ME"
+
+tags = {
+  ManagedBy = "terraform"
+}

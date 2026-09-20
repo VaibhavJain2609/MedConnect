@@ -1,0 +1,73 @@
+name: Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to roll back"
+        required: true
+        type: choice
+        options: [staging, production]
+      deployment:
+        description: "Which Deployment(s) to roll back"
+        required: true
+        type: choice
+        options: [all, backend, frontend, keycloak]
+      revision:
+        description: "Target revision number from `kubectl rollout history` (leave blank for the immediately previous revision)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    # workflow_dispatch's `environment:` choice input and the job's own
+    # `environment:` gate are two different things — this line is what
+    # actually applies the target GitHub Environment's required reviewers
+    # (staging/production) to this manual run.
+    environment: ${{ inputs.environment == 'production' && 'production' || 'staging' }}
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name ${{ vars.EKS_CLUSTER_NAME }} --region ${{ vars.AWS_REGION }}
+
+      - name: Resolve namespace and target deployments
+        id: resolve
+        run: |
+          if [ "${{ inputs.environment }}" = "production" ]; then
+            echo "namespace=medconnect-prod" >> "$GITHUB_OUTPUT"
+          else
+            echo "namespace=medconnect-staging" >> "$GITHUB_OUTPUT"
+          fi
+          if [ "${{ inputs.deployment }}" = "all" ]; then
+            echo "targets=backend frontend keycloak" >> "$GITHUB_OUTPUT"
+          else
+            echo "targets=${{ inputs.deployment }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Roll back
+        run: |
+          for d in ${{ steps.resolve.outputs.targets }}; do
+            if [ -n "${{ inputs.revision }}" ]; then
+              kubectl rollout undo "deployment/$d" -n ${{ steps.resolve.outputs.namespace }} --to-revision="${{ inputs.revision }}"
+            else
+              kubectl rollout undo "deployment/$d" -n ${{ steps.resolve.outputs.namespace }}
+            fi
+            kubectl rollout status "deployment/$d" -n ${{ steps.resolve.outputs.namespace }} --timeout=300s
+          done
+
+      - name: Summary
+        run: |
+          echo "### Rollback complete" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Environment: \`${{ inputs.environment }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Namespace: \`${{ steps.resolve.outputs.namespace }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Deployments: \`${{ steps.resolve.outputs.targets }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Target revision: \`${{ inputs.revision || 'previous' }}\`" >> "$GITHUB_STEP_SUMMARY"

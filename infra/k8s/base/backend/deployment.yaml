@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  labels:
+    app: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      serviceAccountName: backend-sa
+      securityContext:
+        runAsNonRoot: true
+      # emptyDir satisfies the production config validator (UPLOADS_DIR must
+      # not be under /tmp) but does NOT solve multi-replica or restart
+      # persistence — a file uploaded to one pod is invisible to the others
+      # and lost on pod recreation. STORAGE_BACKEND=s3 is the real fix
+      # (storage_service.py already has an S3 code path); wiring it needs
+      # IRSA-based app code changes out of scope for this pipeline.
+      volumes:
+        - name: uploads
+          emptyDir: {}
+      containers:
+        - name: backend
+          image: medconnect-backend:latest
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: medconnect-config
+            - secretRef:
+                name: backend-secrets
+          volumeMounts:
+            - name: uploads
+              mountPath: /data/uploads
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6

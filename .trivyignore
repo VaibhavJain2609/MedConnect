@@ -1,0 +1,10 @@
+# Accepted-risk CVEs for the CD pipeline's Trivy scan (.github/workflows/cd.yml).
+# Empty by default — this pipeline has never run against a real image build,
+# so there is nothing here yet to justify ignoring. Add entries only after a
+# real CI run surfaces a CVE that's genuinely not exploitable in this app's
+# context, one per line, with a reason and a recheck date so entries don't
+# silently go stale:
+#
+# CVE-2024-XXXXX exp:2026-06-01
+# # Reason: <why this doesn't apply here — e.g. unused code path, patched
+# # upstream with no release yet, mitigated by network policy>

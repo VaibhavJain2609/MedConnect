@@ -1,0 +1,12 @@
+# Copy to terraform.tfvars (gitignored) and fill in before `terraform apply`.
+
+region  = "ap-south-1"
+azs     = ["ap-south-1a", "ap-south-1b"]
+
+github_org    = "VaibhavJain2609"
+github_repo   = "MedConnect"
+deploy_branch = "master"
+
+tags = {
+  ManagedBy = "terraform"
+}

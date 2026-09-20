@@ -1,0 +1,23 @@
+# kube-prometheus-stack's Prometheus CR defaults to
+# serviceMonitorSelectorNilUsesHelmValues: true (unchanged in
+# infra/terraform/modules/addons's helm_release.kube_prometheus_stack), which
+# scopes it to ServiceMonitors labeled release: kube-prometheus-stack —
+# that Helm release's own name — rather than selecting cluster-wide. Without
+# both this file and that label, the backend's /metrics endpoint
+# (prometheus-fastapi-instrumentator, backend/app/main.py) is exposed but
+# never actually scraped.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: backend
+  labels:
+    app: backend
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: backend
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s

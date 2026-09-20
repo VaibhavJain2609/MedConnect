@@ -1,0 +1,88 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: medconnect-prod
+
+resources:
+  - ../../base
+
+configMapGenerator:
+  - name: keycloak-realm-config
+    behavior: replace
+    files:
+      - keycloak/realm-export.json
+    options:
+      disableNameSuffixHash: true
+
+# See overlays/staging/kustomization.yaml's comment — no images: block here
+# either; the CD pipeline sets it via `kustomize edit set image` before apply.
+
+patches:
+  - target:
+      kind: ConfigMap
+      name: medconnect-config
+    patch: |-
+      - op: replace
+        path: /data/KEYCLOAK_PUBLIC_URL
+        value: https://auth.medconnect.example.com
+      - op: replace
+        path: /data/KC_HOSTNAME
+        value: auth.medconnect.example.com
+      - op: replace
+        path: /data/NEXT_PUBLIC_API_URL
+        value: https://medconnect.example.com/api
+
+  - target:
+      kind: Ingress
+      name: medconnect
+    patch: |-
+      - op: replace
+        path: /metadata/annotations/alb.ingress.kubernetes.io~1certificate-arn
+        value: PLACEHOLDER_ACM_CERT_ARN_PROD
+      - op: replace
+        path: /metadata/annotations/alb.ingress.kubernetes.io~1wafv2-acl-arn
+        value: PLACEHOLDER_WAF_ACL_ARN_PROD
+      - op: replace
+        path: /spec/rules/0/host
+        value: auth.medconnect.example.com
+      - op: replace
+        path: /spec/rules/1/host
+        value: medconnect.example.com
+
+  # Prod runs more replicas than base's single-replica default; the PDB
+  # (minAvailable: 1 in base) only actually protects availability once
+  # maxReplicas is above 1, so this and the HPA bump below go together.
+  - target:
+      kind: Deployment
+      name: backend
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  - target:
+      kind: Deployment
+      name: frontend
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: backend
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 2
+      - op: replace
+        path: /spec/maxReplicas
+        value: 6
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: frontend
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 2
+      - op: replace
+        path: /spec/maxReplicas
+        value: 6

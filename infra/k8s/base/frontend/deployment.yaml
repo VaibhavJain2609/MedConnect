@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  labels:
+    app: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: frontend
+          image: medconnect-frontend:latest
+          ports:
+            - name: http
+              containerPort: 3000
+          # NEXT_PUBLIC_* values are inlined into the JS bundle by `next build`,
+          # so setting them here only affects code that reads them at runtime
+          # (e.g. via a server component or route handler). The values that
+          # matter for the browser bundle must be passed as Docker build args
+          # in the CI pipeline (`docker build --build-arg NEXT_PUBLIC_API_URL=...`),
+          # not here — changing this ConfigMap alone will NOT change what
+          # already-built client JS calls.
+          envFrom:
+            - configMapRef:
+                name: medconnect-config
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 250m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6

@@ -1,0 +1,43 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: medconnect
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - backend/serviceaccount.yaml
+  - backend/deployment.yaml
+  - backend/service.yaml
+  - backend/hpa.yaml
+  - backend/pdb.yaml
+  - backend/servicemonitor.yaml
+  - frontend/deployment.yaml
+  - frontend/service.yaml
+  - frontend/hpa.yaml
+  - frontend/pdb.yaml
+  - keycloak/deployment.yaml
+  - keycloak/service.yaml
+  - migrations/job.yaml
+  - ingress/ingress.yaml
+  - external-secrets/cluster-secret-store.yaml
+  - external-secrets/backend-external-secret.yaml
+  - external-secrets/keycloak-external-secret.yaml
+
+# disableNameSuffixHash so the name stays exactly "keycloak-realm-config" —
+# keycloak/deployment.yaml's volumes.configMap.name references it literally,
+# and each overlay's own configMapGenerator (same name, behavior: replace)
+# swaps in its environment's real hostname without needing a kustomize var.
+configMapGenerator:
+  - name: keycloak-realm-config
+    files:
+      - keycloak/realm-export.json
+    options:
+      disableNameSuffixHash: true
+
+# No images: transformer here — base intentionally leaves the deployment
+# manifests' `image:` fields as the literal `medconnect-backend:latest` /
+# `medconnect-frontend:latest` / `medconnect-keycloak:latest` refs (the
+# kustomize convention for a placeholder image). Each overlay's own
+# `images:` block, or the CD pipeline's `kustomize edit set image`, rewrites
+# these to the real ECR registry + tag at deploy time.

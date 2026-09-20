@@ -1,0 +1,150 @@
+name: CD
+
+on:
+  push:
+    branches: [master]
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    outputs:
+      backend_image: ${{ steps.vars.outputs.backend_image }}
+      frontend_image: ${{ steps.vars.outputs.frontend_image }}
+      keycloak_image: ${{ steps.vars.outputs.keycloak_image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image tags
+        id: vars
+        # ECR repos are image_tag_mutability = IMMUTABLE (infra/terraform/modules/ecr) —
+        # every tag must be unique, so this uses the commit SHA, never `latest`.
+        run: |
+          echo "backend_image=${{ steps.ecr-login.outputs.registry }}/medconnect-backend:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          echo "frontend_image=${{ steps.ecr-login.outputs.registry }}/medconnect-frontend:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          echo "keycloak_image=${{ steps.ecr-login.outputs.registry }}/medconnect-keycloak:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build & push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          push: true
+          tags: ${{ steps.vars.outputs.backend_image }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Build & push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          push: true
+          tags: ${{ steps.vars.outputs.frontend_image }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+      - name: Build & push keycloak
+        uses: docker/build-push-action@v6
+        with:
+          context: keycloak
+          push: true
+          tags: ${{ steps.vars.outputs.keycloak_image }}
+          cache-from: type=gha,scope=keycloak
+          cache-to: type=gha,mode=max,scope=keycloak
+
+      # .trivyignore documents each accepted-risk CVE with a reason and a
+      # recheck date — see that file for the current list.
+      - name: Scan backend image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ steps.vars.outputs.backend_image }}
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          trivyignores: .trivyignore
+
+      - name: Scan frontend image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ steps.vars.outputs.frontend_image }}
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          trivyignores: .trivyignore
+
+      - name: Scan keycloak image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ steps.vars.outputs.keycloak_image }}
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          trivyignores: .trivyignore
+
+      - uses: sigstore/cosign-installer@v3
+
+      # Keyless signing — the signature is bound to this workflow's OIDC
+      # identity (repo + workflow path + ref) via Sigstore Fulcio/Rekor, no
+      # signing key stored anywhere. `cosign verify` against this identity
+      # is how a cluster admission controller would confirm provenance, if
+      # one were added later; that verification step is not part of this
+      # pipeline.
+      - name: Sign images (keyless)
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          cosign sign --yes ${{ steps.vars.outputs.backend_image }}
+          cosign sign --yes ${{ steps.vars.outputs.frontend_image }}
+          cosign sign --yes ${{ steps.vars.outputs.keycloak_image }}
+
+  deploy-staging:
+    needs: build-and-push
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit
+    with:
+      environment: staging
+      namespace: medconnect-staging
+      overlay_path: infra/k8s/overlays/staging
+      app_hostname: staging.medconnect.example.com
+      backend_image: ${{ needs.build-and-push.outputs.backend_image }}
+      frontend_image: ${{ needs.build-and-push.outputs.frontend_image }}
+      keycloak_image: ${{ needs.build-and-push.outputs.keycloak_image }}
+
+  deploy-prod:
+    needs: [build-and-push, deploy-staging]
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit
+    with:
+      environment: production
+      namespace: medconnect-prod
+      overlay_path: infra/k8s/overlays/prod
+      app_hostname: medconnect.example.com
+      backend_image: ${{ needs.build-and-push.outputs.backend_image }}
+      frontend_image: ${{ needs.build-and-push.outputs.frontend_image }}
+      keycloak_image: ${{ needs.build-and-push.outputs.keycloak_image }}
+
+  notify:
+    needs: [deploy-prod]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify deploy result
+        if: vars.DEPLOY_WEBHOOK_URL != ''
+        run: |
+          status="${{ needs.deploy-prod.result }}"
+          curl -fsS -X POST "${{ vars.DEPLOY_WEBHOOK_URL }}" \
+            -H 'Content-Type: application/json' \
+            -d "{\"text\": \"MedConnect prod deploy for ${{ github.sha }}: ${status}\"}"

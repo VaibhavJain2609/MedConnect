@@ -1,0 +1,91 @@
+# Security-header gap: Nginx (see docker-compose's nginx service) previously
+# injected CSP/X-Frame-Options/HSTS response headers. The AWS ALB Ingress
+# Controller cannot inject arbitrary response headers the way Nginx did — but
+# this is already covered without it: the backend's `add_security_headers`
+# middleware (backend/app/main.py) and the frontend's `headers()`
+# (frontend/next.config.js) each set their own CSP/X-Frame-Options/HSTS
+# directly, so every response carries them regardless of what sits in front.
+# Nginx's *rate limiting* (limit_req_zone on /api/ and /api/v1/auth/) is the
+# part with no app-level equivalent — that gap is closed by the WAFv2 rate-based
+# rule (see infra/terraform/modules/waf, associated below via wafv2-acl-arn).
+#
+# /docs, /redoc, /openapi.json gap: Nginx used path-based rules to 404 these
+# in production. ALB path routing can forward or not forward a path, but it
+# cannot conditionally 404 based on environment the way Nginx did — and this
+# manifest intentionally does NOT try to fake that with a broken/missing path
+# rule. Instead, the FastAPI app itself already disables docs when
+# APP_ENV=production (see backend/app/main.py's `_api_docs_enabled`), so the
+# routes below simply forward /docs et al. to the backend, which will 404
+# them naturally in prod. Do not remove that app-level gate.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: medconnect
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    # ACM cert ARN is a required input — provisioned by Terraform, not created here.
+    alb.ingress.kubernetes.io/certificate-arn: PLACEHOLDER_ACM_CERT_ARN
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    # WAFv2 ACL with rate-based rules is provisioned by Terraform, another
+    # engineer's work — this only associates it once that ARN exists.
+    alb.ingress.kubernetes.io/wafv2-acl-arn: PLACEHOLDER_WAF_ACL_ARN
+spec:
+  ingressClassName: alb
+  rules:
+    # Second host rule, added beyond the app's own path routing: the browser
+    # performs the OIDC redirect straight to Keycloak (NEXT_PUBLIC_KEYCLOAK_URL
+    # in the frontend), and Keycloak 24 serves at its root path (no /auth
+    # prefix by default), which would collide with the frontend's own routes
+    # if exposed under the same host as a path. A dedicated host avoids that
+    # collision instead of trying to path-route around it.
+    - host: PLACEHOLDER_AUTH_HOSTNAME
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  number: 8080
+    - host: PLACEHOLDER_HOSTNAME
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 80
+          - path: /docs
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 80
+          - path: /redoc
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 80
+          - path: /openapi.json
+            pathType: Exact
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 80
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80

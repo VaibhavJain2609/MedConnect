@@ -1,0 +1,23 @@
+# Copy to terraform.tfvars (gitignored) and fill in before `terraform apply`.
+# Apply environments/shared first — this environment reads its outputs via
+# terraform_remote_state.
+
+region = "ap-south-1"
+
+rds_instance_class        = "db.r6g.large"
+rds_allocated_storage     = 100
+rds_max_allocated_storage = 500
+
+redis_node_type       = "cache.r6g.large"
+redis_num_cache_nodes = 2
+
+keycloak_admin_username = "admin"
+sentry_dsn              = ""
+
+auth_hostname       = "auth.medconnect.example.com"
+app_hostname        = "medconnect.example.com"
+acm_certificate_arn = "arn:aws:acm:ap-south-1:123456789012:certificate/REPLACE_ME"
+
+tags = {
+  ManagedBy = "terraform"
+}

@@ -38,3 +38,19 @@ coverage.xml
 
 # Misc
 *.log
+
+# Terraform — .terraform.lock.hcl is deliberately NOT listed here; Terraform
+# itself asks for it to stay in version control so provider version
+# selection stays reproducible.
+**/.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+crash.log
+crash.*.log
+
+# Generated/agent artifacts
+graphify-out/
+.serena/
+analysis/
+.worktrees/

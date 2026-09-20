@@ -3,6 +3,7 @@ import structlog
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.config import settings
 from app.middleware.rate_limit import RateLimitMiddleware
@@ -51,6 +52,10 @@ app = FastAPI(
     redoc_url="/redoc" if _api_docs_enabled else None,
     openapi_url="/openapi.json" if _api_docs_enabled else None,
 )
+
+# Prometheus metrics at /metrics, scraped in-cluster by Prometheus only —
+# the Ingress path rules never expose it externally.
+Instrumentator().instrument(app).expose(app, include_in_schema=False)
 
 # CORS Configuration - Allow frontend to access API
 allowed_origins = [settings.FRONTEND_URL]

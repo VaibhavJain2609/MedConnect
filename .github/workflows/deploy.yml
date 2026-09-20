@@ -1,0 +1,134 @@
+name: Deploy environment
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "GitHub Environment name (staging/production) — gates the job on that Environment's required reviewers, if configured"
+        required: true
+        type: string
+      namespace:
+        required: true
+        type: string
+      overlay_path:
+        required: true
+        type: string
+      app_hostname:
+        description: "Public hostname to smoke-test after rollout, e.g. staging.medconnect.example.com"
+        required: true
+        type: string
+      backend_image:
+        required: true
+        type: string
+      frontend_image:
+        required: true
+        type: string
+      keycloak_image:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name ${{ vars.EKS_CLUSTER_NAME }} --region ${{ vars.AWS_REGION }}
+
+      - name: Install kustomize
+        # kubectl bundles a kustomize *renderer* (`kubectl kustomize`), but not
+        # the `edit` subcommand this job needs to set image tags.
+        run: |
+          curl -sSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v5.5.0/kustomize_v5.5.0_linux_amd64.tar.gz" | tar xz
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Install yq
+        run: |
+          sudo curl -sSL -o /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Set image tags
+        working-directory: ${{ inputs.overlay_path }}
+        run: |
+          kustomize edit set image \
+            medconnect-backend=${{ inputs.backend_image }} \
+            medconnect-frontend=${{ inputs.frontend_image }} \
+            medconnect-keycloak=${{ inputs.keycloak_image }}
+
+      - name: Render manifests
+        run: kubectl kustomize ${{ inputs.overlay_path }} > /tmp/rendered.yaml
+
+      # infra/k8s/base/migrations/job.yaml documents why this Job must be
+      # deleted before every re-apply: Job specs are immutable, and
+      # `kubectl apply` on an unchanged one is a no-op — neither works for
+      # "run migrations again on this deploy." Extracting just the Job with
+      # yq and running it ahead of the full apply also guarantees migrations
+      # finish before new backend/frontend pods start taking traffic.
+      - name: Run database migrations
+        run: |
+          yq eval-all 'select(.kind == "Job")' /tmp/rendered.yaml > /tmp/migration-job.yaml
+          kubectl delete -f /tmp/migration-job.yaml --ignore-not-found
+          kubectl apply -f /tmp/migration-job.yaml
+          kubectl wait --for=condition=complete --timeout=300s -n ${{ inputs.namespace }} job/alembic-migrate
+
+      - name: Apply manifests
+        run: kubectl apply -f /tmp/rendered.yaml
+
+      - name: Wait for rollout
+        id: rollout
+        run: |
+          kubectl rollout status deployment/backend -n ${{ inputs.namespace }} --timeout=300s
+          kubectl rollout status deployment/frontend -n ${{ inputs.namespace }} --timeout=300s
+          kubectl rollout status deployment/keycloak -n ${{ inputs.namespace }} --timeout=300s
+
+      # External check: hits the real ALB/DNS/TLS path, but only the "/"
+      # rule (frontend) — infra/k8s/base/ingress/ingress.yaml has no bare
+      # /health path rule, only /api (backend), /docs, /redoc, /openapi.json,
+      # and / (frontend catch-all), so a public https://<host>/health or
+      # /api/health request would not reach either service's actual health
+      # route. Internal check: hits each Service's real health route
+      # directly over cluster DNS from an ephemeral pod, bypassing that
+      # routing gap entirely.
+      - name: Smoke test — external (frontend via ALB)
+        id: smoke_external
+        run: |
+          for i in $(seq 1 10); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "https://${{ inputs.app_hostname }}/" || echo "000")
+            if [ "$code" = "200" ]; then exit 0; fi
+            sleep 10
+          done
+          echo "::error::Frontend did not return 200 via https://${{ inputs.app_hostname }}/ after 10 attempts"
+          exit 1
+
+      - name: Smoke test — internal (backend + frontend health routes)
+        id: smoke_internal
+        if: success()
+        run: |
+          kubectl run smoke-test-${{ github.run_id }} \
+            --image=curlimages/curl:8.10.1 --restart=Never -n ${{ inputs.namespace }} \
+            --command -- sh -c \
+            "curl -fsS http://backend/health && curl -fsS http://frontend/api/health"
+          kubectl wait --for=condition=Ready --timeout=60s -n ${{ inputs.namespace }} pod/smoke-test-${{ github.run_id }} || true
+          kubectl logs -n ${{ inputs.namespace }} smoke-test-${{ github.run_id }}
+          exit_code=$(kubectl get pod smoke-test-${{ github.run_id }} -n ${{ inputs.namespace }} -o jsonpath='{.status.containerStatuses[0].state.terminated.exitCode}')
+          kubectl delete pod smoke-test-${{ github.run_id }} -n ${{ inputs.namespace }} --ignore-not-found
+          exit "$exit_code"
+
+      - name: Roll back on failure
+        if: failure() && (steps.rollout.outcome == 'failure' || steps.smoke_external.outcome == 'failure' || steps.smoke_internal.outcome == 'failure')
+        run: |
+          kubectl rollout undo deployment/backend -n ${{ inputs.namespace }} || true
+          kubectl rollout undo deployment/frontend -n ${{ inputs.namespace }} || true
+          kubectl rollout undo deployment/keycloak -n ${{ inputs.namespace }} || true
+          echo "::error::Deploy to ${{ inputs.environment }} failed and was rolled back to the previous revision."

@@ -1,0 +1,50 @@
+# Jobs are immutable — the CD pipeline must delete-and-recreate (or apply
+# with a fresh, unique name via kustomize's nameSuffix/hash) on every
+# deploy; `kubectl apply` on an unchanged Job spec is a no-op, and applying
+# a *changed* spec to the same Job name fails outright. Give this Job a
+# generateName-friendly base name (`alembic-migrate`) and either let
+# kustomize's configMapGenerator-style hashing suffix it, or have the
+# pipeline run `kubectl delete job -l app=alembic-migrate --ignore-not-found`
+# before `kubectl apply` each deploy.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: alembic-migrate
+  labels:
+    app: alembic-migrate
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app: alembic-migrate
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: alembic-migrate
+          image: medconnect-backend:latest
+          workingDir: /app
+          command:
+            - sh
+            - -c
+            - |
+              alembic -c alembic.ini upgrade head && \
+              alembic -c alembic_medicine.ini upgrade head
+          envFrom:
+            - configMapRef:
+                name: medconnect-config
+            - secretRef:
+                name: backend-secrets
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

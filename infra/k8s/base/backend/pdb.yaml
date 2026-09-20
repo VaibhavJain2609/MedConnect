@@ -1,0 +1,12 @@
+# NOTE: at the base's minReplicas: 1, this PDB blocks voluntary node drains
+# entirely (there is nothing to evict below). Once HPA minReplicas > 1
+# (prod overlay), a drain can proceed by moving one pod at a time.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: backend
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: backend

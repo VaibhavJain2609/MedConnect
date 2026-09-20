@@ -1,0 +1,55 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: medconnect-staging
+
+resources:
+  - ../../base
+
+# behavior: replace overrides the base's same-named generated ConfigMap
+# outright — this is what actually closes the hardcoded-localhost:3000 gap
+# per environment (see base/keycloak/deployment.yaml's comment).
+configMapGenerator:
+  - name: keycloak-realm-config
+    behavior: replace
+    files:
+      - keycloak/realm-export.json
+    options:
+      disableNameSuffixHash: true
+
+# The CD pipeline runs `kustomize edit set image
+# medconnect-backend=<ecr>/...:<sha> medconnect-frontend=... medconnect-keycloak=...`
+# against this file immediately before `kubectl apply -k` — no images: block
+# is pre-declared here since it has nothing meaningful to default to.
+
+patches:
+  - target:
+      kind: ConfigMap
+      name: medconnect-config
+    patch: |-
+      - op: replace
+        path: /data/KEYCLOAK_PUBLIC_URL
+        value: https://auth-staging.medconnect.example.com
+      - op: replace
+        path: /data/KC_HOSTNAME
+        value: auth-staging.medconnect.example.com
+      - op: replace
+        path: /data/NEXT_PUBLIC_API_URL
+        value: https://staging.medconnect.example.com/api
+
+  - target:
+      kind: Ingress
+      name: medconnect
+    patch: |-
+      - op: replace
+        path: /metadata/annotations/alb.ingress.kubernetes.io~1certificate-arn
+        value: PLACEHOLDER_ACM_CERT_ARN_STAGING
+      - op: replace
+        path: /metadata/annotations/alb.ingress.kubernetes.io~1wafv2-acl-arn
+        value: PLACEHOLDER_WAF_ACL_ARN_STAGING
+      - op: replace
+        path: /spec/rules/0/host
+        value: auth-staging.medconnect.example.com
+      - op: replace
+        path: /spec/rules/1/host
+        value: staging.medconnect.example.com
