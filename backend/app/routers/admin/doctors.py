@@ -1,4 +1,5 @@
-from datetime import datetime
+import uuid
+from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID
 
@@ -9,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
-from app.dependencies import require_admin
+from app.dependencies import invalidate_user_cache, require_admin
 from app.models.doctor import Doctor
 from app.models.medical_record import MedicalRecord
 from app.models.notification import Notification, NotificationType
@@ -248,3 +249,222 @@ async def verify_doctor(
         "verified": doctor.verified,
         "message": f"Doctor {'approved' if body.action == 'approve' else 'rejected'} successfully",
     }
+
+
+class AdminDoctorCreateRequest(BaseModel):
+    # Frontend sends Partial<Doctor> which uses `name`; accept full_name too.
+    name: str | None = None
+    full_name: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    specialization: str | None = None
+    license_number: str | None = None
+    facility_name: str | None = None
+    facility_city: str | None = None
+    verified: bool = False
+
+
+class AdminDoctorUpdateRequest(BaseModel):
+    name: str | None = None
+    full_name: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    is_active: bool | None = None
+    specialization: str | None = None
+    license_number: str | None = None
+    facility_name: str | None = None
+    facility_city: str | None = None
+    verified: bool | None = None
+
+
+def _doctor_payload(doctor: Doctor, user: User) -> dict:
+    """Same shape as list_admin_doctors items / frontend Doctor interface."""
+    return {
+        "id": str(doctor.id),
+        "user_id": str(doctor.user_id),
+        "name": user.full_name,
+        "email": user.email,
+        "specialization": doctor.specialization,
+        "license_number": doctor.license_number,
+        "facility_name": doctor.facility_name,
+        "facility_city": doctor.facility_city,
+        "verified": doctor.verified,
+        "created_at": doctor.created_at.isoformat(),
+    }
+
+
+@router.post("/doctors", status_code=status.HTTP_201_CREATED)
+async def create_doctor(
+    body: AdminDoctorCreateRequest,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a doctor: local User (role=doctor) + Doctor profile.
+
+    The account is local-only (walkin: keycloak_sub) — the doctor cannot log in
+    until a Keycloak account is linked, same convention as walk-in patients."""
+    full_name = (body.full_name or body.name or "").strip()
+    if not full_name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": {"code": "VALIDATION_ERROR", "message": "name is required"}},
+        )
+
+    user = User(
+        id=uuid.uuid4(),
+        keycloak_sub=f"walkin:{uuid.uuid4()}",
+        full_name=full_name,
+        email=body.email or None,
+        phone=body.phone or None,
+        role="doctor",
+    )
+    db.add(user)
+    await db.flush()
+
+    doctor = Doctor(
+        id=uuid.uuid4(),
+        user_id=user.id,
+        specialization=body.specialization,
+        license_number=body.license_number,
+        facility_name=body.facility_name,
+        facility_city=body.facility_city,
+        verified=body.verified,
+    )
+    db.add(doctor)
+    await db.flush()
+
+    from app.services.audit_service import log_change
+    await log_change(
+        db=db,
+        table_name="doctors",
+        record_id=doctor.id,
+        action="INSERT",
+        old_values=None,
+        new_values={k: v for k, v in body.model_dump(exclude_none=True).items()},
+    )
+    await db.commit()
+    await db.refresh(doctor)
+    await db.refresh(user)
+
+    return _doctor_payload(doctor, user)
+
+
+@router.put("/doctors/{doctor_id}")
+async def update_doctor(
+    doctor_id: UUID,
+    body: AdminDoctorUpdateRequest,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a doctor's profile and linked user fields."""
+    result = await db.execute(
+        select(Doctor)
+        .options(selectinload(Doctor.user))
+        .where(Doctor.id == doctor_id, Doctor.deleted_at.is_(None))
+    )
+    doctor = result.scalar_one_or_none()
+    if not doctor or doctor.user is None or doctor.user.deleted_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "NOT_FOUND", "message": "Doctor not found"}},
+        )
+
+    user = doctor.user
+    now = datetime.now(timezone.utc)
+    user_touched = False
+    doctor_touched = False
+
+    full_name = body.full_name if body.full_name is not None else body.name
+    if full_name is not None:
+        user.full_name = full_name
+        user_touched = True
+    if body.email is not None:
+        user.email = body.email
+        user_touched = True
+    if body.phone is not None:
+        user.phone = body.phone
+        user_touched = True
+    if body.is_active is not None:
+        user.is_active = body.is_active
+        user_touched = True
+
+    if body.specialization is not None:
+        doctor.specialization = body.specialization
+        doctor_touched = True
+    if body.license_number is not None:
+        doctor.license_number = body.license_number
+        doctor_touched = True
+    if body.facility_name is not None:
+        doctor.facility_name = body.facility_name
+        doctor_touched = True
+    if body.facility_city is not None:
+        doctor.facility_city = body.facility_city
+        doctor_touched = True
+    if body.verified is not None:
+        doctor.verified = body.verified
+        doctor_touched = True
+
+    if user_touched:
+        user.updated_at = now
+        invalidate_user_cache(user.keycloak_sub)
+    if doctor_touched:
+        doctor.updated_at = now
+
+    from app.services.audit_service import log_change
+    await log_change(
+        db=db,
+        table_name="doctors",
+        record_id=doctor.id,
+        action="UPDATE",
+        old_values=None,
+        new_values={k: v for k, v in body.model_dump(exclude_none=True).items()},
+    )
+    await db.commit()
+    await db.refresh(doctor)
+    await db.refresh(user)
+
+    return _doctor_payload(doctor, user)
+
+
+@router.delete("/doctors/{doctor_id}")
+async def delete_doctor(
+    doctor_id: UUID,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Soft-delete a doctor profile and deactivate the linked user."""
+    result = await db.execute(
+        select(Doctor)
+        .options(selectinload(Doctor.user))
+        .where(Doctor.id == doctor_id, Doctor.deleted_at.is_(None))
+    )
+    doctor = result.scalar_one_or_none()
+    if not doctor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "NOT_FOUND", "message": "Doctor not found"}},
+        )
+
+    now = datetime.now(timezone.utc)
+    doctor.deleted_at = now
+    doctor.updated_at = now
+
+    user = doctor.user
+    if user is not None and user.deleted_at is None:
+        user.deleted_at = now
+        user.updated_at = now
+        user.is_active = False
+        invalidate_user_cache(user.keycloak_sub)
+
+    from app.services.audit_service import log_change
+    await log_change(
+        db=db,
+        table_name="doctors",
+        record_id=doctor.id,
+        action="DELETE",
+        old_values={"verified": doctor.verified, "specialization": doctor.specialization},
+        new_values={"deleted": True},
+    )
+    await db.commit()
+
+    return {"id": str(doctor.id), "message": "Doctor deleted successfully"}
