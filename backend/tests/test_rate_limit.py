@@ -55,22 +55,27 @@ class TestGetUserKey:
         request.client.host = client_host
         return request
 
-    def test_extracts_sub_from_valid_jwt(self):
+    def test_hashes_bearer_token_to_stable_key(self):
+        import hashlib
+
         import jwt as pyjwt
         token = pyjwt.encode({"sub": "user-abc-123"}, "secret", algorithm="HS256")
         request = self._make_request(auth_header=f"Bearer {token}")
         key = _get_user_key(request)
-        assert key == "user:user-abc-123"
+        expected = hashlib.sha256(token.encode()).hexdigest()[:32]
+        assert key == f"token:{expected}"
 
     def test_falls_back_to_ip_when_no_auth(self):
         request = self._make_request()
         key = _get_user_key(request)
         assert key == "ip:127.0.0.1"
 
-    def test_falls_back_to_ip_on_malformed_token(self):
+    def test_hashes_any_bearer_token_without_validating(self):
+        # The middleware hashes the raw token (it does not validate the JWT),
+        # so a malformed bearer token still produces a stable token key.
         request = self._make_request(auth_header="Bearer not-a-valid-jwt")
         key = _get_user_key(request)
-        assert key == "ip:127.0.0.1"
+        assert key.startswith("token:")
 
     def test_uses_x_forwarded_for_when_present(self):
         request = self._make_request(forwarded_for="10.0.0.5, 10.0.0.1")

@@ -1,6 +1,14 @@
 /**
  * MSW Request Handlers
- * Mock API responses for testing
+ * Mock API responses for testing.
+ *
+ * Paths are wildcard-prefixed (`*` + `/api/v1/...`) so they match the
+ * axios instance's absolute baseURL (`http://localhost:8000`) as well as
+ * any relative request.
+ *
+ * NOTE: MSW is currently disabled in tests/setup.ts — see that file and
+ * tests/mocks/api-mock.ts for the active mocking strategy. These handlers
+ * are kept ready for a future MSW re-enable.
  */
 
 import { http, HttpResponse } from 'msw'
@@ -48,7 +56,7 @@ export const mockAppointment = (id: string = 'A-001') => ({
 // API request handlers
 export const handlers = [
   // Auth endpoints
-  http.post('/api/v1/auth/login', () => {
+  http.post('*/api/v1/auth/login', () => {
     return HttpResponse.json({
       access_token: 'mock-token',
       user: {
@@ -60,11 +68,11 @@ export const handlers = [
     })
   }),
 
-  http.post('/api/v1/auth/logout', () => {
+  http.post('*/api/v1/auth/logout', () => {
     return HttpResponse.json({ success: true })
   }),
 
-  http.get('/api/v1/users/me', () => {
+  http.get('*/api/v1/users/me', () => {
     return HttpResponse.json({
       id: '1',
       email: 'test@example.com',
@@ -74,7 +82,7 @@ export const handlers = [
   }),
 
   // Patients endpoints
-  http.get('/api/v1/admin/patients', () => {
+  http.get('*/api/v1/admin/patients', () => {
     return HttpResponse.json([
       mockPatient('P-001'),
       mockPatient('P-002'),
@@ -82,12 +90,12 @@ export const handlers = [
     ])
   }),
 
-  http.get('/api/v1/patients/:id', ({ params }) => {
+  http.get('*/api/v1/patients/:id', ({ params }) => {
     return HttpResponse.json(mockPatient(params.id as string))
   }),
 
   // Doctors endpoints
-  http.get('/api/v1/admin/doctors', () => {
+  http.get('*/api/v1/admin/doctors', () => {
     return HttpResponse.json([
       mockDoctor('D-001'),
       mockDoctor('D-002'),
@@ -95,7 +103,7 @@ export const handlers = [
   }),
 
   // Appointments endpoints
-  http.get('/api/v1/admin/appointments', () => {
+  http.get('*/api/v1/admin/appointments', () => {
     return HttpResponse.json([
       mockAppointment('A-001'),
       mockAppointment('A-002'),
@@ -103,7 +111,7 @@ export const handlers = [
   }),
 
   // Dashboard stats
-  http.get('/api/v1/admin/stats', () => {
+  http.get('*/api/v1/admin/stats', () => {
     return HttpResponse.json({
       total_patients: 108,
       patient_trend: 20,
@@ -117,7 +125,7 @@ export const handlers = [
   }),
 
   // Notifications
-  http.get('/api/v1/notifications', () => {
+  http.get('*/api/v1/notifications', () => {
     return HttpResponse.json([
       {
         id: '1',
@@ -131,7 +139,7 @@ export const handlers = [
   }),
 
   // Search
-  http.get('/api/v1/search', ({ request }) => {
+  http.get('*/api/v1/search', ({ request }) => {
     const url = new URL(request.url)
     const query = url.searchParams.get('q')
 
