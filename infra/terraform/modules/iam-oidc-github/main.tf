@@ -5,12 +5,14 @@ locals {
 
   # GitHub's sub claim differs by trigger context: a push to a protected branch
   # carries `ref:refs/heads/<branch>`, while a job gated by a GitHub Environment
-  # (deploy-prod, behind required reviewers) carries `environment:<name>`
+  # (production, behind required reviewers) carries `environment:<name>`
   # instead — both must be allowlisted or the prod deploy job's token is rejected.
+  # The Environment names must match the workflows exactly: cd.yml/deploy.yml/
+  # rollback.yml all gate on `environment: production` (not `prod`).
   allowed_subs = [
     "repo:${var.github_org}/${var.github_repo}:ref:refs/heads/${var.deploy_branch}",
     "repo:${var.github_org}/${var.github_repo}:environment:staging",
-    "repo:${var.github_org}/${var.github_repo}:environment:prod",
+    "repo:${var.github_org}/${var.github_repo}:environment:production",
   ]
 }
 

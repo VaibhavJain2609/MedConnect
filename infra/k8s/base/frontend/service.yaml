@@ -4,6 +4,12 @@ metadata:
   name: frontend
   labels:
     app: frontend
+  annotations:
+    # Per-Service override of the Ingress-level
+    # alb.ingress.kubernetes.io/healthcheck-path (/health): the Next.js app's
+    # health endpoint lives at /api/health, not /health — without this the ALB
+    # target group would 404 every health check and drain the targets.
+    alb.ingress.kubernetes.io/healthcheck-path: /api/health
 spec:
   type: ClusterIP
   selector:

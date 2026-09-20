@@ -14,7 +14,7 @@ output "security_group_id" {
   value = aws_security_group.this.id
 }
 
-output "db_name_placeholder" {
-  description = "RDS itself has no default database beyond `postgres`; medconnect/medconnect_medicines/keycloak schema creation is a post-apply CI step — see module main.tf"
-  value       = "postgres"
+output "db_name" {
+  description = "The database RDS created at provision (var.db_name, default `medconnect`). `medconnect_medicines` + the `keycloak` schema are created by the in-cluster db-bootstrap Job — see module main.tf."
+  value       = aws_db_instance.this.db_name
 }

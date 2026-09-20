@@ -17,10 +17,21 @@ data:
   # Frontend's Keycloak client is public (PKCE), distinct from the backend's confidential client.
   NEXT_PUBLIC_KEYCLOAK_REALM: medconnect
   NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: medconnect-frontend
-  # Same-namespace short DNS name — resolves regardless of which namespace an
-  # overlay deploys into, so this does not need per-overlay patching.
-  KEYCLOAK_URL: http://keycloak:8080
+  # KEYCLOAK_URL is the backend's *internal* JWKS/admin base. The bare
+  # `http://keycloak:8080` short name is rejected by Settings'
+  # check_production_config() validator (backend/app/config.py:42 — that exact
+  # literal raises under APP_ENV=production), so this uses the fully-qualified
+  # cluster DNS name instead. It is namespace-qualified, which means each
+  # overlay MUST patch it to its own namespace (see overlays/*/kustomization.yaml).
+  KEYCLOAK_URL: http://keycloak.medconnect.svc.cluster.local:8080
   # Overlay-specific: public hostnames, patched per environment.
   KEYCLOAK_PUBLIC_URL: PLACEHOLDER_KEYCLOAK_PUBLIC_URL
   KC_HOSTNAME: PLACEHOLDER_KEYCLOAK_HOSTNAME
   NEXT_PUBLIC_API_URL: PLACEHOLDER_API_PUBLIC_URL
+  # FRONTEND_URL feeds CORS allowed_origins + CSP connect-src and prescription
+  # QR links; BACKEND_URL is the public origin used to build presigned upload
+  # URLs (`{BACKEND_URL}/api/v1/uploads/...`). Both must be real https URLs in
+  # production — FRONTEND_URL containing "localhost" is rejected by the same
+  # prod validator. Patched per environment in each overlay.
+  FRONTEND_URL: PLACEHOLDER_FRONTEND_URL
+  BACKEND_URL: PLACEHOLDER_BACKEND_URL

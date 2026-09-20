@@ -1,0 +1,32 @@
+# OPTIONAL hardening — not wired into kustomization.yaml by default (see the
+# commented `- resourcequota.yaml` line there). Uncomment to enforce a
+# per-namespace resource budget and default container limits.
+#
+# Safe to enable as-is: every workload in this base already sets explicit
+# requests and limits, so the ResourceQuota's requirement that all pods
+# declare them is already satisfied. Tune the numbers per environment via an
+# overlay patch if enabled — these are sized for the base replica counts.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: medconnect-quota
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.cpu: "8"
+    limits.memory: 16Gi
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: medconnect-defaults
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 50m
+        memory: 128Mi
+      default:
+        cpu: 500m
+        memory: 512Mi

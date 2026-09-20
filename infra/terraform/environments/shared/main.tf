@@ -28,7 +28,12 @@ module "eks" {
   node_min_size       = var.node_min_size
   node_max_size       = var.node_max_size
   node_desired_size   = var.node_desired_size
-  tags                = var.tags
+
+  # See variables.tf — open by default because GitHub-hosted runners need it;
+  # restrict via tfvars when the deploy path has known egress IPs.
+  endpoint_public_access_cidrs = var.eks_endpoint_public_access_cidrs
+
+  tags = var.tags
 }
 
 module "addons" {

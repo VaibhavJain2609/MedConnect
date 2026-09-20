@@ -24,6 +24,13 @@ metadata:
   annotations:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
+    # Ingress-level default for the ALB target-group health check — correct
+    # for the backend (/health is its deep-check endpoint). The frontend and
+    # keycloak Services carry their own
+    # alb.ingress.kubernetes.io/healthcheck-path (and keycloak also
+    # healthcheck-port: "9000") annotations, which override this default
+    # per target group — those services' health endpoints do not live at
+    # /health on the traffic port.
     alb.ingress.kubernetes.io/healthcheck-path: /health
     # ACM cert ARN is a required input — provisioned by Terraform, not created here.
     alb.ingress.kubernetes.io/certificate-arn: PLACEHOLDER_ACM_CERT_ARN

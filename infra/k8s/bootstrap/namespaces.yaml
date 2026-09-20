@@ -1,0 +1,30 @@
+# One Namespace per environment — both run on the single shared cluster
+# (see infra/terraform/environments/shared). These used to be produced by the
+# base kustomization's `namespace:` transformer, but a Namespace is
+# cluster-scoped and the CD role (AmazonEKSEditPolicy, namespace-scoped)
+# cannot create them, so they live here in the cluster-admin bootstrap set.
+#
+# Pod Security Standards: `enforce: baseline` blocks the actually-dangerous
+# stuff (privileged containers, host namespaces/PID/IPC, hostPath, hostPorts)
+# without breaking the current workloads. `restricted` stays audit/warn-only
+# for now — the frontend/keycloak pods would need seccompProfile + full
+# capability drops before enforce could tighten (backend already complies).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: medconnect-staging
+  labels:
+    app.kubernetes.io/part-of: medconnect
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: medconnect-prod
+  labels:
+    app.kubernetes.io/part-of: medconnect
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted

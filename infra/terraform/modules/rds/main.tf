@@ -55,6 +55,12 @@ resource "aws_db_parameter_group" "this" {
   family = "postgres16"
   tags   = local.tags
 
+  # force_ssl=1 makes the server reject non-TLS connections outright. Every
+  # client here defaults to SSL anyway — libpq/psycopg2 (alembic, db-bootstrap
+  # Job's psql) and asyncpg both use sslmode=prefer (attempt TLS first), and
+  # pgjdbc (Keycloak's KC_DB_URL) likewise — so no URL changes are needed; the
+  # db-bootstrap Job passes sslmode=require explicitly to fail closed rather
+  # than silently downgrade. See infra/README.md.
   parameter {
     name  = "rds.force_ssl"
     value = "1"
@@ -66,6 +72,11 @@ resource "aws_db_instance" "this" {
   engine         = "postgres"
   engine_version = var.engine_version
   instance_class = var.instance_class
+
+  # Creates the `medconnect` database at provision time — without db_name RDS
+  # provisions only the `postgres` admin database and every app connection
+  # (DATABASE_URL, KC_DB_URL, alembic) targets a database that does not exist.
+  db_name = var.db_name
 
   allocated_storage     = var.allocated_storage
   max_allocated_storage = var.max_allocated_storage
@@ -85,6 +96,7 @@ resource "aws_db_instance" "this" {
   skip_final_snapshot          = var.skip_final_snapshot
   final_snapshot_identifier    = var.skip_final_snapshot ? null : "${var.identifier}-final-${formatdate("YYYYMMDDhhmmss", timestamp())}"
   backup_retention_period      = var.backup_retention_period
+  backup_window                = var.backup_window
   performance_insights_enabled = var.performance_insights_enabled
   auto_minor_version_upgrade   = true
   copy_tags_to_snapshot        = true
@@ -98,14 +110,15 @@ resource "aws_db_instance" "this" {
 }
 
 # ---------------------------------------------------------------------------
-# Database/schema creation for `medconnect`, `medconnect_medicines`, and the
-# `keycloak` schema is intentionally NOT done via a Terraform provisioner.
-# `aws_db_instance` provisioners would need network-level access to the RDS
-# endpoint from wherever `terraform apply` runs, which is a CI runner outside
-# the VPC here — that access does not reliably exist, and provisioners hide
-# an imperative step inside declarative state with no idempotency guarantee
-# on retry. Instead this is a documented post-apply CI step: the deploy
-# pipeline (running inside the cluster, which already has network access)
-# applies backend/*/migrations against this instance before the app rolls
-# out. See infra/terraform/README.md for the exact command.
+# `db_name` above gets Terraform to create the `medconnect` database at
+# provision. The second logical database (`medconnect_medicines`), the
+# `keycloak` schema inside `medconnect`, and the pg_trgm/pgvector extensions
+# are intentionally NOT done via a Terraform provisioner: provisioners would
+# need network access to the RDS endpoint from wherever `terraform apply`
+# runs (a CI runner outside the VPC — that access does not reliably exist),
+# and they hide an imperative step inside declarative state with no
+# idempotency guarantee on retry. Instead the in-cluster db-bootstrap Job
+# (infra/k8s/base/migrations/db-bootstrap-job.yaml, applied as part of the
+# k8s overlays before the alembic Job) creates them idempotently from inside
+# the VPC. See infra/README.md for the apply order.
 # ---------------------------------------------------------------------------

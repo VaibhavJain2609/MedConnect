@@ -72,33 +72,68 @@ step, so DNS has to be a follow-up, not part of `terraform apply`) and an
 ACM certificate covering both hostnames (or a wildcard) validated in the
 same region. This repo does not provision Route53 or ACM — that's
 intentionally out of scope, since it requires a domain this pipeline has no
-way to know about.
+way to know about. Terraform itself doesn't consume these values; it echoes
+them back via `terraform output ingress_config` so the values you must
+substitute into the k8s overlay placeholders are printed next to
+`waf_web_acl_arn`.
+
+### rds.force_ssl and client TLS
+
+The RDS parameter group sets `rds.force_ssl=1` — the server rejects non-TLS
+connections outright. All app clients negotiate SSL by default
+(libpq/psycopg2, asyncpg, and pgjdbc all default to sslmode=prefer), so no
+URL changes were needed; the db-bootstrap Job passes `sslmode=require`
+explicitly so it fails closed. If you ever see "no pg_hba.conf entry ...
+SSL off" errors, the client is forcing `sslmode=disable` — remove that
+override rather than relaxing the parameter group.
 
 ## 3. Deploy the Kubernetes manifests (first time, by hand)
 
-The CD pipeline (`cd.yml`) handles this on every push to `master` once
-GitHub Actions is wired up (step 5 below), but the very first deploy — or
-any time you want to bypass CI — can be done manually:
+The apply order matters — do these in sequence:
 
 ```bash
 aws eks update-kubeconfig --name medconnect --region ap-south-1
 
-# Patch in real image references (see step 2's ECR repo URLs from
-# `terraform output ecr_repository_urls` in environments/shared):
+# 1. Cluster-admin bootstrap, ONCE per cluster: creates the
+#    medconnect-staging / medconnect-prod Namespaces and the shared
+#    ClusterSecretStore. The CD role (AmazonEKSEditPolicy) is
+#    namespace-scoped and cannot apply cluster-scoped kinds, which is why
+#    these live outside base/.
+kubectl apply -k infra/k8s/bootstrap
+
+# 2. Patch in real image references (see step 2's ECR repo URLs from
+#    `terraform output ecr_repository_urls` in environments/shared):
 cd infra/k8s/overlays/staging
 kustomize edit set image \
   medconnect-backend=<ecr-url>/medconnect-backend:<tag> \
   medconnect-frontend=<ecr-url>/medconnect-frontend:<tag> \
   medconnect-keycloak=<ecr-url>/medconnect-keycloak:<tag>
+cd -
 
+# 3. Apply the overlay. This creates the ExternalSecrets (which sync
+#    backend-secrets/keycloak-secrets from Secrets Manager), runs the
+#    db-bootstrap Job (creates the medconnect_medicines database, the
+#    keycloak schema, and the pg_trgm/vector extensions — idempotent,
+#    safe to rerun), then the alembic Job, then the Deployments. Backend
+#    pods may crash-loop until the secrets sync and both Jobs complete —
+#    that's expected on the first deploy; they settle once the chain
+#    finishes.
 kubectl apply -k infra/k8s/overlays/staging
+kubectl -n medconnect-staging wait --for=condition=complete job/db-bootstrap --timeout=300s
+kubectl -n medconnect-staging wait --for=condition=complete job/alembic-migrate --timeout=600s
 ```
 
-Before this will actually work end to end, also patch the two
-`PLACEHOLDER_*` values each overlay's `kustomization.yaml` still carries —
-`terraform output waf_web_acl_arn` (from `environments/staging` or `prod`)
-for the WAF ARN, and your real ACM certificate ARN — since Terraform's WAF
-and the Ingress are wired together by hand, not automatically.
+Before this will actually work end to end, also patch the
+`PLACEHOLDER_*` values each overlay's `kustomization.yaml` still carries:
+`PLACEHOLDER_ACM_CERT_ARN_<ENV>` (your ACM cert ARN — also printed by
+`terraform output ingress_config`) and `PLACEHOLDER_WAF_ACL_ARN_<ENV>`
+(`terraform output waf_web_acl_arn` from the matching environment). In CI
+these are substituted from GitHub Actions variables; manually, edit the
+overlay files or sed them in place before `kubectl apply -k`.
+
+The CD pipeline (`cd.yml`) does all of the above on every push to `master`
+once GitHub Actions is wired up (step 5 below), minus the bootstrap step —
+that one stays a cluster-admin responsibility.
 
 ## 4. Verifying without touching AWS
 
@@ -112,6 +147,7 @@ cd infra/terraform/environments/<shared|staging|prod>
 terraform init -backend=false && terraform validate
 
 # Kubernetes — real rendering + schema validation, no cluster needed
+kubectl kustomize infra/k8s/bootstrap
 kubectl kustomize infra/k8s/overlays/staging
 kubectl kustomize infra/k8s/overlays/prod
 kubeconform -strict -ignore-missing-schemas -kubernetes-version 1.31.0 -summary <(kubectl kustomize infra/k8s/overlays/staging)

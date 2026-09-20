@@ -4,6 +4,14 @@ metadata:
   name: keycloak
   labels:
     app: keycloak
+  annotations:
+    # Per-Service override of the Ingress-level
+    # alb.ingress.kubernetes.io/healthcheck-path (/health): Keycloak 24's
+    # health endpoints live on the management port (9000), not the HTTP
+    # traffic port — the ALB health check must hit /health/ready on 9000 or
+    # the target group marks the pod unhealthy.
+    alb.ingress.kubernetes.io/healthcheck-path: /health/ready
+    alb.ingress.kubernetes.io/healthcheck-port: "9000"
 spec:
   type: ClusterIP
   selector:

@@ -68,6 +68,12 @@ resource "aws_elasticache_replication_group" "this" {
   transit_encryption_enabled = true
   auth_token                 = var.auth_token
 
+  # Without snapshot_retention_limit, automated snapshots default to 0 days
+  # (disabled) — a node failure would lose warm cache state with no recovery
+  # point. Seven days is cheap for a Redis cache whose data is re-populable
+  # but expensive to rebuild under load.
+  snapshot_retention_limit = var.snapshot_retention_limit
+
   auto_minor_version_upgrade = true
   apply_immediately          = var.environment != "prod"
 
