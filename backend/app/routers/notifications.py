@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -53,6 +53,27 @@ class NotificationsListResponse(BaseModel):
 
 class NotificationPreferencesResponse(BaseModel):
     preferences: dict
+
+
+DEFAULT_NOTIFICATION_PREFERENCES: dict = {
+    "email_notifications": True,
+    "push_notifications": True,
+    "appointment_reminders": True,
+    "lab_results": True,
+    "prescription_alerts": True,
+    "system_alerts": True,
+}
+
+
+class NotificationPreferencesUpdate(BaseModel):
+    """Validated body for PUT /preferences. Unset fields keep their current value."""
+
+    email_notifications: bool = True
+    push_notifications: bool = True
+    appointment_reminders: bool = True
+    lab_results: bool = True
+    prescription_alerts: bool = True
+    system_alerts: bool = True
 
 
 # Endpoints
@@ -163,7 +184,7 @@ async def mark_as_read(
 
     # Mark as read
     notification.read = True
-    notification.read_at = datetime.now()
+    notification.read_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(notification)
 
@@ -218,7 +239,7 @@ async def mark_all_as_read(
                 Notification.read.is_(False),
             )
         )
-        .values(read=True, read_at=datetime.now())
+        .values(read=True, read_at=datetime.now(timezone.utc))
     )
     await db.execute(stmt)
     await db.commit()
@@ -241,7 +262,7 @@ async def delete_all_read(
                 Notification.read.is_(True),
             )
         )
-        .values(deleted_at=datetime.now())
+        .values(deleted_at=datetime.now(timezone.utc))
     )
     result = await db.execute(stmt)
     await db.commit()
@@ -274,7 +295,7 @@ async def delete_notification(
             detail={"error": {"code": "NOT_FOUND", "message": "Notification not found"}},
         )
 
-    notification.deleted_at = datetime.now()
+    notification.deleted_at = datetime.now(timezone.utc)
     await db.commit()
 
     return None
@@ -288,28 +309,20 @@ async def get_notification_preferences(
     """Get user's notification preferences."""
     query = select(NotificationPreferences).where(
         NotificationPreferences.user_id == user.id,
-        NotificationPreferences.deleted_at.is_(None),
     )
     result = await db.execute(query)
     preferences = result.scalar_one_or_none()
 
     if not preferences:
         # Return default preferences
-        return {
-            "email_notifications": True,
-            "push_notifications": True,
-            "appointment_reminders": True,
-            "lab_results": True,
-            "prescription_alerts": True,
-            "system_alerts": True,
-        }
+        return DEFAULT_NOTIFICATION_PREFERENCES
 
     return preferences.preferences
 
 
 @router.put("/preferences")
 async def update_notification_preferences(
-    preferences: dict,
+    preferences: NotificationPreferencesUpdate,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -317,15 +330,18 @@ async def update_notification_preferences(
     # Check if preferences exist
     query = select(NotificationPreferences).where(
         NotificationPreferences.user_id == user.id,
-        NotificationPreferences.deleted_at.is_(None),
     )
     result = await db.execute(query)
     existing_prefs = result.scalar_one_or_none()
 
+    # Only the keys the client actually sent are updated; the rest are preserved.
+    updates = preferences.model_dump(exclude_unset=True)
+
     if existing_prefs:
         # Update existing
-        existing_prefs.preferences = preferences
-        existing_prefs.updated_at = datetime.now()
+        merged = {**(existing_prefs.preferences or {}), **updates}
+        existing_prefs.preferences = merged
+        existing_prefs.updated_at = datetime.now(timezone.utc)
         await db.commit()
         await db.refresh(existing_prefs)
         return existing_prefs.preferences
@@ -333,7 +349,7 @@ async def update_notification_preferences(
         # Create new
         new_prefs = NotificationPreferences(
             user_id=user.id,
-            preferences=preferences,
+            preferences={**DEFAULT_NOTIFICATION_PREFERENCES, **updates},
         )
         db.add(new_prefs)
         await db.commit()
