@@ -1,0 +1,35 @@
+# Frontend build context (. / frontend). The Dockerfile does `COPY . .`, so
+# anything not listed here ends up inside the image.
+
+# Dependencies are installed via `npm ci` inside the image — never copy a
+# host node_modules (wrong platform binaries, huge context).
+node_modules
+
+# Build output — a stale local build must never clobber `next build`
+.next
+out
+*.tsbuildinfo
+
+# Secrets / local env
+.env
+.env.*
+!.env.example
+
+# Tests & coverage — not needed to build or run
+tests
+coverage
+jest.config.js
+
+# Repo/build metadata
+.git
+.gitignore
+.dockerignore
+Dockerfile
+
+# OS / editor noise
+.DS_Store
+.idea
+.vscode
+*.swp
+*.swo
+*.log

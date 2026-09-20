@@ -1,0 +1,47 @@
+# Build-context hygiene for any image built with the repo root as context.
+# Keeps secrets, VCS data, caches and installed dependencies out of images.
+
+# VCS / repo metadata
+.git
+.gitignore
+.gitattributes
+.cgcignore
+.trivyignore
+
+# Secrets & local environment — never bake into an image
+.env
+.env.*
+**/.env
+**/.env.*
+!**/.env.example
+
+# Python
+**/__pycache__
+**/*.py[cod]
+**/.venv
+**/venv
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/.coverage
+**/htmlcov
+
+# Node
+**/node_modules
+**/.next
+**/out
+**/coverage
+**/*.tsbuildinfo
+
+# Generated/agent artifacts & IDE/OS noise
+graphify-out
+.serena
+analysis
+.worktrees
+.claude
+**/.DS_Store
+**/Thumbs.db
+**/*.swp
+**/*.swo
+**/.idea
+**/.vscode

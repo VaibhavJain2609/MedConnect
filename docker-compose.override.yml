@@ -1,0 +1,46 @@
+# docker-compose.override.yml — local development overrides.
+#
+# `docker compose` merges this file on top of docker-compose.yml
+# automatically, so plain `docker compose up --build` gives you the dev
+# stack. To run the production-shaped base only:
+#   docker compose -f docker-compose.yml up --build
+
+services:
+  backend:
+    # Run as the host UID/GID so files written into the bind-mounted source
+    # tree (__pycache__, alembic artifacts) are owned correctly on the host.
+    # The image's own `app` user is still used when running the base stack.
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes:
+      - ./backend:/app
+    command: >
+      sh -c "alembic upgrade head &&
+             alembic -c alembic_medicine.ini upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+  reminder-worker:
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes:
+      - ./backend:/app
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: dev   # dev stage: node_modules installed via npm ci, runs `next dev`
+    command: npm run dev
+    environment:
+      NODE_ENV: development
+      # In `next dev` these are read at request time from the environment,
+      # unlike the prod bundle where they are inlined at build time.
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_KEYCLOAK_URL: http://localhost:8080
+      NEXT_PUBLIC_KEYCLOAK_REALM: medconnect
+      NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: medconnect-frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules   # keep image-installed modules; don't shadow with the host's
+
+  nginx:
+    volumes:
+      - ./nginx/nginx.dev.conf:/etc/nginx/nginx.conf:ro
