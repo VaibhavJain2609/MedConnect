@@ -8,8 +8,12 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
 ReminderTypeEnum = Enum("24h", "2h", name="reminder_type_enum")
-ChannelEnum = Enum("log", "sms", "whatsapp", name="reminder_channel_enum")
-ReminderStatusEnum = Enum("pending", "sent", "failed", name="reminder_status_enum")
+# NOTE: "log" is retained for backwards compatibility with rows written before
+# real channel dispatch existed; new rows always use a real channel value.
+# DB-side enum values must be added via an Alembic migration
+# (ALTER TYPE reminder_channel_enum ADD VALUE ...).
+ChannelEnum = Enum("in_app", "log", "email", "sms", "whatsapp", name="reminder_channel_enum")
+ReminderStatusEnum = Enum("pending", "sent", "failed", "skipped", name="reminder_status_enum")
 
 
 class ReminderLog(Base):
@@ -46,10 +50,12 @@ class ReminderLog(Base):
     )
 
     __table_args__ = (
-        # One reminder of each type per appointment — prevents duplicate sends
+        # One reminder of each type per appointment per channel — prevents
+        # duplicate sends while allowing one log row per attempted channel.
         UniqueConstraint(
             "appointment_id",
             "reminder_type",
+            "channel",
             name="uq_reminder_log_appointment_type",
         ),
     )

@@ -1,10 +1,11 @@
 """
 Appointment reminder tasks executed by the ARQ worker.
 
-Writes a ReminderLog row and creates an in-app Notification for the
-patient (and the doctor) so reminders are actually visible in the app.
-WhatsApp / SMS delivery can be wired in later by updating the
-`_dispatch` function and setting `channel` accordingly.
+Dispatches the reminder over every notification channel enabled in the
+patient's NotificationPreferences (in_app, email, sms, whatsapp) via
+app.services.notification_channels, then writes one ReminderLog row per
+attempted channel with the real channel value and a sent/failed/skipped
+status. The doctor always gets an in-app notification.
 """
 import uuid
 from datetime import datetime, timezone
@@ -19,7 +20,7 @@ from app.models.doctor import Doctor
 from app.models.notification import NotificationType
 from app.models.reminder_log import ReminderLog
 from app.models.user import User
-from app.services import notification_service
+from app.services import notification_channels, notification_service
 
 logger = structlog.get_logger()
 
@@ -102,11 +103,12 @@ async def _process_reminder(
         )
         return
 
-    # Fetch patient
+    # Fetch patient — the full row is needed for channel dispatch (email/phone)
     patient_res = await db.execute(
-        select(User.full_name).where(User.id == appt.patient_id)
+        select(User).where(User.id == appt.patient_id)
     )
-    patient_name: str = patient_res.scalar_one_or_none() or "Patient"
+    patient = patient_res.scalar_one_or_none()
+    patient_name: str = patient.full_name if patient else "Patient"
 
     # Fetch doctor user id + name via User → Doctor join
     doctor_res = await db.execute(
@@ -134,24 +136,51 @@ async def _process_reminder(
         "reminder_type": reminder_type,
     }
 
-    # In-app notification for the patient
-    await notification_service.create_notification(
-        db,
-        user_id=appt.patient_id,
-        notif_type=NotificationType.APPOINTMENT.value,
-        title=f"Appointment in {hours_before} hour(s)",
-        body=message,
-        action_url="/patient/appointments",
-        metadata=notif_meta,
-    )
+    title = f"Appointment in {hours_before} hour(s)"
 
-    # In-app notification for the doctor (if resolvable)
+    # --- Patient: dispatch over every enabled channel -------------------
+    channel_results = []
+    if patient is None:
+        logger.warning(
+            "reminder_patient_not_found",
+            appointment_id=appointment_id,
+            patient_id=str(appt.patient_id),
+        )
+    else:
+        prefs = await notification_channels.get_preferences(patient.id, db=db)
+
+        # Per-type opt-out — not a channel flag, so it gates the whole reminder
+        if not prefs.get("appointment_reminders", True):
+            logger.info(
+                "reminder_skipped_user_opted_out",
+                appointment_id=appointment_id,
+                patient_id=str(patient.id),
+            )
+        else:
+            channels = [
+                c for c in notification_channels.CHANNELS
+                if notification_channels.channel_enabled(c, prefs)
+            ]
+            channel_results = await notification_channels.send_all(
+                patient,
+                channels,
+                title,
+                message,
+                db=db,
+                notif_type=NotificationType.APPOINTMENT.value,
+                action_url="/patient/appointments",
+                metadata=notif_meta,
+                prefs=prefs,
+            )
+
+    # In-app notification for the doctor (if resolvable) — doctors always get
+    # the in-app copy; patient channel prefs do not apply to them.
     if doctor_user_id is not None:
         await notification_service.create_notification(
             db,
             user_id=doctor_user_id,
             notif_type=NotificationType.APPOINTMENT.value,
-            title=f"Appointment in {hours_before} hour(s)",
+            title=title,
             body=(
                 f"Reminder: your appointment with {patient_name} "
                 f"is in {hours_before} hour(s) — {scheduled_local}."
@@ -160,22 +189,29 @@ async def _process_reminder(
             metadata=notif_meta,
         )
 
-    log_entry = ReminderLog(
-        id=uuid.uuid4(),
-        appointment_id=appt.id,
-        reminder_type=reminder_type,
-        channel="log",
-        status="sent",
-        message=message,
-        sent_at=datetime.now(tz=timezone.utc),
-    )
-    db.add(log_entry)
+    # One ReminderLog row per attempted channel with the real channel value
+    now = datetime.now(tz=timezone.utc)
+    for result in channel_results:
+        db.add(
+            ReminderLog(
+                id=uuid.uuid4(),
+                appointment_id=appt.id,
+                reminder_type=reminder_type,
+                channel=result.channel,
+                status=result.status,
+                message=(
+                    f"{result.reason}: {message}" if result.reason else message
+                ),
+                sent_at=now if result.status == "sent" else None,
+            )
+        )
     await db.commit()
 
     # NOTE: do not log patient/doctor names or message bodies — PHI must not
     # reach INFO logs. Identifiers only.
     logger.info(
-        "reminder_logged",
+        "reminder_dispatched",
         appointment_id=appointment_id,
         reminder_type=reminder_type,
+        channels={r.channel: r.status for r in channel_results},
     )

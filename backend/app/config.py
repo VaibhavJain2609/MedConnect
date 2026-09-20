@@ -34,6 +34,24 @@ class Settings(BaseSettings):
     STORAGE_BACKEND: str = "local"  # "local" | "s3"
     UPLOADS_DIR: str = "/tmp/medconnect-uploads"
 
+    # Notification channels — all optional. When unset the channel is skipped
+    # with a logged `channel_unavailable` result; safe to leave empty in any env.
+    # Email (SMTP)
+    SMTP_HOST: str | None = None
+    SMTP_PORT: int = 587
+    SMTP_USER: str | None = None
+    SMTP_PASSWORD: str | None = None
+    SMTP_FROM: str | None = None
+    SMTP_TLS: bool = True  # STARTTLS after connect
+    # SMS via MSG91 (provider stub — real wiring pending)
+    MSG91_AUTH_KEY: str | None = None
+    MSG91_SENDER_ID: str | None = None
+    MSG91_TEMPLATE_ID: str | None = None
+    # WhatsApp Business Cloud API (provider stub — real wiring pending)
+    WHATSAPP_ACCESS_TOKEN: str | None = None
+    WHATSAPP_PHONE_NUMBER_ID: str | None = None
+    WHATSAPP_BUSINESS_ACCOUNT_ID: str | None = None
+
     @model_validator(mode="after")
     def check_production_config(self) -> "Settings":
         if self.APP_ENV == "production":
