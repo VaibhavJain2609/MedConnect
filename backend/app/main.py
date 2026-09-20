@@ -13,6 +13,7 @@ from starlette.datastructures import MutableHeaders
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import settings
+from app.middleware.audit_middleware import AuditReadMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.routers import auth, doctors, patients, notifications
 from app.routers import medicines_emr, interactions, search
@@ -130,6 +131,14 @@ if settings.APP_ENV == "development":
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     ])
+
+# AuditReadMiddleware is registered FIRST so it ends up INNERMOST
+# (add_middleware prepends; last registration is outermost). It must sit
+# directly above the router because it is pure-ASGI and reads the
+# audit-user contextvar set by auth dependencies — any BaseHTTPMiddleware
+# between it and the router would run the endpoint in a copied context
+# and hide that value.
+app.add_middleware(AuditReadMiddleware)
 
 app.add_middleware(RateLimitMiddleware)
 
