@@ -1,9 +1,16 @@
+import asyncio
+import logging
+import uuid
+from contextlib import asynccontextmanager
+
 import sentry_sdk
 import structlog
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
+from starlette.datastructures import MutableHeaders
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import settings
 from app.middleware.rate_limit import RateLimitMiddleware
@@ -28,21 +35,72 @@ from app.routers import uploads
 from app.routers import vitals
 from app.routers import prescriptions_pdf
 from app.routers import billing, revenue, queue
-from app.routers.admin import components as admin_components
-from app.routers.admin import medicines as admin_medicines
+
+# merge_contextvars first so request_id (bound by RequestIDMiddleware) shows
+# up on every log line. wrap_for_formatter hands structlog events to the
+# stdlib ProcessorFormatter below; foreign_pre_chain applies the same
+# processors to stdlib-originated records so all logs render as JSON.
+_shared_log_processors = [
+    structlog.contextvars.merge_contextvars,
+    structlog.stdlib.add_log_level,
+    structlog.processors.TimeStamper(fmt="iso"),
+]
 
 structlog.configure(
     processors=[
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.add_log_level,
+        *_shared_log_processors,
+        structlog.processors.format_exc_info,
+        structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+    ],
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
+)
+
+_stdlib_formatter = structlog.stdlib.ProcessorFormatter(
+    foreign_pre_chain=_shared_log_processors,
+    processors=[
+        structlog.stdlib.ProcessorFormatter.remove_processors_meta,
         structlog.processors.JSONRenderer(),
     ],
 )
+_stdlib_handler = logging.StreamHandler()
+_stdlib_handler.setFormatter(_stdlib_formatter)
+_root_logger = logging.getLogger()
+if not _root_logger.handlers:
+    _root_logger.addHandler(_stdlib_handler)
+    _root_logger.setLevel(logging.INFO)
 
 if settings.SENTRY_DSN:
     sentry_sdk.init(dsn=settings.SENTRY_DSN, traces_sample_rate=0.1)
 
 _api_docs_enabled = settings.APP_ENV != "production"
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: pre-warm the Keycloak JWKS cache so the first authenticated
+    # request doesn't block on the certs fetch. PyJWKClient is synchronous —
+    # run it in a worker thread (prewarm_jwks logs and swallows failures).
+    from app.utils.security import prewarm_jwks
+
+    await asyncio.to_thread(prewarm_jwks)
+
+    yield
+
+    # Shutdown: close the rate-limit Redis client, then dispose both engines.
+    from app.database import engine, medicine_engine
+    from app.middleware import rate_limit as _rate_limit
+
+    redis_client = _rate_limit._redis_client
+    if redis_client is not None:
+        try:
+            await redis_client.aclose()
+        except Exception:
+            pass
+    await engine.dispose()
+    await medicine_engine.dispose()
+
 
 app = FastAPI(
     title="MedConnect API",
@@ -51,6 +109,7 @@ app = FastAPI(
     docs_url="/docs" if _api_docs_enabled else None,
     redoc_url="/redoc" if _api_docs_enabled else None,
     openapi_url="/openapi.json" if _api_docs_enabled else None,
+    lifespan=lifespan,
 )
 
 # Prometheus metrics at /metrics, scraped in-cluster by Prometheus only —
@@ -69,25 +128,17 @@ if settings.APP_ENV == "development":
 
 app.add_middleware(RateLimitMiddleware)
 
-
-@app.middleware("http")
-async def set_audit_context(request: Request, call_next):
-    from app.services.audit_service import set_audit_user
-    try:
-        set_audit_user(None)
-    except Exception:
-        pass
-    response = await call_next(request)
-    return response
-
+# NOTE: the audit user is set by auth dependencies (set_audit_user(user.id)
+# in app/dependencies.py). There is intentionally no middleware resetting it
+# to None here — doing so would wipe the real user bound for the request.
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Clinic-Id", "X-Forwarded-For"],
-    expose_headers=["X-Total-Count", "X-Next-Cursor"],
+    allow_headers=["Authorization", "Content-Type", "X-Clinic-Id", "X-Forwarded-For", "X-Request-Id"],
+    expose_headers=["X-Total-Count", "X-Next-Cursor", "X-Request-Id"],
 )
 
 
@@ -113,6 +164,49 @@ async def add_security_headers(request: Request, call_next):
     if settings.APP_ENV == "production":
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
+
+
+class RequestIDMiddleware:
+    """Pure-ASGI middleware: propagate an inbound X-Request-Id or generate
+    one, echo it on the response, and bind it to structlog contextvars so
+    every log line emitted during the request carries request_id.
+
+    Pure ASGI (not BaseHTTPMiddleware) so the contextvar binding covers the
+    entire downstream stack — endpoints, dependencies, and other middleware.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        request_id = None
+        for name, value in scope.get("headers") or []:
+            if name.lower() == b"x-request-id":
+                request_id = value.decode("latin-1")
+                break
+        if not request_id:
+            request_id = str(uuid.uuid4())
+
+        structlog.contextvars.bind_contextvars(request_id=request_id)
+
+        async def send_with_request_id(message):
+            if message["type"] == "http.response.start":
+                MutableHeaders(scope=message)["X-Request-Id"] = request_id
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_with_request_id)
+        finally:
+            structlog.contextvars.clear_contextvars()
+
+
+# Registered last → outermost middleware, so request_id is bound before
+# CORS/rate-limit/security-header handling and reaches every log call.
+app.add_middleware(RequestIDMiddleware)
 
 app.include_router(auth.router)
 app.include_router(patients.router)
@@ -145,8 +239,18 @@ app.include_router(prescriptions_pdf.router)
 app.include_router(billing.router)
 app.include_router(revenue.router)
 app.include_router(queue.router)
-app.include_router(admin_components.router, prefix="/api/v1")
-app.include_router(admin_medicines.router, prefix="/api/v1")
+# NOTE: routers/medicines.py, routers/prescriptions.py,
+# routers/admin/medicines.py and routers/admin/components.py are dead/broken
+# and have been removed — do not re-add imports or include_router calls.
+
+
+@app.get("/livez", include_in_schema=False)
+async def livez():
+    """Shallow liveness probe — 200 if the process can serve requests.
+
+    No dependency checks; a DB/Redis outage must NOT restart the pod.
+    /health remains the deep readiness check."""
+    return {"status": "ok"}
 
 
 @app.get("/health")
@@ -189,6 +293,30 @@ async def health():
             "redis": "ok" if redis_ok else "error",
             "version": "0.1.0",
         },
+    )
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """Unify the error envelope: always emit {"error": {"code", "message"}}
+    at the TOP LEVEL, whether the endpoint raised detail as a plain string
+    or as the {"error": {...}} dict convention. StarletteHTTPException covers
+    both fastapi.HTTPException and framework-raised errors (404/405/etc)."""
+    detail = exc.detail
+    if isinstance(detail, dict) and isinstance(detail.get("error"), dict):
+        error = detail["error"]
+        code = error.get("code") or f"HTTP_{exc.status_code}"
+        message = error.get("message") or "Request failed"
+    elif isinstance(detail, dict):
+        code = detail.get("code") or f"HTTP_{exc.status_code}"
+        message = detail.get("message") or "Request failed"
+    else:
+        code = f"HTTP_{exc.status_code}"
+        message = str(detail)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": {"code": code, "message": message}},
+        headers=exc.headers,
     )
 
 
