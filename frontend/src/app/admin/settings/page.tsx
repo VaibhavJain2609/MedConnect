@@ -2,14 +2,24 @@
 
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Save, Settings } from "lucide-react";
+import { AlertTriangle, Save, Settings } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import {
   getPlatformSettings,
   PlatformSetting,
   updatePlatformSetting,
-} from "@/lib/api/admin-broadcast";
+} from "@/lib/api/platform-settings";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const REMINDER_CHANNELS = [
   { key: "in_app", label: "In-app" },
@@ -86,6 +96,7 @@ function SettingCard({
   );
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [confirmMaintenanceOpen, setConfirmMaintenanceOpen] = useState(false);
 
   // Re-sync local state when the server value changes (e.g. after refetch).
   useEffect(() => {
@@ -97,6 +108,7 @@ function SettingCard({
   const isKnownBool = BOOLEAN_KEYS.has(setting.key);
   const isKnownNumber = NUMBER_KEYS.has(setting.key);
   const isReminderChannels = setting.key === "reminder_channels_enabled";
+  const isMaintenance = setting.key === "maintenance_mode";
   const isTyped = isKnownBool || isKnownNumber || isReminderChannels;
 
   const channels =
@@ -104,17 +116,7 @@ function SettingCard({
       ? (draft as Record<string, boolean>)
       : {};
 
-  const handleSave = async () => {
-    let value = draft;
-    if (!isTyped) {
-      try {
-        value = JSON.parse(jsonText);
-      } catch {
-        setJsonError("Invalid JSON — fix the value before saving.");
-        return;
-      }
-      setJsonError(null);
-    }
+  const performSave = async (value: unknown) => {
     setSaving(true);
     try {
       await updatePlatformSetting(setting.key, value);
@@ -130,6 +132,43 @@ function SettingCard({
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSave = () => {
+    let value = draft;
+    if (!isTyped) {
+      try {
+        value = JSON.parse(jsonText);
+      } catch {
+        setJsonError("Invalid JSON — fix the value before saving.");
+        return;
+      }
+      setJsonError(null);
+    }
+    if (isKnownNumber) {
+      if (typeof value !== "number" || !Number.isFinite(value)) {
+        toast({
+          title: "Invalid value",
+          description: `${setting.key} must be a number.`,
+          variant: "destructive",
+        });
+        return;
+      }
+      if (setting.key === "max_upload_mb" && (value < 1 || value > 50)) {
+        toast({
+          title: "Invalid value",
+          description: "Max upload size must be between 1 and 50 MB.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    // Turning maintenance mode ON is destructive — require confirmation.
+    if (isMaintenance && value === true && setting.value !== true) {
+      setConfirmMaintenanceOpen(true);
+      return;
+    }
+    void performSave(value);
   };
 
   return (
@@ -171,10 +210,22 @@ function SettingCard({
         </div>
       )}
 
+      {isMaintenance && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+          <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+          <p className="text-xs text-amber-800">
+            Enabling maintenance mode locks out all non-admin API calls.
+            Patients and doctors will be unable to use the platform until it
+            is turned back off.
+          </p>
+        </div>
+      )}
+
       {isKnownNumber && (
         <input
           type="number"
           min={1}
+          max={50}
           value={typeof draft === "number" ? draft : ""}
           onChange={(e) =>
             setDraft(e.target.value === "" ? null : Number(e.target.value))
@@ -225,6 +276,31 @@ function SettingCard({
       <p className="text-xs text-dreams-textSecondary">
         Last updated: {formatDateTime(setting.updated_at)}
       </p>
+
+      <AlertDialog
+        open={confirmMaintenanceOpen}
+        onOpenChange={setConfirmMaintenanceOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Enable maintenance mode?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will lock out all non-admin API calls. Patients and doctors
+              will be unable to use the platform until maintenance mode is
+              turned back off.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => void performSave(true)}
+              className="bg-dreams-blue text-white hover:opacity-90"
+            >
+              Enable maintenance mode
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

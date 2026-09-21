@@ -1,5 +1,7 @@
 /**
- * Admin Announcement Broadcasts + Platform Settings API Functions
+ * Admin Announcement Broadcasts API Functions
+ *
+ * Platform settings / feature flags live in ./platform-settings.
  */
 
 import api from "../api";
@@ -41,18 +43,6 @@ export interface BroadcastsResponse {
   totalPages: number;
 }
 
-export interface PlatformSetting {
-  key: string;
-  value: unknown;
-  description: string | null;
-  updated_by: string | null;
-  updated_at: string | null;
-}
-
-export interface PlatformSettingsResponse {
-  data: PlatformSetting[];
-}
-
 /**
  * Send an announcement notification to all matching active users
  */
@@ -77,38 +67,4 @@ export async function listBroadcasts(
     `/api/v1/admin/notifications/broadcasts?page=${page}&limit=${limit}`
   );
   return response.data;
-}
-
-/**
- * Get all platform settings / feature flags
- */
-export async function getPlatformSettings(): Promise<PlatformSetting[]> {
-  const response = await api.get("/api/v1/admin/settings");
-  return response.data.data || [];
-}
-
-/**
- * Update a single platform setting (upsert by key)
- */
-export async function updatePlatformSetting(
-  key: string,
-  value: unknown,
-  description?: string
-): Promise<PlatformSetting[]> {
-  const response = await api.put("/api/v1/admin/settings", {
-    key,
-    value,
-    ...(description !== undefined ? { description } : {}),
-  });
-  return response.data.data || [];
-}
-
-/**
- * Bulk update platform settings
- */
-export async function updatePlatformSettings(
-  settings: Record<string, unknown>
-): Promise<PlatformSetting[]> {
-  const response = await api.put("/api/v1/admin/settings", { settings });
-  return response.data.data || [];
 }
