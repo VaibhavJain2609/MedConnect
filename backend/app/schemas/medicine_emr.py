@@ -156,6 +156,34 @@ class BrandCompositionResponse(BaseModel):
         from_attributes = True
 
 
+class PackFormResponse(BaseModel):
+    """Dosage/pack form (tablet, syrup, ...)."""
+    pack_form_id: UUID
+    form_name: str
+    route_of_administration: str | None = None
+    is_solid: bool | None = None
+    is_liquid: bool | None = None
+    requires_reconstitution: bool | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class BrandPackagingResponse(BaseModel):
+    """Packaging detail for a brand — GTIN/EAN barcodes live per-pack."""
+    brand_pack_id: UUID
+    pack_form_id: UUID
+    pack_form_name: str | None = None
+    quantity: int
+    pack_type: str | None = None
+    sku: str | None = None
+    barcode: str | None = None
+    is_primary_pack: bool = True
+
+    class Config:
+        from_attributes = True
+
+
 class BrandBase(BaseModel):
     brand_name: str
     is_discontinued: bool = False
@@ -166,6 +194,7 @@ class BrandResponse(BrandBase):
     brand_id: UUID
     manufacturer: ManufacturerResponse | None = None
     compositions: list[BrandCompositionResponse] = []
+    packaging: list[BrandPackagingResponse] = []
     salt_composition: str  # Computed property
     side_effects: list[SaltSideEffectItem] = []
     launch_date: date | None = None

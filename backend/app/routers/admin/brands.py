@@ -8,15 +8,18 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 import re
 
 from app.database import get_medicine_db
 from app.dependencies import require_admin
 from app.models.user import User
 from app.models.medicine.commercial import Brand, Manufacturer, BrandComposition
-from app.models.medicine.salts import SaltStrength
+from app.models.medicine.packaging import BrandPackaging, PackForm
+from app.models.medicine.salts import Salt, SaltStrength
+from app.schemas.medicine_emr import BrandPackagingResponse
 from app.services import medicine_cache
+from app.utils.barcode import is_valid_barcode, normalize_barcode
 
 
 # Pydantic schemas for request/response
@@ -24,6 +27,25 @@ class BrandCompositionInput(BaseModel):
     """Input for brand composition (salt + strength)."""
     salt_strength_id: UUID
     sequence: int = Field(default=1, ge=1)
+
+
+class BrandPackagingInput(BaseModel):
+    """Input for one pack entry (pack size + optional GTIN/EAN barcode)."""
+    pack_form_id: UUID
+    quantity: int = Field(default=1, ge=1)
+    pack_type: Optional[str] = Field(None, max_length=100)
+    sku: Optional[str] = Field(None, max_length=100)
+    barcode: Optional[str] = Field(None, max_length=100)
+    is_primary_pack: bool = True
+
+    @field_validator("barcode")
+    @classmethod
+    def _validate_barcode(cls, v: Optional[str]) -> Optional[str]:
+        """Normalize (strip spaces) and validate GTIN/EAN format."""
+        code = normalize_barcode(v)
+        if code is not None and not is_valid_barcode(code):
+            raise ValueError("barcode must be digits only, 8-14 characters (GTIN/EAN)")
+        return code
 
 
 class BrandCreateRequest(BaseModel):
@@ -36,6 +58,7 @@ class BrandCreateRequest(BaseModel):
     discontinuation_date: Optional[date] = None
     ndhm_code: Optional[str] = Field(None, max_length=50)
     compositions: list[BrandCompositionInput] = Field(..., min_items=1)
+    packaging: list[BrandPackagingInput] = Field(default_factory=list)
 
 
 class BrandUpdateRequest(BaseModel):
@@ -48,6 +71,8 @@ class BrandUpdateRequest(BaseModel):
     discontinuation_date: Optional[date] = None
     ndhm_code: Optional[str] = Field(None, max_length=50)
     compositions: Optional[list[BrandCompositionInput]] = None
+    # When provided, replaces all existing packaging rows (like compositions)
+    packaging: Optional[list[BrandPackagingInput]] = None
 
 
 class BrandResponse(BaseModel):
@@ -62,9 +87,46 @@ class BrandResponse(BaseModel):
     launch_date: Optional[date]
     discontinuation_date: Optional[date]
     ndhm_code: Optional[str]
+    packaging: list[BrandPackagingResponse] = []
 
     class Config:
         from_attributes = True
+
+
+def _packaging_responses(brand: Brand) -> list[BrandPackagingResponse]:
+    """Flatten a brand's packaging rows (pack_form eager-loaded) for response."""
+    return [
+        BrandPackagingResponse(
+            brand_pack_id=pack.brand_pack_id,
+            pack_form_id=pack.pack_form_id,
+            pack_form_name=pack.pack_form.form_name if pack.pack_form else None,
+            quantity=pack.quantity,
+            pack_type=pack.pack_type,
+            sku=pack.sku,
+            barcode=pack.barcode,
+            is_primary_pack=pack.is_primary_pack,
+        )
+        for pack in brand.packaging
+    ]
+
+
+async def _validate_pack_form_ids(
+    db: AsyncSession, packaging: list[BrandPackagingInput]
+) -> None:
+    """404 when any supplied pack_form_id does not exist."""
+    pack_form_ids = {p.pack_form_id for p in packaging}
+    if not pack_form_ids:
+        return
+    result = await db.execute(
+        select(PackForm).where(PackForm.pack_form_id.in_(pack_form_ids))
+    )
+    found = {pf.pack_form_id for pf in result.scalars().all()}
+    missing = pack_form_ids - found
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Pack forms not found: {missing}"
+        )
 
 
 router = APIRouter(
@@ -148,6 +210,20 @@ async def create_brand(
         )
         db.add(composition)
 
+    # Create packaging rows (per-pack barcodes) if provided
+    if brand_data.packaging:
+        await _validate_pack_form_ids(db, brand_data.packaging)
+        for pack_data in brand_data.packaging:
+            db.add(BrandPackaging(
+                brand_id=new_brand.brand_id,
+                pack_form_id=pack_data.pack_form_id,
+                quantity=pack_data.quantity,
+                pack_type=pack_data.pack_type,
+                sku=pack_data.sku,
+                barcode=pack_data.barcode,  # already normalized by validator
+                is_primary_pack=pack_data.is_primary_pack,
+            ))
+
     await db.commit()
     await medicine_cache.invalidate_catalog()
 
@@ -156,7 +232,8 @@ async def create_brand(
         select(Brand)
         .options(
             selectinload(Brand.manufacturer),
-            selectinload(Brand.compositions).selectinload(BrandComposition.salt_strength)
+            selectinload(Brand.compositions).selectinload(BrandComposition.salt_strength),
+            selectinload(Brand.packaging).selectinload(BrandPackaging.pack_form),
         )
         .where(Brand.brand_id == new_brand.brand_id)
     )
@@ -173,6 +250,7 @@ async def create_brand(
         launch_date=created_brand.launch_date,
         discontinuation_date=created_brand.discontinuation_date,
         ndhm_code=created_brand.ndhm_code,
+        packaging=_packaging_responses(created_brand),
     )
 
 
@@ -193,7 +271,10 @@ async def update_brand(
     # Fetch existing brand
     result = await db.execute(
         select(Brand)
-        .options(selectinload(Brand.compositions))
+        .options(
+            selectinload(Brand.compositions),
+            selectinload(Brand.packaging),
+        )
         .where(Brand.brand_id == brand_id)
     )
     brand = result.scalar_one_or_none()
@@ -281,6 +362,22 @@ async def update_brand(
             )
             db.add(composition)
 
+    # Update packaging if provided (replace-all semantics, like compositions)
+    if brand_data.packaging is not None:
+        await _validate_pack_form_ids(db, brand_data.packaging)
+        for existing_pack in brand.packaging:
+            await db.delete(existing_pack)
+        for pack_data in brand_data.packaging:
+            db.add(BrandPackaging(
+                brand_id=brand_id,
+                pack_form_id=pack_data.pack_form_id,
+                quantity=pack_data.quantity,
+                pack_type=pack_data.pack_type,
+                sku=pack_data.sku,
+                barcode=pack_data.barcode,  # already normalized by validator
+                is_primary_pack=pack_data.is_primary_pack,
+            ))
+
     await db.commit()
     await medicine_cache.invalidate_catalog()
     # The in-session compositions collection still holds the deleted rows
@@ -293,7 +390,8 @@ async def update_brand(
         select(Brand)
         .options(
             selectinload(Brand.manufacturer),
-            selectinload(Brand.compositions).selectinload(BrandComposition.salt_strength).selectinload(SaltStrength.salt)
+            selectinload(Brand.compositions).selectinload(BrandComposition.salt_strength).selectinload(SaltStrength.salt),
+            selectinload(Brand.packaging).selectinload(BrandPackaging.pack_form),
         )
         .where(Brand.brand_id == brand_id)
     )
@@ -310,6 +408,7 @@ async def update_brand(
         launch_date=updated_brand.launch_date,
         discontinuation_date=updated_brand.discontinuation_date,
         ndhm_code=updated_brand.ndhm_code,
+        packaging=_packaging_responses(updated_brand),
     )
 
 

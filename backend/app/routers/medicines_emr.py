@@ -10,11 +10,14 @@ from app.services import medicine_cache
 from app.services.salt_service import SaltService
 from app.services.brand_service import BrandService, ManufacturerService
 from app.services.medicine_search_service import MedicineSearchService
+from app.utils.barcode import is_valid_barcode, normalize_barcode
 from app.schemas.medicine_emr import (
     SaltResponse,
     SaltListResponse,
     BrandResponse,
     BrandListResponse,
+    BrandPackagingResponse,
+    PackFormResponse,
     UnifiedSearchResponse,
     ManufacturerResponse,
     SaltStrengthResponse,
@@ -27,6 +30,60 @@ router = APIRouter(
     tags=["medicines"],
     dependencies=[Depends(get_current_user)],
 )
+
+
+def _packaging_responses(brand) -> list[BrandPackagingResponse]:
+    """Flatten a brand's eager-loaded packaging rows to response models."""
+    return [
+        BrandPackagingResponse(
+            brand_pack_id=pack.brand_pack_id,
+            pack_form_id=pack.pack_form_id,
+            pack_form_name=pack.pack_form.form_name if pack.pack_form else None,
+            quantity=pack.quantity,
+            pack_type=pack.pack_type,
+            sku=pack.sku,
+            barcode=pack.barcode,
+            is_primary_pack=pack.is_primary_pack,
+        )
+        for pack in brand.packaging
+    ]
+
+
+def _brand_detail_response(
+    brand,
+    side_effects: list[SaltSideEffectItem] | None = None,
+) -> BrandResponse:
+    """Build the brand detail response (compositions + packaging + side effects).
+
+    Requires manufacturer, compositions (→ salt_strength → salt) and
+    packaging (→ pack_form) to be eager-loaded on ``brand``.
+    """
+    compositions = [
+        BrandCompositionResponse(
+            composition_id=bc.composition_id,
+            salt_name=bc.salt_strength.salt.salt_name,
+            strength_value=bc.salt_strength.strength_value,
+            strength_unit=bc.salt_strength.strength_unit,
+            display_strength=bc.salt_strength.display_strength,
+            sequence=bc.sequence,
+        )
+        for bc in sorted(brand.compositions, key=lambda x: x.sequence)
+    ]
+    return BrandResponse(
+        brand_id=brand.brand_id,
+        brand_name=brand.brand_name,
+        manufacturer=brand.manufacturer,
+        compositions=compositions,
+        packaging=_packaging_responses(brand),
+        salt_composition=brand.salt_composition,
+        side_effects=side_effects or [],
+        is_discontinued=brand.is_discontinued,
+        drug_type=brand.drug_type,
+        launch_date=brand.launch_date,
+        discontinuation_date=brand.discontinuation_date,
+        created_at=brand.created_at,
+        updated_at=brand.updated_at,
+    )
 
 
 # ============================================================================
@@ -140,6 +197,75 @@ async def autocomplete_medicines(
     response = {"results": autocomplete_results, "count": len(autocomplete_results)}
     await medicine_cache.set_cached(cache_key, response)
     return response
+
+
+# ============================================================================
+# BARCODE LOOKUP & PACK FORMS
+# ============================================================================
+
+@router.get("/medicines/by-barcode/{code}", response_model=BrandResponse)
+async def get_medicine_by_barcode(
+    code: str,
+    db: AsyncSession = Depends(get_medicine_db),
+):
+    """
+    Look up a brand by pack barcode (GTIN/EAN).
+
+    Barcodes are stored per-pack on ``brand_packaging.barcode`` (Indian packs
+    carry a barcode per pack size). The code must be digits only, 8-14
+    characters; surrounding/embedded whitespace is stripped. When multiple
+    brands share a barcode (non-unique index by design), the first by brand
+    name is returned — its ``packaging`` list carries all packs so callers
+    can disambiguate.
+    """
+    normalized = normalize_barcode(code)
+    if normalized is None or not is_valid_barcode(normalized):
+        # dict detail passes through the 422 handler untouched (see main.py)
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": {
+                    "code": "INVALID_BARCODE",
+                    "message": "Invalid barcode format — expected 8-14 digits (GTIN/EAN)",
+                }
+            },
+        )
+
+    cache_key = medicine_cache.make_key("barcode", normalized)
+    cached = await medicine_cache.get_cached(cache_key)
+    if cached is not None:
+        return cached
+
+    brands = await BrandService.get_brands_by_barcode(db, normalized)
+    if not brands:
+        raise HTTPException(status_code=404, detail="No medicine found for this barcode")
+
+    response = _brand_detail_response(brands[0])
+    await medicine_cache.set_cached(
+        cache_key, response, ttl=medicine_cache.DETAIL_TTL_SECONDS
+    )
+    return response
+
+
+@router.get("/pack-forms", response_model=list[PackFormResponse])
+async def list_pack_forms(
+    db: AsyncSession = Depends(get_medicine_db),
+):
+    """List dosage/pack forms (dropdown source for pack/barcode management UIs)."""
+    from sqlalchemy import select
+    from app.models.medicine.packaging import PackForm
+
+    cache_key = medicine_cache.make_key("pack-forms")
+    cached = await medicine_cache.get_cached(cache_key)
+    if cached is not None:
+        return cached
+
+    result = await db.execute(select(PackForm).order_by(PackForm.form_name))
+    items = [PackFormResponse.model_validate(pf) for pf in result.scalars().all()]
+    await medicine_cache.set_cached(
+        cache_key, items, ttl=medicine_cache.DETAIL_TTL_SECONDS
+    )
+    return items
 
 
 # ============================================================================
@@ -435,18 +561,6 @@ async def get_brand(
     if not brand:
         raise HTTPException(status_code=404, detail="Brand not found")
 
-    compositions = [
-        BrandCompositionResponse(
-            composition_id=bc.composition_id,
-            salt_name=bc.salt_strength.salt.salt_name,
-            strength_value=bc.salt_strength.strength_value,
-            strength_unit=bc.salt_strength.strength_unit,
-            display_strength=bc.salt_strength.display_strength,
-            sequence=bc.sequence,
-        )
-        for bc in sorted(brand.compositions, key=lambda x: x.sequence)
-    ]
-
     # Side effects come straight from the brand_side_effects mapping —
     # the per-row data shipped with the dataset. No salt-level aggregation.
     side_effects: list[SaltSideEffectItem] = [
@@ -463,20 +577,7 @@ async def get_brand(
     ]
     side_effects.sort(key=lambda s: s.side_effect_name.lower())
 
-    response = BrandResponse(
-        brand_id=brand.brand_id,
-        brand_name=brand.brand_name,
-        manufacturer=brand.manufacturer,
-        compositions=compositions,
-        salt_composition=brand.salt_composition,
-        side_effects=side_effects,
-        is_discontinued=brand.is_discontinued,
-        drug_type=brand.drug_type,
-        launch_date=brand.launch_date,
-        discontinuation_date=brand.discontinuation_date,
-        created_at=brand.created_at,
-        updated_at=brand.updated_at,
-    )
+    response = _brand_detail_response(brand, side_effects=side_effects)
     await medicine_cache.set_cached(
         cache_key, response, ttl=medicine_cache.DETAIL_TTL_SECONDS
     )
