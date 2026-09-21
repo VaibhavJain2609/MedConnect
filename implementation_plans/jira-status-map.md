@@ -106,7 +106,17 @@
   - Web Push end-to-end (subscriptions, VAPID, provider, prefs, SW handler, kill-switch)
   - response_model= on 21 hot endpoints (OpenAPI→TS now emits real types)
   - jest-axe a11y suite (29 tests) + fixes: labels, dialog roles, aria-labels
-- **Round-8 queue:** deps vulns (next 14.2.21 critical), OCR/AI ingest, barcode source, coverage→80%, Keycloak-side erasure (needs admin creds), record-version diff UI, contrast audit (real-browser), landmark e2e check, ABDM (BLOCKED pending approval)
+- **Round-8 — ALL LANDED (473 backend tests, 45 frontend tests green; 0 npm high/critical vulns):**
+  - Next.js 14.2.35→16.3.5 + React 19.3 (Turbopack build, flat eslint config, viewport export) — cleared all remaining CVEs
+  - axios→1.20, fastapi→0.133.1, starlette→1.3.1, PyJWT→2.13, python-multipart→0.0.32, requests→2.34.2 (42 pip-audit advisories → 0)
+  - Medical-record amendment history UI (patient-facing versions endpoint + field-level diff)
+  - Admin audit-log CSV export (all list filters honored, 50k cap, EXPORT audit row)
+  - Security headers middleware (no-store on /api/v1/* — PHI cache-poisoning fix)
+  - Notification deep-linking (SPA nav, fallback, vitals emitter url added)
+  - Audit-log diff viewer (diffValues + expanded-row UI)
+  - +68 coverage tests (encounters lifecycle, uploads owner-binding/size-cap)
+  - FIX: ReminderLog was never imported → absent from Base.metadata (alembic autogen + drop_all bug)
+- **Round-9 queue:** react-hooks v7 warnings triage (~45 lint warnings demoted), OCR/AI ingest, barcode source, Keycloak-side erasure (needs admin creds), contrast audit (real-browser axe), httpx→httpx2 (starlette testclient deprecation), ABDM (BLOCKED pending approval)
 - **BLOCKED — ABDM/ABHA: awaiting regulatory approval (user-confirmed)** — do not implement: ABHA creation/linking, NRCeS-conformant FHIR, HIP module (tickets 107–116)
 - **Blocked/external:** SMS/WhatsApp live provider accounts (code adapters anyway), OCR/AI features, load testing env, i18n assets, barcode data source, push VAPID/service
 
