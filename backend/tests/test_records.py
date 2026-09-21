@@ -95,3 +95,89 @@ async def test_patient_cannot_access_other_records(client: AsyncClient, db):
         headers={"Authorization": f"Bearer {other_token}"},
     )
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_patient_record_versions(client: AsyncClient, db):
+    doctor_token, patient_token, patient_id = await create_doctor_and_patient(client, db)
+
+    create_resp = await client.post(
+        "/api/v1/doctors/records",
+        json={
+            "patient_id": patient_id,
+            "record_type": "opd_note",
+            "title": "Visit",
+            "description": "initial note",
+        },
+        headers={"Authorization": f"Bearer {doctor_token}"},
+    )
+    assert create_resp.status_code == 201
+    record_id = create_resp.json()["id"]
+
+    # No amendments yet — chain is just the original
+    resp = await client.get(
+        f"/api/v1/patients/records/{record_id}/versions",
+        headers={"Authorization": f"Bearer {patient_token}"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 1
+    assert data["data"][0]["version"] == 1
+    assert data["data"][0]["is_latest"] is True
+    assert data["data"][0]["amended_from_id"] is None
+
+    amend_resp = await client.post(
+        f"/api/v1/doctors/records/{record_id}/amend",
+        json={
+            "record_type": "opd_note",
+            "title": "Visit (corrected)",
+            "description": "amended note",
+        },
+        headers={"Authorization": f"Bearer {doctor_token}"},
+    )
+    assert amend_resp.status_code == 201
+    amendment_id = amend_resp.json()["id"]
+
+    resp = await client.get(
+        f"/api/v1/patients/records/{record_id}/versions",
+        headers={"Authorization": f"Bearer {patient_token}"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 2
+    assert data["root_record_id"] == record_id
+    v1, v2 = data["data"]
+    assert v1["version"] == 1 and v1["is_latest"] is False
+    assert v2["version"] == 2 and v2["is_latest"] is True
+    assert v2["amended_from_id"] == record_id
+    assert v2["doctor_name"] == "Dr. Test"
+
+    # Chain resolves the same way when queried via the amendment's id
+    resp = await client.get(
+        f"/api/v1/patients/records/{amendment_id}/versions",
+        headers={"Authorization": f"Bearer {patient_token}"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 2
+
+
+@pytest.mark.asyncio
+async def test_patient_cannot_access_other_record_versions(client: AsyncClient, db):
+    doctor_token, _, patient_id = await create_doctor_and_patient(client, db)
+
+    create_resp = await client.post(
+        "/api/v1/doctors/records",
+        json={"patient_id": patient_id, "record_type": "opd_note", "title": "Private"},
+        headers={"Authorization": f"Bearer {doctor_token}"},
+    )
+    record_id = create_resp.json()["id"]
+
+    other_sub = str(uuid.uuid4())
+    other_token = create_test_token(sub=other_sub, email="other2@records.com", name="Other", roles=["patient"])
+    await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {other_token}"})
+
+    response = await client.get(
+        f"/api/v1/patients/records/{record_id}/versions",
+        headers={"Authorization": f"Bearer {other_token}"},
+    )
+    assert response.status_code == 404
