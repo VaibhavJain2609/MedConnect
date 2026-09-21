@@ -4,7 +4,6 @@
  */
 
 import api from "../api";
-import keycloak from "../keycloak";
 
 export interface Notification {
   id: string;
@@ -118,51 +117,4 @@ export async function updateNotificationPreferences(
 ): Promise<Record<string, boolean>> {
   const response = await api.put("/api/v1/notifications/preferences", preferences);
   return response.data;
-}
-
-/**
- * WebSocket connection for real-time notifications
- * Note: This requires WebSocket implementation on the backend
- */
-export function connectNotificationWebSocket(
-  onNotification: (notification: Notification) => void,
-  onError?: (error: Event) => void
-): WebSocket | null {
-  if (typeof window === "undefined") return null;
-
-  // NOTE(MD-303): Read token from the Keycloak instance rather than localStorage.
-  // localStorage is XSS-readable; the preferred long-term fix is HttpOnly cookies (architectural change).
-  const token = keycloak?.token ?? null;
-  if (!token) return null;
-
-  const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  // Token is NOT placed in the URL to avoid leaking it in server logs / browser history.
-  // It is sent as the first message after the connection opens.
-  const wsUrl = `${wsProtocol}//${window.location.host}/ws/notifications`;
-
-  const ws = new WebSocket(wsUrl);
-
-  ws.onopen = () => {
-    ws.send(JSON.stringify({ type: "auth", token }));
-  };
-
-  ws.onmessage = (event) => {
-    try {
-      const notification = JSON.parse(event.data);
-      onNotification(notification);
-    } catch (error) {
-      console.error("Failed to parse notification:", error);
-    }
-  };
-
-  ws.onerror = (error) => {
-    console.error("WebSocket error:", error);
-    if (onError) onError(error);
-  };
-
-  ws.onclose = () => {
-    console.log("WebSocket connection closed");
-  };
-
-  return ws;
 }

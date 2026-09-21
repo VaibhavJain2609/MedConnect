@@ -17,7 +17,7 @@
 
 import { useState } from "react";
 import { Download } from "lucide-react";
-import api from "@/lib/api";
+import { downloadFile } from "@/lib/download";
 import { formatDate } from "@/lib/utils";
 
 interface Medicine {
@@ -104,17 +104,10 @@ export function PrescriptionCard({
     setDownloading(true);
     setDownloadError(false);
     try {
-      const res = await api.get(`/api/v1/prescriptions/${prescriptionId}/pdf`, {
-        responseType: "blob",
-      });
-      const url = URL.createObjectURL(res.data as Blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `prescription-${prescriptionId}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      await downloadFile(
+        `/api/v1/prescriptions/${prescriptionId}/pdf`,
+        `prescription-${prescriptionId}.pdf`
+      );
     } catch {
       setDownloadError(true);
     } finally {

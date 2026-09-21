@@ -4,6 +4,7 @@
  */
 
 import api from "../api";
+import { saveBlob } from "../download";
 
 export interface DashboardStats {
   total_patients: number;
@@ -242,12 +243,5 @@ export async function exportReport(
  * Download exported report
  */
 export function downloadReport(blob: Blob, filename: string) {
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  window.URL.revokeObjectURL(url);
+  saveBlob(blob, filename);
 }
