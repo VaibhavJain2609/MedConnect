@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
+import { downloadFile } from "@/lib/download";
 import { formatDate, recordTypeLabel, recordTypeColor } from "@/lib/utils";
 import { ArrowLeft, Download } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
@@ -24,25 +25,15 @@ export default function RecordDetailPage() {
   });
 
   // document_url stores the uploads object key; the file endpoint requires
-  // auth, so download via axios blob instead of a plain <a href>.
+  // auth, so download via the axios-blob helper instead of a plain <a href>.
   const handleDownload = async () => {
     if (!record?.document_url || downloading) return;
     setDownloading(true);
     setDownloadError("");
     try {
-      const res = await api.get(`/api/v1/uploads/${record.document_url}`, {
-        responseType: "blob",
-      });
       const filename =
         record.document_url.split("/").pop() || `${record.title || "document"}`;
-      const url = URL.createObjectURL(res.data as Blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      await downloadFile(`/api/v1/uploads/${record.document_url}`, filename);
     } catch {
       setDownloadError("Failed to download the document. Please try again.");
     } finally {

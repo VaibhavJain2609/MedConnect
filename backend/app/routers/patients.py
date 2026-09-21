@@ -1,6 +1,8 @@
+import json
+from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, field_validator
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +15,7 @@ from app.models.user import User
 from app.schemas.common import PaginatedResponse, PaginationMeta
 from app.schemas.record import RecordResponse, VALID_RECORD_TYPES, _validate_document_url
 from app.schemas.user import MedicalHistoryUpdate, PatientProfileUpdate
+from app.services.export_service import build_records_export_bundle
 from app.services.prescription_service import get_patient_prescriptions
 from app.services.record_service import create_record, get_patient_timeline, get_record_detail
 
@@ -52,6 +55,34 @@ async def list_records(
     return PaginatedResponse(
         data=records,
         pagination=PaginationMeta(next_cursor=next_cursor, has_more=has_more, limit=limit),
+    )
+
+
+# NOTE: must be declared before /records/{record_id} so "export" isn't
+# captured by the UUID path parameter.
+@router.get("/records/export")
+async def export_records(
+    format: str = Query("json", description="Export format (only 'json' is supported)"),
+    user: User = Depends(require_patient),
+    db: AsyncSession = Depends(get_db),
+):
+    """Download all of the caller's records as a FHIR R4 collection Bundle."""
+    if format != "json":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "Only format=json is supported",
+                }
+            },
+        )
+    bundle = await build_records_export_bundle(db=db, user=user)
+    filename = f"medconnect-records-{datetime.now(timezone.utc).date().isoformat()}.json"
+    return Response(
+        content=json.dumps(bundle),
+        media_type="application/fhir+json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
