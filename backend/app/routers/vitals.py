@@ -215,6 +215,7 @@ async def _fire_critical_vital_notifications(
         type=NotificationType.SYSTEM,
         title=title,
         message=message,
+        action_url="/patient/vitals",
         meta={"vital_type": vital_type, "value": value, "abnormal_flag": True},
     )
     db.add(patient_notification)
@@ -255,6 +256,7 @@ async def _fire_critical_vital_notifications(
                 type=NotificationType.SYSTEM,
                 title=title,
                 message=doctor_message,
+                action_url=f"/doctor/patients/{patient_user.id}",
                 meta={
                     "vital_type": vital_type,
                     "value": value,

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { Bell, Check, X, Calendar, TestTube, AlertCircle, Pill, CheckCircle, XCircle } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -39,8 +40,17 @@ function safeActionUrl(url?: string): string | undefined {
 export const NotificationCenter: React.FC = () => {
   const [isOpen, setIsOpen] = React.useState(false);
   const queryClient = useQueryClient();
+  const router = useRouter();
   const { user } = useAuthStore();
   const dropdownRef = React.useRef<HTMLDivElement>(null);
+
+  // Fallback target when a notification carries no action_url
+  const notificationsPath =
+    user?.role === "admin"
+      ? "/admin/notifications"
+      : user?.role === "doctor"
+      ? "/doctor/notifications"
+      : "/patient/notifications";
 
   // Fetch notifications
   const { data } = useQuery({
@@ -191,9 +201,8 @@ export const NotificationCenter: React.FC = () => {
                       markAsReadMutation.mutate(notification.id);
                     }
                     const url = safeActionUrl(notification.action_url);
-                    if (url) {
-                      window.location.href = url;
-                    }
+                    setIsOpen(false);
+                    router.push(url ?? notificationsPath);
                   }}
                 >
                   <div className="flex gap-3">
@@ -282,13 +291,7 @@ export const NotificationCenter: React.FC = () => {
           {notifications && notifications.length > 0 && (
             <div className="p-3 text-center border-t border-dreams-border">
               <a
-                href={
-                  user?.role === "admin"
-                    ? "/admin/notifications"
-                    : user?.role === "doctor"
-                    ? "/doctor/notifications"
-                    : "/patient/notifications"
-                }
+                href={notificationsPath}
                 className="text-sm text-dreams-blue hover:underline"
               >
                 View all notifications

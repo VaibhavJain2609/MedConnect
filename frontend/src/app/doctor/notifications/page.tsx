@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Bell, Check, Calendar, TestTube, AlertCircle, Pill, Trash2,
@@ -58,6 +59,7 @@ function safeActionUrl(url?: string): string | undefined {
 
 export default function DoctorNotificationsPage() {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [typeFilter, setTypeFilter] = useState("");
   const [offset, setOffset] = useState(0);
@@ -202,9 +204,14 @@ export default function DoctorNotificationsPage() {
               <li
                 key={n.id}
                 className={cn(
-                  "flex gap-3 p-4 hover:bg-dreams-lightBg/50 transition-colors",
+                  "flex gap-3 p-4 hover:bg-dreams-lightBg/50 transition-colors cursor-pointer",
                   !n.read && "bg-dreams-blue/5"
                 )}
+                onClick={() => {
+                  if (!n.read) markReadMutation.mutate(n.id);
+                  const url = safeActionUrl(n.action_url);
+                  if (url) router.push(url);
+                }}
               >
                 <div className="flex-shrink-0 mt-0.5">{getIcon(n.type)}</div>
 
@@ -224,8 +231,11 @@ export default function DoctorNotificationsPage() {
                   {safeActionUrl(n.action_url) && (
                     <a
                       href={safeActionUrl(n.action_url)}
-                      className="mt-1 text-xs text-dreams-blue hover:underline"
-                      onClick={() => !n.read && markReadMutation.mutate(n.id)}
+                      className="mt-1 inline-block text-xs text-dreams-blue hover:underline"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!n.read) markReadMutation.mutate(n.id);
+                      }}
                     >
                       View details
                     </a>
@@ -236,7 +246,10 @@ export default function DoctorNotificationsPage() {
                 <div className="flex-shrink-0 flex items-start gap-1 pt-0.5">
                   {!n.read && (
                     <button
-                      onClick={() => markReadMutation.mutate(n.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        markReadMutation.mutate(n.id);
+                      }}
                       disabled={markReadMutation.isPending}
                       className="p-1.5 rounded hover:bg-dreams-lightBg text-dreams-textSecondary"
                       title="Mark as read"
@@ -245,7 +258,10 @@ export default function DoctorNotificationsPage() {
                     </button>
                   )}
                   <button
-                    onClick={() => deleteMutation.mutate(n.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteMutation.mutate(n.id);
+                    }}
                     disabled={deleteMutation.isPending}
                     className="p-1.5 rounded hover:bg-red-50 text-dreams-textSecondary hover:text-red-500"
                     title="Delete"
