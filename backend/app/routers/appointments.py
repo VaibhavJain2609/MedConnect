@@ -938,6 +938,9 @@ async def update_appointment_status(
             },
         )
 
+    if req.status == "cancelled":
+        await _unschedule_appointment_reminders(appt)
+
     appt.status = req.status
     if req.cancelled_reason is not None:
         appt.cancelled_reason = req.cancelled_reason
@@ -998,6 +1001,7 @@ async def delete_appointment(
     now = datetime.now(tz=timezone.utc)
     appt.deleted_at = now
     appt.status = "cancelled"
+    await _unschedule_appointment_reminders(appt)
     await db.flush()
 
 
