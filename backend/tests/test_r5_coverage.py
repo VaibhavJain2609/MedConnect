@@ -12,9 +12,12 @@ Covers:
 - Encounter read/update/delete authorization: patient owner, authoring doctor,
   clinic admin member, platform admin; strangers rejected.
 
+- DPDP erasure: POST /api/v1/patients/erasure anonymizes the caller's PII,
+  is idempotent, and reports the retained Keycloak identity via
+  ``keycloak_identity_retained`` so ops automation can detect the pending
+  IdP step (docs/dpdp-erasure.md).
+
 Skipped (endpoint absent in this worktree):
-- POST /api/v1/patients/erasure — the r5-dpdp erasure endpoint is not merged
-  here (no route in app/routers/patients.py).
 - GET /api/v1/queue/my-position — no such route in app/routers/queue.py.
 """
 
@@ -726,3 +729,39 @@ class TestEncounterAccess:
     async def test_get_missing_encounter_404(self, doctor_client):
         resp = await doctor_client.get(f"/api/v1/encounters/{uuid.uuid4()}")
         assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# DPDP erasure (POST /api/v1/patients/erasure)
+# ---------------------------------------------------------------------------
+
+
+class TestPatientErasure:
+    async def test_erasure_anonymizes_and_flags_keycloak_gap(
+        self, patient_client, patient_user, db
+    ):
+        resp = await patient_client.post("/api/v1/patients/erasure")
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["status"] == "erased"
+        assert body["erased_at"] is not None
+        # Ops-facing signal: the IdP identity is untouched by this endpoint.
+        assert body["keycloak_identity_retained"] is True
+
+        await db.refresh(patient_user)
+        assert patient_user.full_name == "Erased User"
+        assert patient_user.email == f"erased-{patient_user.id}@erased.invalid"
+        assert patient_user.phone is None
+        assert patient_user.erased_at is not None
+
+    async def test_erasure_idempotent_and_still_flagged(self, patient_client):
+        first = await patient_client.post("/api/v1/patients/erasure")
+        second = await patient_client.post("/api/v1/patients/erasure")
+        assert first.json()["status"] == "erased"
+        assert second.status_code == 200
+        assert second.json()["status"] == "already_processed"
+        assert second.json()["keycloak_identity_retained"] is True
+
+    async def test_erasure_requires_auth(self, client):
+        resp = await client.post("/api/v1/patients/erasure")
+        assert resp.status_code == 401
