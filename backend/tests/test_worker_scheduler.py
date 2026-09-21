@@ -153,14 +153,6 @@ async def test_schedule_swallows_redis_failure(arq_redis: AsyncMock, monkeypatch
     arq_redis.enqueue_job.assert_not_awaited()
 
 
-@pytest.mark.xfail(
-    reason=(
-        "BUG (report-only): a failure enqueueing the 24h job propagates out "
-        "of the loop, so the 2h job is never attempted — the whole try wraps "
-        "both enqueues (scheduler.py:70-106)."
-    ),
-    strict=True,
-)
 async def test_schedule_enqueue_failure_still_attempts_remaining_jobs(
     arq_redis: AsyncMock,
 ):
@@ -441,14 +433,6 @@ async def test_reminder_skips_unknown_appointment(db: AsyncSession):
     assert count == 0
 
 
-@pytest.mark.xfail(
-    reason=(
-        "BUG (report-only): the doctor in-app notification is created "
-        "unconditionally on every run (appointment_reminders.py:209-218) — "
-        "there is no dedupe for the doctor row, so any retry duplicates it."
-    ),
-    strict=True,
-)
 async def test_retry_does_not_duplicate_doctor_notification(
     db: AsyncSession,
     doctor_user: User,

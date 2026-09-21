@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.appointment import Appointment
 from app.models.doctor import Doctor
-from app.models.notification import NotificationType
+from app.models.notification import Notification, NotificationType
 from app.models.reminder_log import ReminderLog
 from app.models.user import User
 from app.services import notification_channels, notification_service, platform_settings
@@ -205,17 +205,30 @@ async def _process_reminder(
             )
 
     # In-app notification for the doctor (if resolvable) — doctors always get
-    # the in-app copy; patient channel prefs do not apply to them.
+    # the in-app copy; patient channel prefs do not apply to them. Deduped on
+    # the Notification meta itself so a partial retry can't spam the doctor
+    # (ReminderLog.channel is a pg enum — no room for a synthetic marker).
     if doctor_user_id is not None:
-        await notification_service.create_notification(
-            db,
-            user_id=doctor_user_id,
-            notif_type=NotificationType.APPOINTMENT.value,
-            title=title,
-            body=doctor_message,
-            action_url="/doctor/appointments",
-            metadata=notif_meta,
-        )
+        already_notified = (
+            await db.execute(
+                select(Notification.id).where(
+                    Notification.user_id == doctor_user_id,
+                    Notification.meta["appointment_id"].astext == str(appt.id),
+                    Notification.meta["reminder_type"].astext == reminder_type,
+                    Notification.deleted_at.is_(None),
+                )
+            )
+        ).scalar_one_or_none()
+        if already_notified is None:
+            await notification_service.create_notification(
+                db,
+                user_id=doctor_user_id,
+                notif_type=NotificationType.APPOINTMENT.value,
+                title=title,
+                body=doctor_message,
+                action_url="/doctor/appointments",
+                metadata=notif_meta,
+            )
 
     # One ReminderLog row per attempted channel. NEVER store the rendered
     # message body (contains patient/doctor names + meeting URL — PHI at rest);

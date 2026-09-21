@@ -418,19 +418,6 @@ async def test_max_per_run_cap(
     assert str(overflow_rx_id) not in notified_rx_ids
 
 
-@pytest.mark.xfail(
-    reason=(
-        "BUG (report-only): check_prescription_expiry's error handler "
-        "crashes the whole run. The except block does db.rollback() — which "
-        "expires every ORM object in the session — then logger.error reads "
-        "str(rx.id), a lazy expired-attribute load that raises "
-        "MissingGreenlet outside the greenlet context "
-        "(prescription_expiry.py:87-94). The exception propagates out of the "
-        "task, so every remaining prescription is skipped — 'one bad row "
-        "must not kill the run' does not hold."
-    ),
-    strict=True,
-)
 async def test_one_bad_prescription_does_not_abort_run(
     db: AsyncSession,
     patient_user: User,

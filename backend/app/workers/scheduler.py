@@ -69,7 +69,18 @@ async def schedule_appointment_reminders(
 
     try:
         redis = await _get_redis_pool()
-        for hours_before, run_at in jobs:
+    except Exception as exc:
+        logger.error(
+            "reminder_schedule_failed",
+            appointment_id=appointment_id,
+            error=str(exc),
+        )
+        return
+
+    # Per-job try: a failure enqueueing the 24h reminder must not skip the 2h
+    # one (the appointment would silently lose its last reminder).
+    for hours_before, run_at in jobs:
+        try:
             if run_at <= now:
                 logger.info(
                     "reminder_skipped_past",
@@ -97,13 +108,14 @@ async def schedule_appointment_reminders(
                     hours_before=hours_before,
                     run_at=run_at.isoformat(),
                 )
-    except Exception as exc:
-        # Non-critical — log and continue so appointment creation is not blocked
-        logger.error(
-            "reminder_schedule_failed",
-            appointment_id=appointment_id,
-            error=str(exc),
-        )
+        except Exception as exc:
+            # Non-critical — log and continue so appointment creation is not blocked
+            logger.error(
+                "reminder_schedule_failed",
+                appointment_id=appointment_id,
+                hours_before=hours_before,
+                error=str(exc),
+            )
 
 
 async def unschedule_appointment_reminders(appointment_id: str) -> None:

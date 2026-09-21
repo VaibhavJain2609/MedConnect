@@ -64,8 +64,11 @@ async def check_prescription_expiry(ctx: dict) -> None:
     processed = 0
     failed = 0
     async with session_factory() as db:
+        # Fetch ids only: rollback() expires every ORM object in the session,
+        # so holding Prescription rows across items would lazy-load on access
+        # and explode outside the greenlet. Re-load each row inside the try.
         res = await db.execute(
-            select(Prescription)
+            select(Prescription.id)
             .where(
                 Prescription.deleted_at.is_(None),
                 Prescription.valid_until.isnot(None),
@@ -75,10 +78,14 @@ async def check_prescription_expiry(ctx: dict) -> None:
             .order_by(Prescription.valid_until)
             .limit(MAX_PER_RUN)
         )
-        prescriptions = res.scalars().all()
+        rx_ids = res.scalars().all()
 
-        for rx in prescriptions:
+        for rid in rx_ids:
+            rx_id = str(rid)
             try:
+                rx = await db.get(Prescription, rid)
+                if rx is None:
+                    continue
                 await _process_prescription(db, rx, today)
                 processed += 1
             except Exception as exc:
@@ -88,7 +95,7 @@ async def check_prescription_expiry(ctx: dict) -> None:
                 failed += 1
                 logger.error(
                     "rx_expiry_item_failed",
-                    prescription_id=str(rx.id),
+                    prescription_id=rx_id,
                     error=str(exc),
                     exc_info=True,
                 )
@@ -96,7 +103,7 @@ async def check_prescription_expiry(ctx: dict) -> None:
     # Ids/counts only — no PHI in logs.
     logger.info(
         "rx_expiry_run_complete",
-        scanned=len(prescriptions),
+        scanned=len(rx_ids),
         processed=processed,
         failed=failed,
         window_start=window_start.isoformat(),
