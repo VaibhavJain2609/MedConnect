@@ -12,7 +12,9 @@ from app.models import (
     SaltStrength,
     Salt,
     BrandSideEffect,
+    BrandPackaging,
 )
+from app.utils.barcode import is_barcode_query, normalize_barcode
 
 
 class BrandService:
@@ -28,7 +30,7 @@ class BrandService:
                 selectinload(Brand.compositions)
                 .selectinload(BrandComposition.salt_strength)
                 .selectinload(SaltStrength.salt),
-                selectinload(Brand.packaging),
+                selectinload(Brand.packaging).selectinload(BrandPackaging.pack_form),
                 selectinload(Brand.side_effects).joinedload(BrandSideEffect.side_effect),
             )
             .where(Brand.brand_id == brand_id)
@@ -45,13 +47,30 @@ class BrandService:
         limit: int = 50,
         offset: int = 0,
     ) -> tuple[list[Brand], int]:
-        """Search brands with filters."""
+        """Search brands with filters.
+
+        When ``search`` is a pure digit string of length 8-14 it is also
+        matched against ``BrandPackaging.barcode`` (scanned GTIN/EAN input).
+        """
+        # Barcode branch: a digit-only query of barcode length additionally
+        # matches packs whose barcode equals the (normalized) input.
+        barcode_code = normalize_barcode(search) if is_barcode_query(search) else None
+
+        def _search_filter():
+            name_clause = Brand.brand_name.ilike(f"%{search}%")
+            if barcode_code:
+                return or_(
+                    name_clause,
+                    Brand.packaging.any(BrandPackaging.barcode == barcode_code),
+                )
+            return name_clause
+
         # Build count query (faster without joins/loads)
         count_query = select(func.count(Brand.brand_id))
 
         # Search filter
         if search:
-            count_query = count_query.where(Brand.brand_name.ilike(f"%{search}%"))
+            count_query = count_query.where(_search_filter())
 
         # Salt filter (brands containing this salt)
         if salt_id:
@@ -78,7 +97,7 @@ class BrandService:
 
         # Apply same filters
         if search:
-            query = query.where(Brand.brand_name.ilike(f"%{search}%"))
+            query = query.where(_search_filter())
 
         if salt_id:
             query = query.join(Brand.compositions).join(BrandComposition.salt_strength).where(
@@ -98,6 +117,30 @@ class BrandService:
         brands = list(result.scalars().unique().all())
 
         return brands, total or 0
+
+    @staticmethod
+    async def get_brands_by_barcode(db: AsyncSession, barcode: str) -> list[Brand]:
+        """Get brands having a pack with this exact GTIN/EAN barcode.
+
+        Non-unique by design — the same barcode can appear on multiple
+        packs/brands — so this returns a list ordered by brand name.
+        """
+        result = await db.execute(
+            select(Brand)
+            .options(
+                joinedload(Brand.manufacturer),
+                selectinload(Brand.compositions)
+                .selectinload(BrandComposition.salt_strength)
+                .selectinload(SaltStrength.salt),
+                selectinload(Brand.packaging).selectinload(BrandPackaging.pack_form),
+            )
+            .where(
+                Brand.packaging.any(BrandPackaging.barcode == barcode),
+                Brand.is_discontinued == False,
+            )
+            .order_by(Brand.brand_name)
+        )
+        return list(result.scalars().unique().all())
 
     @staticmethod
     async def get_brand_alternatives(db: AsyncSession, brand_id: UUID) -> list[Brand]:
