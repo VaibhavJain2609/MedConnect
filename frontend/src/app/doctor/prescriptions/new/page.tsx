@@ -689,10 +689,60 @@ export default function NewPrescriptionPage() {
   }, [medicines]);
 
   // ---------------------------------------------------------------------------
-  // Derived safety data — allergies vs selected medicines (brand + salt names)
+  // Derived safety data — allergies vs selected medicines. Server-side check
+  // against salt names is authoritative; the local substring matcher covers
+  // medicines with no salt_id and acts as the fail-open fallback.
   // ---------------------------------------------------------------------------
 
-  const allergyConflicts = findAllergyConflicts(medicines, patientAllergies);
+  const [serverAllergyConflicts, setServerAllergyConflicts] = useState<
+    AllergyConflict[]
+  >([]);
+
+  useEffect(() => {
+    const saltIds = medicines
+      .map((m) => m.salt_id)
+      .filter((id): id is string => !!id);
+    if (!selectedPatient || saltIds.length === 0) {
+      setServerAllergyConflicts([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      api
+        .post("/api/v1/interactions/check-allergies", {
+          patient_id: selectedPatient.id,
+          salt_ids: saltIds,
+        })
+        .then((res) => {
+          if (cancelled) return;
+          const conflicts: AllergyConflict[] = (
+            res.data?.conflicts || []
+          ).map((c: any) => ({
+            allergy: c.allergy,
+            medicine: c.salt_name,
+          }));
+          setServerAllergyConflicts(conflicts);
+        })
+        .catch(() => {
+          if (!cancelled) setServerAllergyConflicts([]);
+        });
+    }, 600);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [selectedPatient?.id, medicines]);
+
+  const localConflicts = findAllergyConflicts(medicines, patientAllergies);
+  const seenConflicts = new Set<string>();
+  const allergyConflicts = [...serverAllergyConflicts, ...localConflicts].filter(
+    (c) => {
+      const key = `${c.allergy.toLowerCase()}::${c.medicine.toLowerCase()}`;
+      if (seenConflicts.has(key)) return false;
+      seenConflicts.add(key);
+      return true;
+    }
+  );
 
   // ---------------------------------------------------------------------------
   // Handlers
