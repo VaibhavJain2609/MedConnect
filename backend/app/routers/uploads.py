@@ -294,6 +294,25 @@ async def _user_can_access_object(db: AsyncSession, user: User, object_key: str)
     if owner is not None and owner == str(user.id):
         return True
 
+    # Admin can fetch any stored object (verification review, audit, support).
+    # Must run before the records early-return: standalone uploads (e.g. a
+    # doctor's license document) have no MedicalRecord referencing them.
+    if user.role == "admin":
+        return True
+
+    # A doctor can always fetch their own onboarding/license documents even
+    # after the upload-key TTL expired.
+    if user.role == "doctor":
+        own_doc = await db.execute(
+            select(Doctor.id).where(
+                Doctor.user_id == user.id,
+                Doctor.deleted_at.is_(None),
+                Doctor.license_document_url == object_key,
+            )
+        )
+        if own_doc.scalar_one_or_none() is not None:
+            return True
+
     result = await db.execute(
         select(MedicalRecord).where(
             MedicalRecord.document_url == object_key,
@@ -304,8 +323,6 @@ async def _user_can_access_object(db: AsyncSession, user: User, object_key: str)
     if not records:
         return False
 
-    if user.role == "admin":
-        return True
     if user.role == "patient":
         return any(r.patient_id == user.id for r in records)
     if user.role == "doctor":
