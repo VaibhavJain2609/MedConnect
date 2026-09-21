@@ -304,6 +304,7 @@ async def admin_get_clinic_detail(
         logo_url=clinic.logo_url,
         is_active=clinic.is_active,
         record_sharing_mode=clinic.record_sharing_mode,
+        timezone=clinic.timezone,
         created_by=str(clinic.created_by) if clinic.created_by else None,
         created_at=clinic.created_at,
         updated_at=clinic.updated_at,

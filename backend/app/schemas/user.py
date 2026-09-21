@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class DoctorProfileCreate(BaseModel):
@@ -116,6 +116,11 @@ class AdminCreatePatientResponse(BaseModel):
     role: str
     is_active: bool
     created_at: datetime
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def _id_to_str(cls, v):
+        return str(v)
 
     class Config:
         from_attributes = True

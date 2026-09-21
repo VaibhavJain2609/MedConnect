@@ -167,7 +167,7 @@ async def create_patient(
 
 @router.get("/{user_id}", response_model=AdminUserDetailResponse)
 async def get_user(
-    user_id: str,
+    user_id: _uuid_mod.UUID,
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -241,7 +241,7 @@ async def get_user(
 
 @router.get("/{user_id}/prescriptions", response_model=AdminUserPrescriptionsResponse)
 async def get_user_prescriptions(
-    user_id: str,
+    user_id: _uuid_mod.UUID,
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
@@ -298,7 +298,7 @@ async def get_user_prescriptions(
 
 @router.get("/{user_id}/records", response_model=AdminUserRecordsResponse)
 async def get_user_records(
-    user_id: str,
+    user_id: _uuid_mod.UUID,
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
@@ -438,12 +438,12 @@ async def _sync_keycloak_role(keycloak_sub: str | None, new_role: str) -> None:
 
 @router.put("/{user_id}", response_model=AdminUserUpdateResponse)
 async def update_user(
-    user_id: str,
+    user_id: _uuid_mod.UUID,
     body: AdminUserUpdateRequest,
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    if str(admin.id) == user_id:
+    if admin.id == user_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"error": {"code": "SELF_MODIFY", "message": "Cannot modify your own account"}},
@@ -532,11 +532,11 @@ async def update_user(
 
 @router.delete("/{user_id}", response_model=AdminUserDeleteResponse)
 async def delete_user(
-    user_id: str,
+    user_id: _uuid_mod.UUID,
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    if str(admin.id) == user_id:
+    if admin.id == user_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"error": {"code": "SELF_DELETE", "message": "Cannot delete your own account"}},
@@ -575,7 +575,7 @@ async def delete_user(
 
 @router.get("/{user_id}/related-patients")
 async def get_related_patients(
-    user_id: str,
+    user_id: _uuid_mod.UUID,
     db: AsyncSession = Depends(get_db),
 ):
     """Find other patients sharing the same email or phone (family group)."""

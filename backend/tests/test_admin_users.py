@@ -226,12 +226,6 @@ class TestListUsers:
 
 
 class TestCreatePatient:
-    @pytest.mark.xfail(
-        strict=True,
-        reason="BUG (report-only): create_patient returns the ORM User directly; "
-        "AdminCreatePatientResponse.id is `str` but user.id is uuid.UUID, so "
-        "response validation raises ResponseValidationError → POST 500s every time",
-    )
     async def test_creates_walkin_patient(self, admin_client, db):
         resp = await admin_client.post(
             BASE,
@@ -294,13 +288,6 @@ class TestGetUserDetail:
         resp = await admin_client.get(f"{BASE}/{patient_user.id}")
         assert resp.status_code == 404
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="BUG (report-only): GET /admin/users/{user_id} (and PUT/DELETE/"
-        "prescriptions/records/related-patients) bind the raw path string to a "
-        "UUID column with no validation → asyncpg DataError → 500 on "
-        "non-UUID input instead of a 4xx",
-    )
     async def test_invalid_id_returns_4xx_not_500(self, admin_client):
         resp = await admin_client.get(f"{BASE}/not-a-uuid")
         assert resp.status_code in (400, 404, 422)

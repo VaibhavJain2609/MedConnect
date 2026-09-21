@@ -89,15 +89,8 @@ async def _patient_link(
 # ---------------------------------------------------------------------------
 
 
-_DETAIL_TIMEZONE_BUG = (
-    "BUG (report-only): clinic_service.admin_get_clinic_detail never passes "
-    "`timezone` to AdminClinicDetailResponse (required on ClinicResponse) → "
-    "ValidationError → 500 on POST/GET-detail/PUT /admin/clinics"
-)
-
 
 class TestCreateAndList:
-    @pytest.mark.xfail(strict=True, reason=_DETAIL_TIMEZONE_BUG)
     async def test_create_clinic(self, admin_client):
         resp = await admin_client.post(
             BASE,
@@ -160,7 +153,6 @@ class TestCreateAndList:
 
 
 class TestDetailUpdateDelete:
-    @pytest.mark.xfail(strict=True, reason=_DETAIL_TIMEZONE_BUG)
     async def test_detail_counts_and_branches(
         self, admin_client, db, clinic, doctor_user, doctor_profile, patient_user
     ):
@@ -196,7 +188,6 @@ class TestDetailUpdateDelete:
         assert resp.status_code == 422
         assert resp.json()["error"]["code"] == "INVALID_ID"
 
-    @pytest.mark.xfail(strict=True, reason=_DETAIL_TIMEZONE_BUG)
     async def test_update_clinic(self, admin_client, clinic):
         resp = await admin_client.put(
             f"{BASE}/{clinic.id}",
