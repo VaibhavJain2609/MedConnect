@@ -126,3 +126,46 @@ export async function getLabTestCategories(): Promise<string[]> {
   const response = await api.get("/api/v1/admin/lab-results/categories");
   return response.data;
 }
+
+// ---------------------------------------------------------------------------
+// Lab-report OCR ingest (doctor-scoped, human-in-the-loop)
+// ---------------------------------------------------------------------------
+
+/** One extracted analyte row returned for review — never auto-saved. */
+export interface LabIngestCandidate {
+  name: string;
+  value: string | null;
+  unit: string | null;
+  ref_low: string | null;
+  ref_high: string | null;
+  flag: string | null;
+}
+
+export interface LabIngestResponse {
+  upload_key: string;
+  provider: string;
+  candidates: LabIngestCandidate[];
+}
+
+/**
+ * POST /api/v1/lab-results/ingest — extract candidate lab values from an
+ * already-uploaded report image (`upload_key` from the presign/PUT flow).
+ *
+ * Doctor-scoped: requires a verified doctor token; `patientId` is optional
+ * but when given the doctor must have an active relationship with the
+ * patient. Returns candidates ONLY — nothing is persisted server-side.
+ *
+ * Errors: 503 OCR_NOT_CONFIGURED when the feature is off (OCR_PROVIDER=none),
+ * 503 OCR_UNAVAILABLE when the configured backend stub is unwired, 403
+ * INVALID_UPLOAD_KEY for keys not owned by the caller.
+ */
+export async function ingestLabResultImage(
+  uploadKey: string,
+  patientId?: string
+): Promise<LabIngestResponse> {
+  const response = await api.post<LabIngestResponse>(
+    "/api/v1/lab-results/ingest",
+    { upload_key: uploadKey, patient_id: patientId }
+  );
+  return response.data;
+}

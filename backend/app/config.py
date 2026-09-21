@@ -77,6 +77,17 @@ class Settings(BaseSettings):
     VAPID_PRIVATE_KEY: str | None = None  # base64url VAPID private key
     VAPID_PUBLIC_KEY: str | None = None   # base64url public key (served at /api/v1/push/vapid-public)
 
+    # Lab-report OCR ingest (services/providers/ocr.py) — disabled by default.
+    # POST /api/v1/lab-results/ingest returns 503 OCR_NOT_CONFIGURED until
+    # OCR_PROVIDER is set to a real backend. The "llm" provider is a stub
+    # (raises OcrUnavailable) until an OpenAI-compatible vision endpoint is
+    # wired in — see the provider module docstring and RUNBOOK.md.
+    OCR_PROVIDER: str = "none"  # "none" | "llm"
+    OCR_LLM_BASE_URL: str | None = None
+    OCR_LLM_API_KEY: str | None = None
+    OCR_LLM_MODEL: str | None = None
+    OCR_LLM_TIMEOUT_SECONDS: float = 30.0
+
     @model_validator(mode="after")
     def check_production_config(self) -> "Settings":
         if self.APP_ENV == "production":

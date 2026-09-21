@@ -245,3 +245,38 @@ or patient data (same constraint the audit middleware already enforces).
 
 K8s has no aggregation yet — use `kubectl -n <ns> logs deploy/backend |
 jq …` (§7); a promtail/alloy DaemonSet is the follow-up.
+
+## 9. Lab-report OCR ingest (optional, off by default)
+
+`POST /api/v1/lab-results/ingest` extracts candidate lab values from an
+uploaded report image (doctor-scoped, human-in-the-loop — it returns
+`candidates[]` for review and never writes `LabResult` rows). Provider
+adapter: `backend/app/services/providers/ocr.py`.
+
+Disabled by default: `OCR_PROVIDER=none` → every ingest call returns
+`503 OCR_NOT_CONFIGURED`; the frontend shows a quiet "not enabled"
+notice. No credentials ship with the scaffold — the `llm` provider stub
+(`LlmVisionOcrProvider`) raises `OcrUnavailable` until
+`_call_vision_api` is wired to a real OpenAI-compatible vision endpoint.
+
+To enable once a backend exists:
+
+```bash
+# backend env
+OCR_PROVIDER=llm
+OCR_LLM_BASE_URL=https://api.example.com/v1   # OpenAI-compatible endpoint
+OCR_LLM_API_KEY=<secret>                      # never commit
+OCR_LLM_MODEL=<vision-model-name>
+OCR_LLM_TIMEOUT_SECONDS=30                    # optional
+```
+
+Failure modes:
+
+- `503 OCR_NOT_CONFIGURED` — `OCR_PROVIDER` unset/`none` (expected until enabled).
+- `503 OCR_UNAVAILABLE` — provider selected but stub unwired or `OCR_LLM_*`
+  incomplete; check backend logs for `lab_ingest`/`lab_ocr` events.
+- `403 INVALID_UPLOAD_KEY` — ingest key wasn't presigned by the same doctor
+  (keys expire 15 min after presign; re-upload the image).
+
+PHI: report images stay in the uploads object store; providers log only
+identifiers (provider name, candidate count) — never image bytes or values.
