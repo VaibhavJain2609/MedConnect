@@ -31,6 +31,12 @@ class User(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # DPDP (India) consent + erasure tracking
+    consent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    consent_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    erasure_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    erased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     doctor_profile: Mapped["Doctor"] = relationship(back_populates="user", uselist=False)
     records_as_patient: Mapped[list["MedicalRecord"]] = relationship(
         back_populates="patient", foreign_keys="MedicalRecord.patient_id"
