@@ -300,6 +300,11 @@ async def update_settings(
                 },
             )
         _validate_setting_value(key, value)
+        existing = (
+            await db.execute(
+                select(PlatformSetting).where(PlatformSetting.key == key)
+            )
+        ).scalar_one_or_none()
         stmt = (
             pg_insert(PlatformSetting)
             .values(
@@ -318,6 +323,15 @@ async def update_settings(
             )
         )
         await db.execute(stmt)
+        from app.services.audit_service import log_change
+        await log_change(
+            db=db,
+            table_name="platform_settings",
+            record_id=(existing.id if existing else uuid.uuid5(uuid.NAMESPACE_URL, f"platform-setting:{key}")),
+            action="UPDATE" if existing else "INSERT",
+            old_values={"value": existing.value} if existing else None,
+            new_values={"value": value, "updated_by": str(admin.id)},
+        )
 
     # Optional description update applies to the single-key form only.
     if payload.key is not None and payload.description is not None:
