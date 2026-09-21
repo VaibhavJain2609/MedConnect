@@ -12,6 +12,8 @@ export interface Doctor {
   email: string | null;
   specialization: string | null;
   license_number: string | null;
+  /** Storage object key for the uploaded license document (download via /api/v1/uploads/{key}) */
+  license_document_url?: string | null;
   facility_name: string | null;
   facility_city: string | null;
   verified: boolean;
@@ -33,6 +35,8 @@ export interface AdminDoctorDetail {
   phone: string | null;
   specialization: string | null;
   license_number: string | null;
+  /** Storage object key for the uploaded license document (download via /api/v1/uploads/{key}) */
+  license_document_url: string | null;
   facility_name: string | null;
   facility_city: string | null;
   verified: boolean;

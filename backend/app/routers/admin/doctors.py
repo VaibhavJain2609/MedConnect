@@ -33,6 +33,7 @@ class AdminDoctorDetailResponse(BaseModel):
     phone: str | None
     specialization: str | None
     license_number: str | None
+    license_document_url: str | None
     facility_name: str | None
     facility_city: str | None
     verified: bool
@@ -95,6 +96,7 @@ async def list_admin_doctors(
             "email": user.email,
             "specialization": doctor.specialization,
             "license_number": doctor.license_number,
+            "license_document_url": doctor.license_document_url,
             "facility_name": doctor.facility_name,
             "facility_city": doctor.facility_city,
             "verified": doctor.verified,
@@ -175,6 +177,7 @@ async def get_doctor_detail(
         phone=user.phone,
         specialization=doctor.specialization,
         license_number=doctor.license_number,
+        license_document_url=doctor.license_document_url,
         facility_name=doctor.facility_name,
         facility_city=doctor.facility_city,
         verified=doctor.verified,
@@ -286,6 +289,7 @@ def _doctor_payload(doctor: Doctor, user: User) -> dict:
         "email": user.email,
         "specialization": doctor.specialization,
         "license_number": doctor.license_number,
+        "license_document_url": doctor.license_document_url,
         "facility_name": doctor.facility_name,
         "facility_city": doctor.facility_city,
         "verified": doctor.verified,

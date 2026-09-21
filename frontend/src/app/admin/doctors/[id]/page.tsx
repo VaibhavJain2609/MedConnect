@@ -18,8 +18,10 @@ import {
   ClipboardList,
   CalendarDays,
   Pill,
+  ExternalLink,
 } from "lucide-react";
 import { getAdminDoctor, verifyDoctor } from "@/lib/api/doctors";
+import { openFileInNewTab } from "@/lib/download";
 import { UserActivityTimeline } from "@/app/admin/users/[id]/activity-timeline";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Avatar } from "@/components/ui/avatar";
@@ -171,6 +173,7 @@ export default function DoctorDetailPage() {
   });
   const [adminNotes, setAdminNotes] = useState("");
   const [modal, setModal] = useState<"approve" | "reject" | null>(null);
+  const [openingDoc, setOpeningDoc] = useState(false);
 
   const {
     data: doctor,
@@ -200,6 +203,18 @@ export default function DoctorDetailPage() {
 
   const toggleCheck = (itemId: string) => {
     setChecklist((prev) => ({ ...prev, [itemId]: !prev[itemId] }));
+  };
+
+  const viewLicenseDocument = async () => {
+    if (!doctor?.license_document_url) return;
+    setOpeningDoc(true);
+    try {
+      await openFileInNewTab(
+        `/api/v1/uploads/${doctor.license_document_url}`
+      );
+    } finally {
+      setOpeningDoc(false);
+    }
   };
 
   if (isLoading) {
@@ -339,6 +354,28 @@ export default function DoctorDetailPage() {
               </div>
               <div>
                 <p className="text-xs text-dreams-textSecondary uppercase tracking-wider mb-1">
+                  License Document
+                </p>
+                <div className="flex items-center gap-2 text-dreams-textPrimary font-medium">
+                  <FileText className="h-4 w-4 text-dreams-textSecondary flex-shrink-0" />
+                  {doctor.license_document_url ? (
+                    <button
+                      onClick={viewLicenseDocument}
+                      disabled={openingDoc}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-dreams-blue border border-dreams-blue/30 rounded-lg hover:bg-dreams-blue/5 transition-colors disabled:opacity-50"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      {openingDoc ? "Opening..." : "View document"}
+                    </button>
+                  ) : (
+                    <span className="text-dreams-textSecondary font-normal">
+                      Not uploaded
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-dreams-textSecondary uppercase tracking-wider mb-1">
                   Facility
                 </p>
                 <div className="flex items-center gap-2 text-dreams-textPrimary font-medium">
@@ -369,13 +406,28 @@ export default function DoctorDetailPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* License Certificate */}
               <div className="border border-dashed border-dreams-border rounded-lg p-5 flex flex-col items-center justify-center text-center gap-2 bg-dreams-lightBg">
-                <FileText className="h-8 w-8 text-gray-300" />
+                <FileText
+                  className={`h-8 w-8 ${
+                    doctor.license_document_url
+                      ? "text-dreams-blue"
+                      : "text-gray-300"
+                  }`}
+                />
                 <p className="text-sm font-medium text-dreams-textSecondary">
                   License Certificate
                 </p>
-                <p className="text-xs text-gray-400">
-                  No document uploaded yet
-                </p>
+                {doctor.license_document_url ? (
+                  <button
+                    onClick={viewLicenseDocument}
+                    disabled={openingDoc}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-dreams-blue border border-dreams-blue/30 rounded-lg hover:bg-dreams-blue/5 transition-colors disabled:opacity-50"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    {openingDoc ? "Opening..." : "View document"}
+                  </button>
+                ) : (
+                  <p className="text-xs text-gray-400">Not uploaded</p>
+                )}
               </div>
 
               {/* ID Proof */}
@@ -391,8 +443,8 @@ export default function DoctorDetailPage() {
             </div>
 
             <p className="text-xs text-dreams-textSecondary mt-4">
-              Document upload will be available once the document management
-              feature is implemented.
+              Additional document types (e.g. ID proof) will be available once
+              the document management feature is extended.
             </p>
           </div>
 
