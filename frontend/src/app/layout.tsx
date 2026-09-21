@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale } from "next-intl/server";
@@ -10,15 +10,18 @@ export const metadata: Metadata = {
   title: "MedConnect India",
   description: "EMR + Patient Portal for India's Digital Health Ecosystem",
   manifest: "/manifest.json",
-  themeColor: "#4169E1",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
   },
-  viewport: {
-    width: "device-width",
-    initialScale: 1,
-  },
+};
+
+// themeColor/viewport must live in the viewport export on Next 15+ —
+// the metadata export no longer accepts them.
+export const viewport: Viewport = {
+  themeColor: "#4169E1",
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default async function RootLayout({
@@ -32,7 +35,6 @@ export default async function RootLayout({
     <html lang={locale}>
       <head>
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#4169E1" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
       </head>
