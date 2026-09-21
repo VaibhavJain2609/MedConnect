@@ -38,6 +38,7 @@ TEST_DB_MEDICINE := postgresql+asyncpg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@l
         psql psql-medicine redis-cli backup restore-drill \
         test-backend test-frontend lint lint-backend lint-frontend typecheck \
         backend-install frontend-install build clean \
+        loadtest loadtest-smoke \
         k8s-render k8s-alerts-staging k8s-alerts-prod
 
 help: ## Show this help
@@ -153,6 +154,23 @@ build: ## Build all service images
 clean: ## Remove build artifacts (keeps volumes; use down-v for those)
 	$(COMPOSE) rm -f
 	rm -rf backend/htmlcov backend/.coverage frontend/.next
+
+# --- load testing -----------------------------------------------------------
+# Requires locust on PATH (`pip install locust` / `pipx install locust`).
+# LOCUST_TOKEN=<keycloak access token> for the authenticated profile — see
+# loadtest/README.md for token minting, rate-limit caveats, and ramp guidance.
+
+LOCUST ?= locust
+TARGET ?= http://localhost:8000
+USERS  ?= 50
+RATE   ?= 5
+TIME   ?= 5m
+
+loadtest: ## Headless locust run — TARGET/USERS/RATE/TIME vars; set LOCUST_TOKEN for authed traffic
+	$(LOCUST) -f loadtest/locustfile.py --headless --host $(TARGET) -u $(USERS) -r $(RATE) -t $(TIME)
+
+loadtest-smoke: ## Anonymous smoke run (SmokeUser: /health + /docs, rate-limit exempt) — 10 users, 1m
+	$(LOCUST) -f loadtest/locustfile.py --headless --host $(TARGET) -u 10 -r 2 -t 1m SmokeUser
 
 # --- kubernetes -------------------------------------------------------------
 
