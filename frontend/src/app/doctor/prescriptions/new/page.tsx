@@ -5,8 +5,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import api from "@/lib/api";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import MedicineAutocomplete from "@/components/medicine/MedicineAutocomplete";
-import { AlertTriangle, X, ChevronDown, BookOpen, Save } from "lucide-react";
+import DrugInteractionWarning from "@/components/medicine/DrugInteractionWarning";
+import { AlertTriangle, X, BookOpen, Save } from "lucide-react";
 import { getMyClinics, getClinicBranches, type ClinicBranch } from "@/lib/api/clinics";
+import {
+  checkDrugInteractions,
+  type DrugInteraction,
+} from "@/lib/api/medicines-emr";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -17,6 +22,8 @@ interface Medicine {
   brand_name: string;
   brand_id: string | null;
   salt_id: string | null;
+  /** Salt composition string from autocomplete — used for allergy cross-check. */
+  composition: string;
   dose: string;
   frequency: string;
   duration: string;
@@ -34,16 +41,6 @@ interface PatientSuggestion {
   full_name: string;
   phone: string | null;
   last_visit_at: string | null;
-}
-
-interface DrugInteraction {
-  interaction_id: string;
-  salt_1: { id: string; name: string };
-  salt_2: { id: string; name: string };
-  severity: string;
-  effect: string;
-  mechanism: string | null;
-  management: string | null;
 }
 
 interface PrescriptionTemplate {
@@ -64,6 +61,7 @@ function newEmptyMedicine(): Medicine {
     brand_name: "",
     brand_id: null,
     salt_id: null,
+    composition: "",
     dose: "",
     frequency: "OD",
     duration: "7 days",
@@ -195,78 +193,59 @@ function PatientSearch({
 }
 
 // ---------------------------------------------------------------------------
-// Drug Interaction Banner
+// Safety helpers — interaction severity ordering + allergy cross-check
 // ---------------------------------------------------------------------------
 
-function InteractionBanner({
-  interactions,
-}: {
-  interactions: DrugInteraction[];
-}) {
-  if (interactions.length === 0) return null;
+const SEVERITY_ORDER: Record<string, number> = {
+  contraindicated: 4,
+  major: 3,
+  moderate: 2,
+  minor: 1,
+};
 
-  const severityOrder: Record<string, number> = {
-    contraindicated: 4,
-    major: 3,
-    moderate: 2,
-    minor: 1,
-  };
-
-  const sorted = [...interactions].sort(
-    (a, b) =>
-      (severityOrder[b.severity] ?? 0) - (severityOrder[a.severity] ?? 0)
+function sortBySeverity(interactions: DrugInteraction[]): DrugInteraction[] {
+  return [...interactions].sort(
+    (a, b) => (SEVERITY_ORDER[b.severity] ?? 0) - (SEVERITY_ORDER[a.severity] ?? 0)
   );
+}
 
-  const highest = sorted[0].severity;
+const BLOCKING_SEVERITIES = new Set(["major", "contraindicated"]);
 
-  let classes =
-    "rounded-lg border p-4 mb-4 flex items-start gap-3";
-  if (highest === "contraindicated" || highest === "major") {
-    classes += " bg-red-50 border-red-200";
-  } else if (highest === "moderate") {
-    classes += " bg-yellow-50 border-yellow-200";
-  } else {
-    classes += " bg-gray-50 border-gray-200";
+interface AllergyConflict {
+  allergy: string;
+  medicine: string;
+}
+
+/**
+ * Cross-check the patient's recorded allergies (free-text strings) against the
+ * selected medicines' brand names and salt compositions. Matching is a
+ * case-insensitive substring check in both directions — free-text allergy
+ * entries can't be resolved to salt IDs without backend support.
+ */
+function findAllergyConflicts(
+  meds: Medicine[],
+  allergyList: string[]
+): AllergyConflict[] {
+  const conflicts: AllergyConflict[] = [];
+  const seen = new Set<string>();
+
+  for (const allergy of allergyList) {
+    const a = String(allergy).toLowerCase().trim();
+    if (a.length < 3) continue;
+    for (const m of meds) {
+      const brand = m.brand_name.trim().toLowerCase();
+      if (!brand) continue;
+      const haystack = `${m.brand_name} ${m.composition}`.toLowerCase();
+      if (haystack.includes(a) || (brand.length >= 3 && a.includes(brand))) {
+        const key = `${a}::${brand}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          conflicts.push({ allergy: String(allergy), medicine: m.brand_name });
+        }
+      }
+    }
   }
-
-  const iconColor =
-    highest === "contraindicated" || highest === "major"
-      ? "text-red-500"
-      : highest === "moderate"
-      ? "text-yellow-500"
-      : "text-gray-400";
-
-  return (
-    <div className={classes}>
-      <AlertTriangle className={`h-5 w-5 mt-0.5 flex-shrink-0 ${iconColor}`} />
-      <div className="flex-1">
-        <p className="text-sm font-semibold text-dreams-textPrimary mb-1">
-          Drug Interaction Warning ({sorted.length} interaction
-          {sorted.length !== 1 ? "s" : ""} detected)
-        </p>
-        <ul className="space-y-1">
-          {sorted.map((ix) => (
-            <li key={ix.interaction_id} className="text-xs text-dreams-textPrimary">
-              <span className="font-medium capitalize">[{ix.severity}]</span>{" "}
-              <span className="font-semibold">
-                {ix.salt_1.name} + {ix.salt_2.name}:
-              </span>{" "}
-              {ix.effect}
-              {ix.management && (
-                <span className="text-dreams-textSecondary">
-                  {" "}
-                  — {ix.management}
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
-        <p className="mt-2 text-xs text-dreams-textSecondary">
-          You can still submit this prescription. Use clinical judgment.
-        </p>
-      </div>
-    </div>
-  );
+  return conflicts;
 }
 
 // ---------------------------------------------------------------------------
@@ -459,6 +438,14 @@ export default function NewPrescriptionPage() {
   // Drug interactions
   const [interactions, setInteractions] = useState<DrugInteraction[]>([]);
 
+  // Patient allergies (fetched from profile on select)
+  const [patientAllergies, setPatientAllergies] = useState<string[]>([]);
+
+  // Safety gate — set when a submit attempt hits blocking alerts
+  // (major/contraindicated interactions or allergy conflicts)
+  const [safetyAckRequired, setSafetyAckRequired] = useState(false);
+  const [safetyAcknowledged, setSafetyAcknowledged] = useState(false);
+
   // Templates
   const [templates, setTemplates] = useState<PrescriptionTemplate[]>([]);
   const [showLoadModal, setShowLoadModal] = useState(false);
@@ -487,6 +474,9 @@ export default function NewPrescriptionPage() {
               phone: p.phone || null,
               last_visit_at: p.last_visit_at || null,
             });
+            setPatientAllergies(
+              Array.isArray(p.allergies) ? p.allergies : []
+            );
           }
         })
         .catch(() => {});
@@ -505,8 +495,12 @@ export default function NewPrescriptionPage() {
       .finally(() => setBranchesLoading(false));
   }, [selectedClinicId]);
 
-  // Drug interaction check whenever medicines change (2+ with salt_id)
+  // Drug interaction check whenever medicines change (2+ with salt_id).
+  // Any edit invalidates a prior safety acknowledgment.
   useEffect(() => {
+    setSafetyAckRequired(false);
+    setSafetyAcknowledged(false);
+
     const saltIds = medicines
       .map((m) => m.salt_id)
       .filter((id): id is string => !!id);
@@ -517,9 +511,8 @@ export default function NewPrescriptionPage() {
     }
 
     const timer = setTimeout(() => {
-      api
-        .post("/api/v1/interactions/check", { salt_ids: saltIds })
-        .then((res) => setInteractions(res.data || []))
+      checkDrugInteractions(saltIds)
+        .then((res) => setInteractions(res || []))
         .catch(() => setInteractions([]));
     }, 600);
 
@@ -527,8 +520,38 @@ export default function NewPrescriptionPage() {
   }, [medicines]);
 
   // ---------------------------------------------------------------------------
+  // Derived safety data — allergies vs selected medicines (brand + salt names)
+  // ---------------------------------------------------------------------------
+
+  const allergyConflicts = findAllergyConflicts(medicines, patientAllergies);
+
+  // ---------------------------------------------------------------------------
   // Handlers
   // ---------------------------------------------------------------------------
+
+  const fetchPatientAllergies = (patientId: string) => {
+    api
+      .get(`/api/v1/doctors/patients/${patientId}/profile`)
+      .then((res) => {
+        const list = res.data?.allergies;
+        setPatientAllergies(Array.isArray(list) ? list : []);
+      })
+      .catch(() => setPatientAllergies([]));
+  };
+
+  const handlePatientSelect = (patient: PatientSuggestion) => {
+    setSelectedPatient(patient);
+    setSafetyAckRequired(false);
+    setSafetyAcknowledged(false);
+    fetchPatientAllergies(patient.id);
+  };
+
+  const handlePatientClear = () => {
+    setSelectedPatient(null);
+    setPatientAllergies([]);
+    setSafetyAckRequired(false);
+    setSafetyAcknowledged(false);
+  };
 
   const updateMedicine = (index: number, field: keyof Medicine, value: string | null) => {
     const updated = [...medicines];
@@ -565,6 +588,7 @@ export default function NewPrescriptionPage() {
       brand_name: medicine.brandName,
       brand_id: medicine.brandId || null,
       salt_id: medicine.saltId || null,
+      composition: medicine.composition || "",
       dose: `${medicine.dosageForm} ${medicine.strength}`.trim(),
     };
     setMedicines(updated);
@@ -577,6 +601,7 @@ export default function NewPrescriptionPage() {
         brand_name: m.brand_name || "",
         brand_id: m.brand_id || null,
         salt_id: m.salt_id || null,
+        composition: m.composition || "",
         dose: m.dose || "",
         frequency: m.frequency || "OD",
         duration: m.duration || "7 days",
@@ -633,6 +658,44 @@ export default function NewPrescriptionPage() {
 
     if (medicinesFormatted.length === 0) {
       setError("Please add at least one medicine");
+      setLoading(false);
+      return;
+    }
+
+    // ------------------------------------------------------------------
+    // Safety gate — re-run the interaction check at submit time so the
+    // decision is based on fresh data, not the debounced preview.
+    // ------------------------------------------------------------------
+    const saltIds = medicinesFormatted
+      .map((m) => m.salt_id)
+      .filter((id): id is string => !!id);
+
+    let latestInteractions = interactions;
+    if (saltIds.length >= 2) {
+      try {
+        latestInteractions = await checkDrugInteractions(saltIds);
+        setInteractions(latestInteractions || []);
+      } catch {
+        // Check failed — fall back to whatever the live check last returned
+        // rather than blocking the prescription on a network hiccup.
+      }
+    } else {
+      latestInteractions = [];
+      setInteractions([]);
+    }
+
+    const blockingInteractions = (latestInteractions || []).filter((ix) =>
+      BLOCKING_SEVERITIES.has(ix.severity)
+    );
+
+    if (
+      (blockingInteractions.length > 0 || allergyConflicts.length > 0) &&
+      !safetyAcknowledged
+    ) {
+      setSafetyAckRequired(true);
+      setError(
+        "Safety review required: this prescription has major drug interactions or allergy conflicts. Review the warnings below and check the acknowledgment box to proceed."
+      );
       setLoading(false);
       return;
     }
@@ -784,7 +847,7 @@ export default function NewPrescriptionPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setSelectedPatient(null)}
+                  onClick={handlePatientClear}
                   aria-label="Clear selected patient"
                   className="text-dreams-textSecondary hover:text-red-500 transition-colors"
                 >
@@ -792,9 +855,37 @@ export default function NewPrescriptionPage() {
                 </button>
               </div>
             ) : (
-              <PatientSearch onSelect={setSelectedPatient} />
+              <PatientSearch onSelect={handlePatientSelect} />
             )}
           </div>
+
+          {/* Patient allergy banner — shown whenever allergies are on file */}
+          {selectedPatient && patientAllergies.length > 0 && (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 mt-0.5 flex-shrink-0 text-red-500" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-red-800">
+                  Patient has recorded allergies
+                </p>
+                <p className="text-sm text-red-700">
+                  {patientAllergies.join(", ")}
+                </p>
+                {allergyConflicts.length > 0 && (
+                  <ul className="mt-1.5 space-y-0.5 border-t border-red-200 pt-1.5">
+                    {allergyConflicts.map((c, i) => (
+                      <li
+                        key={`${c.allergy}-${c.medicine}-${i}`}
+                        className="text-xs font-medium text-red-800"
+                      >
+                        Possible conflict: "{c.allergy}" may match selected
+                        medicine "{c.medicine}".
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Clinic selector */}
           {clinics.length > 0 && (
@@ -891,8 +982,11 @@ export default function NewPrescriptionPage() {
             </button>
           </div>
 
-          {/* Drug interaction banner */}
-          <InteractionBanner interactions={interactions} />
+          {/* Drug interaction warnings */}
+          <DrugInteractionWarning
+            interactions={sortBySeverity(interactions)}
+            className="mb-4"
+          />
 
           {medicines.map((med, idx) => (
             <div key={med._uid} className="mb-4 bg-white rounded-lg shadow-card p-6">
@@ -1061,10 +1155,75 @@ export default function NewPrescriptionPage() {
             </div>
           )}
 
+          {/* Safety gate — explicit acknowledgment required for blocking alerts */}
+          {safetyAckRequired && (
+            <div className="mb-4 rounded-lg border-2 border-red-300 bg-red-50 p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 mt-0.5 flex-shrink-0 text-red-600" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-red-800">
+                    Safety review required before this prescription can be
+                    created
+                  </p>
+                  <ul className="mt-2 space-y-1">
+                    {interactions
+                      .filter((ix) => BLOCKING_SEVERITIES.has(ix.severity))
+                      .map((ix) => (
+                        <li
+                          key={ix.interaction_id}
+                          className="text-xs text-red-700"
+                        >
+                          <span className="font-semibold capitalize">
+                            [{ix.severity}]
+                          </span>{" "}
+                          {ix.salt_1.name} + {ix.salt_2.name} — {ix.effect}
+                        </li>
+                      ))}
+                    {allergyConflicts.map((c, i) => (
+                      <li
+                        key={`ack-allergy-${i}`}
+                        className="text-xs text-red-700"
+                      >
+                        <span className="font-semibold">[allergy]</span>{" "}
+                        {c.medicine} may conflict with recorded allergy "
+                        {c.allergy}"
+                      </li>
+                    ))}
+                  </ul>
+                  <label className="mt-3 flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={safetyAcknowledged}
+                      onChange={(e) => setSafetyAcknowledged(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-red-300 accent-red-600"
+                    />
+                    <span className="text-sm font-medium text-red-800">
+                      I acknowledge the interaction warnings
+                      {allergyConflicts.length > 0 &&
+                        " and allergy conflicts"}{" "}
+                      and take clinical responsibility for this prescription.
+                    </span>
+                  </label>
+                  {!safetyAcknowledged && (
+                    <p className="mt-1.5 text-xs text-red-600">
+                      Check the box above, then click Create Prescription again
+                      to proceed.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-3">
             <button
               type="submit"
-              disabled={loading || !selectedPatient || !hasMedicines}
+              disabled={
+                loading ||
+                !selectedPatient ||
+                !hasMedicines ||
+                (safetyAckRequired && !safetyAcknowledged)
+              }
               className="px-6 py-2.5 bg-dreams-blue text-white text-sm font-medium rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
               {loading ? "Creating..." : "Create Prescription"}
