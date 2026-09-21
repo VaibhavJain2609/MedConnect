@@ -37,20 +37,13 @@ from app.models.doctor import Doctor
 from app.models.medical_record import MedicalRecord
 from app.models.prescription import Prescription
 from app.models.user import User
+from app.utils.pdf import fmt_date as _fmt_date
 
 router = APIRouter(prefix="/api/v1/prescriptions", tags=["prescriptions-pdf"])
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-def _fmt_date(value) -> str:
-    """Format a date or datetime to a readable Indian locale string."""
-    if value is None:
-        return "—"
-    if hasattr(value, "date"):
-        value = value.date()
-    return value.strftime("%d %B %Y")
 
 
 def _build_pdf(

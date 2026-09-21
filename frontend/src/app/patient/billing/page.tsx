@@ -6,11 +6,12 @@ import {
   Receipt,
   ChevronDown,
   ChevronRight,
-  Printer,
+  Download,
   Loader2,
 } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { getMyBills, type PatientBill } from "@/lib/api/patient-portal";
+import { downloadBillReceipt } from "@/lib/api/billing";
 import { cn } from "@/lib/utils";
 
 const STATUS_STYLES: Record<string, string> = {
@@ -44,49 +45,19 @@ function formatDate(iso: string) {
   });
 }
 
-/**
- * Client-side printable receipt.
- * NOTE: the billing API has no PDF/receipt endpoint yet, so we render a
- * printable HTML view in a new window and let the browser handle print/save.
- * TODO: switch to the server receipt endpoint when one exists.
- */
-function printReceipt(bill: PatientBill) {
-  const win = window.open("", "_blank", "noopener,noreferrer");
-  if (!win) return;
-  win.document.write(`<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>Receipt ${bill.id.slice(0, 8)}</title>
-  <style>
-    body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 40px; color: #1A1D1F; }
-    h1 { font-size: 20px; margin-bottom: 4px; }
-    .muted { color: #6B7280; font-size: 13px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 24px; }
-    td, th { text-align: left; padding: 8px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; }
-    .total td { font-weight: 700; border-bottom: none; font-size: 16px; }
-    .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; background: #F5F7FA; font-size: 12px; text-transform: capitalize; }
-  </style>
-</head>
-<body>
-  <h1>MedConnect — Payment Receipt</h1>
-  <p class="muted">Invoice #${bill.id.slice(0, 8)} · ${formatDate(bill.created_at)}</p>
-  <table>
-    <tr><td>Status</td><td><span class="badge">${bill.status}</span></td></tr>
-    <tr><td>Clinic</td><td>${bill.clinic_name ?? "—"}</td></tr>
-    <tr><td>Payment method</td><td>${bill.payment_method ?? "—"}</td></tr>
-    <tr><td>Description</td><td>${bill.notes ?? "Medical services"}</td></tr>
-    <tr class="total"><td>Total</td><td>${formatCurrency(bill.amount)}</td></tr>
-  </table>
-  <p class="muted" style="margin-top:32px">Generated ${new Date().toLocaleString("en-IN")}</p>
-  <script>window.onload = () => window.print();</script>
-</body>
-</html>`);
-  win.document.close();
-}
-
 function BillRow({ bill }: { bill: PatientBill }) {
   const [expanded, setExpanded] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const isPaid = bill.status === "paid";
+
+  async function handleDownload() {
+    setDownloading(true);
+    try {
+      await downloadBillReceipt(bill.id);
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   return (
     <div className="bg-white rounded-lg shadow-card border border-dreams-border">
@@ -191,11 +162,16 @@ function BillRow({ bill }: { bill: PatientBill }) {
           <div className="pt-1">
             <button
               type="button"
-              onClick={() => printReceipt(bill)}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm border border-dreams-border rounded-lg text-dreams-textPrimary hover:bg-dreams-lightBg transition-colors"
+              onClick={handleDownload}
+              disabled={downloading}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm border border-dreams-border rounded-lg text-dreams-textPrimary hover:bg-dreams-lightBg transition-colors disabled:opacity-50"
             >
-              <Printer className="h-4 w-4" />
-              Print Receipt
+              {downloading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              {isPaid ? "Download Receipt" : "Download Invoice"}
             </button>
           </div>
         </div>
