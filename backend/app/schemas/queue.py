@@ -34,3 +34,25 @@ class QueueEntryResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class QueueListResponse(BaseModel):
+    data: list[QueueEntryResponse]
+    total: int
+
+
+class QueuePositionResponse(BaseModel):
+    """Patient-facing live queue position (GET /queue/my-position).
+
+    All fields are null/empty (ahead_count=0) when the patient has no queue
+    entry today — the endpoint returns 200, not 404, in that case."""
+
+    queue_entry_id: UUID | None
+    clinic_id: UUID | None
+    clinic_name: str | None
+    doctor_name: str | None
+    queue_number: int | None
+    position: int | None
+    status: str | None
+    ahead_count: int
+    estimated_wait_minutes: int | None

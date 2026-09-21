@@ -21,6 +21,11 @@ from app.models.medical_record import MedicalRecord
 from app.models.patient_link import PatientClinicLink, PatientLinkCode
 from app.models.prescription import Prescription
 from app.models.user import User
+from app.schemas.appointments_response import (
+    AppointmentResponse,
+    AppointmentsListResponse,
+    LinkProvisionalResponse,
+)
 from app.services import access_service
 from app.services.notification_service import create_notification
 
@@ -102,34 +107,6 @@ class GuestAppointmentCreate(BaseModel):
 class LinkProvisionalRequest(BaseModel):
     provisional_patient_id: UUID
     link_code: str
-
-
-class AppointmentResponse(BaseModel):
-    id: UUID
-    patient_id: UUID
-    patient_name: str | None = None
-    doctor_id: UUID
-    doctor_name: str | None = None
-    clinic_id: UUID | None = None
-    clinic_name: str | None = None
-    branch_id: UUID | None = None
-    branch_name: str | None = None
-    scheduled_at: datetime
-    duration_minutes: int
-    type: str
-    status: str
-    chief_complaint: str | None = None
-    notes: str | None = None
-    cancelled_reason: str | None = None
-    meeting_url: str | None = None
-    is_provisional: bool = False
-    patient_phone: str | None = None
-    created_by: UUID
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -448,7 +425,7 @@ async def _check_patient_clinic_conflict(
 
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=AppointmentResponse, status_code=status.HTTP_201_CREATED)
 async def create_appointment(
     req: AppointmentCreate,
     current_user: User = Depends(get_current_user),
@@ -604,7 +581,7 @@ async def create_appointment(
     return await _load_appointment_with_names(db, appt)
 
 
-@router.get("")
+@router.get("", response_model=AppointmentsListResponse)
 async def list_appointments(
     date_param: str | None = Query(None, alias="date"),
     status_filter: str | None = Query(None, alias="status"),
@@ -741,7 +718,7 @@ async def list_appointments(
     return {"data": data, "total": total, "limit": limit, "offset": offset}
 
 
-@router.get("/{appointment_id}")
+@router.get("/{appointment_id}", response_model=AppointmentResponse)
 async def get_appointment(
     appointment_id: UUID,
     current_user: User = Depends(get_current_user),
@@ -780,7 +757,7 @@ async def get_appointment(
     return await _load_appointment_with_names(db, appt)
 
 
-@router.put("/{appointment_id}")
+@router.put("/{appointment_id}", response_model=AppointmentResponse)
 async def update_appointment(
     appointment_id: UUID,
     req: AppointmentUpdate,
@@ -947,7 +924,7 @@ async def update_appointment(
     return await _load_appointment_with_names(db, appt)
 
 
-@router.put("/{appointment_id}/status")
+@router.put("/{appointment_id}/status", response_model=AppointmentResponse)
 async def update_appointment_status(
     appointment_id: UUID,
     req: AppointmentStatusUpdate,
@@ -1098,7 +1075,7 @@ async def delete_appointment(
     await db.flush()
 
 
-@router.post("/guest", status_code=status.HTTP_201_CREATED)
+@router.post("/guest", response_model=AppointmentResponse, status_code=status.HTTP_201_CREATED)
 async def create_guest_appointment(
     body: GuestAppointmentCreate,
     current_user: User = Depends(get_current_user),
@@ -1226,7 +1203,7 @@ async def create_guest_appointment(
     return await _load_appointment_with_names(db, appt)
 
 
-@router.post("/{appointment_id}/meeting-link")
+@router.post("/{appointment_id}/meeting-link", response_model=AppointmentResponse)
 async def generate_meeting_link(
     appointment_id: UUID,
     current_user: User = Depends(get_current_user),
@@ -1281,7 +1258,7 @@ async def generate_meeting_link(
     return await _load_appointment_with_names(db, appt)
 
 
-@router.post("/link-provisional", status_code=status.HTTP_200_OK)
+@router.post("/link-provisional", response_model=LinkProvisionalResponse, status_code=status.HTTP_200_OK)
 async def link_provisional_patient(
     body: LinkProvisionalRequest,
     current_user: User = Depends(get_current_user),

@@ -21,7 +21,13 @@ from app.models.clinic import Clinic
 from app.models.doctor import Doctor
 from app.models.queue import QueueEntry
 from app.models.user import User
-from app.schemas.queue import QueueEntryCreate, QueueEntryResponse, QueueStatusUpdate
+from app.schemas.queue import (
+    QueueEntryCreate,
+    QueueEntryResponse,
+    QueueListResponse,
+    QueuePositionResponse,
+    QueueStatusUpdate,
+)
 
 router = APIRouter(prefix="/api/v1/queue", tags=["queue"])
 
@@ -95,7 +101,7 @@ async def _resolve_names(
     return patient_names, doctor_names
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=QueueEntryResponse, status_code=status.HTTP_201_CREATED)
 async def add_to_queue(
     req: QueueEntryCreate,
     staff: tuple = Depends(get_clinic_staff),
@@ -197,7 +203,7 @@ async def add_to_queue(
     )
 
 
-@router.get("")
+@router.get("", response_model=QueueListResponse)
 async def get_queue(
     status_filter: str | None = Query(None, alias="status"),
     doctor_id: UUID | None = Query(None),
@@ -251,7 +257,7 @@ async def get_queue(
     return {"data": data, "total": len(data)}
 
 
-@router.get("/my-position")
+@router.get("/my-position", response_model=QueuePositionResponse)
 async def get_my_queue_position(
     user: User = Depends(require_patient),
     db: AsyncSession = Depends(get_db),
@@ -364,7 +370,7 @@ async def get_my_queue_position(
     }
 
 
-@router.get("/{entry_id}")
+@router.get("/{entry_id}", response_model=QueueEntryResponse)
 async def get_queue_entry(
     entry_id: UUID,
     staff: tuple = Depends(get_clinic_staff),
@@ -395,7 +401,7 @@ async def get_queue_entry(
     )
 
 
-@router.patch("/{entry_id}/status")
+@router.patch("/{entry_id}/status", response_model=QueueEntryResponse)
 async def update_queue_status(
     entry_id: UUID,
     req: QueueStatusUpdate,

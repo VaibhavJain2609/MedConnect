@@ -2,7 +2,6 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
 from sqlalchemy import and_, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,49 +9,17 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.notification import Notification, NotificationPreferences, NotificationType
 from app.models.user import User
+from app.schemas.notification import (
+    DeletedCountResponse,
+    MarkAllReadResponse,
+    NotificationPreferencesResponse,
+    NotificationPreferencesUpdate,
+    NotificationResponse,
+    NotificationsListResponse,
+    UnreadCountResponse,
+)
 
 router = APIRouter(prefix="/api/v1/notifications", tags=["notifications"])
-
-
-# Pydantic Schemas
-class NotificationResponse(BaseModel):
-    id: str
-    user_id: str
-    type: str
-    title: str
-    message: str
-    read: bool
-    action_url: str | None
-    metadata: dict | None  # Frontend expects 'metadata', DB uses 'meta'
-    created_at: str
-    read_at: str | None
-
-    model_config = {"from_attributes": True}
-
-    @classmethod
-    def from_orm(cls, notification: Notification):
-        return cls(
-            id=str(notification.id),
-            user_id=str(notification.user_id),
-            type=notification.type.value if hasattr(notification.type, "value") else notification.type,
-            title=notification.title,
-            message=notification.message,
-            read=notification.read,
-            action_url=notification.action_url,
-            metadata=notification.meta,  # Map 'meta' field to 'metadata' for frontend
-            created_at=notification.created_at.isoformat(),
-            read_at=notification.read_at.isoformat() if notification.read_at else None,
-        )
-
-
-class NotificationsListResponse(BaseModel):
-    notifications: list[NotificationResponse]
-    total: int
-    unread_count: int
-
-
-class NotificationPreferencesResponse(BaseModel):
-    preferences: dict
 
 
 DEFAULT_NOTIFICATION_PREFERENCES: dict = {
@@ -67,19 +34,6 @@ DEFAULT_NOTIFICATION_PREFERENCES: dict = {
     "sms_notifications": False,
     "whatsapp_notifications": False,
 }
-
-
-class NotificationPreferencesUpdate(BaseModel):
-    """Validated body for PUT /preferences. Unset fields keep their current value."""
-
-    email_notifications: bool = True
-    push_notifications: bool = True
-    sms_notifications: bool = False
-    whatsapp_notifications: bool = False
-    appointment_reminders: bool = True
-    lab_results: bool = True
-    prescription_alerts: bool = True
-    system_alerts: bool = True
 
 
 # Endpoints
@@ -145,7 +99,7 @@ async def get_notifications(
     )
 
 
-@router.get("/unread-count")
+@router.get("/unread-count", response_model=UnreadCountResponse)
 async def get_unread_count(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -230,7 +184,7 @@ async def mark_as_unread(
     return NotificationResponse.from_orm(notification)
 
 
-@router.post("/read-all")
+@router.post("/read-all", response_model=MarkAllReadResponse)
 async def mark_all_as_read(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -253,7 +207,7 @@ async def mark_all_as_read(
     return {"message": "All notifications marked as read"}
 
 
-@router.delete("/read")
+@router.delete("/read", response_model=DeletedCountResponse)
 async def delete_all_read(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -307,7 +261,7 @@ async def delete_notification(
     return None
 
 
-@router.get("/preferences")
+@router.get("/preferences", response_model=NotificationPreferencesResponse)
 async def get_notification_preferences(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -326,7 +280,7 @@ async def get_notification_preferences(
     return preferences.preferences
 
 
-@router.put("/preferences")
+@router.put("/preferences", response_model=NotificationPreferencesResponse)
 async def update_notification_preferences(
     preferences: NotificationPreferencesUpdate,
     user: User = Depends(get_current_user),
