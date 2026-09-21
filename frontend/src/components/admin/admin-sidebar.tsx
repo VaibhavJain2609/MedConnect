@@ -23,6 +23,7 @@ import {
   Building2,
   CreditCard,
   TrendingUp,
+  HeartPulse,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/auth";
@@ -90,6 +91,7 @@ const navSections: NavSection[] = [
     items: [
       { href: "/admin/doctors/pending", label: "Doctor Verification", icon: UserCheck },
       { href: "/admin/audit-logs", label: "Audit Logs", icon: Shield },
+      { href: "/admin/system", label: "System Health", icon: HeartPulse },
     ],
   },
 ];
