@@ -17,6 +17,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { Autocomplete, AutocompleteOption } from '@/components/ui/autocomplete';
 import { autocompleteMedicines, MedicineAutocompleteResult } from '@/lib/api/medicines-emr';
 
+// Format medicine label for display in dropdown
+const formatMedicineLabel = (medicine: MedicineAutocompleteResult): string => {
+  return `${medicine.brand_name} • ${medicine.salt_composition} • by ${medicine.manufacturer_name}`;
+};
+
 interface MedicineAutocompleteProps {
   onSelect: (medicine: {
     brandId: string;
@@ -51,10 +56,15 @@ export default function MedicineAutocomplete({
     new Map()
   );
 
-  // Debounce search query (300ms)
+  // Debounce search query (300ms). Clearing happens here (inside the timer
+  // callback) so stale results/errors drop exactly when the debounce lands.
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedQuery(searchQuery);
+      if (searchQuery.length < 2) {
+        setOptions([]);
+        setError(null);
+      }
     }, 300);
 
     return () => clearTimeout(timer);
@@ -63,8 +73,6 @@ export default function MedicineAutocomplete({
   // Fetch autocomplete results when debounced query changes
   useEffect(() => {
     if (debouncedQuery.length < 2) {
-      setOptions([]);
-      setError(null);
       return;
     }
 
@@ -99,11 +107,6 @@ export default function MedicineAutocomplete({
 
     fetchResults();
   }, [debouncedQuery]);
-
-  // Format medicine label for display in dropdown
-  const formatMedicineLabel = (medicine: MedicineAutocompleteResult): string => {
-    return `${medicine.brand_name} • ${medicine.salt_composition} • by ${medicine.manufacturer_name}`;
-  };
 
   // Handle search input change
   const handleSearchChange = useCallback((search: string) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import api from "@/lib/api";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
@@ -481,12 +481,16 @@ export default function NewPrescriptionPage() {
   const [overrideAlerts, setOverrideAlerts] = useState<any[] | null>(null);
   const [overrideReason, setOverrideReason] = useState("");
 
-  // Patient safety info (allergies / chronic conditions from profile)
-  const [patientAllergies, setPatientAllergies] = useState<string[]>([]);
-  const [patientChronic, setPatientChronic] = useState<string[]>([]);
+  // Patient safety info (allergies / chronic conditions from profile).
+  // Raw fetch results — the surfaced lists are derived below so clearing the
+  // patient doesn't require a synchronous reset inside an effect.
+  const [fetchedAllergies, setPatientAllergies] = useState<string[]>([]);
+  const [fetchedChronic, setPatientChronic] = useState<string[]>([]);
 
-  // Drug interactions
-  const [interactions, setInteractions] = useState<DrugInteraction[]>([]);
+  // Drug interactions — raw fetch results; the surfaced list is derived
+  // below (only meaningful with 2+ salt-tagged medicines).
+  const [fetchedInteractions, setInteractions] =
+    useState<DrugInteraction[]>([]);
 
   // Draft auto-save
   const [draftRestored, setDraftRestored] = useState(false);
@@ -503,10 +507,32 @@ export default function NewPrescriptionPage() {
   const [showLoadModal, setShowLoadModal] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
 
+  // Derived inputs shared by the safety effects below. `patientId` is the
+  // stable primitive the effects actually depend on; `saltIds` is memoized
+  // so effect deps track `medicines` without re-firing on every render.
+  const patientId = selectedPatient?.id ?? null;
+  const saltIds = useMemo(
+    () =>
+      medicines
+        .map((m) => m.salt_id)
+        .filter((id): id is string => !!id),
+    [medicines]
+  );
+
+  // Derived views — gated on the same conditions the effects used to reset
+  // for, so no synchronous setState-in-effect is needed.
+  const patientAllergies = selectedPatient ? fetchedAllergies : [];
+  const patientChronic = selectedPatient ? fetchedChronic : [];
+  const interactions = saltIds.length >= 2 ? fetchedInteractions : [];
+
   // Restore a saved draft from localStorage (runs once, before prefill).
   // Skipped when the draft names a different patient than the one the URL
   // pre-fills — restoring another patient's draft would be unsafe.
+  // The synchronous setState calls below are intentional: this multi-field
+  // restore must happen post-mount (a lazy useState initializer would run on
+  // the server too and produce a hydration mismatch when a draft exists).
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- mount-once localStorage restore; see comment above */
     try {
       const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
       if (raw) {
@@ -531,6 +557,7 @@ export default function NewPrescriptionPage() {
           setNotes(draft.notes || "");
           setValidUntil(draft.valid_until || "");
           setSelectedClinicId(draft.clinic_id || "");
+          if (draft.clinic_id) setBranchesLoading(true);
           pendingBranchRef.current = draft.branch_id || null;
           setDraftRestored(true);
         }
@@ -539,6 +566,7 @@ export default function NewPrescriptionPage() {
       // Corrupt or unreadable draft — ignore and start fresh.
     }
     draftReadyRef.current = true;
+    /* eslint-enable react-hooks/set-state-in-effect */
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -620,14 +648,15 @@ export default function NewPrescriptionPage() {
   ]);
 
   // Fetch branches when a clinic is selected. Re-applies a branch restored
-  // from a draft once the branch list arrives.
+  // from a draft once the branch list arrives. The selection/loading resets
+  // live in the clinic select's onChange (and the draft-restore effect), so
+  // this effect only performs the fetch.
   useEffect(() => {
+    if (!selectedClinicId) return;
+    // Consume the pending draft branch only when a fetch actually runs —
+    // reading it before the clinic guard would drop it on mount.
     const pendingBranch = pendingBranchRef.current;
     pendingBranchRef.current = null;
-    setSelectedBranchId("");
-    setBranches([]);
-    if (!selectedClinicId) return;
-    setBranchesLoading(true);
     getClinicBranches(selectedClinicId)
       .then((data) => {
         setBranches(data);
@@ -642,13 +671,9 @@ export default function NewPrescriptionPage() {
   // Fetch the selected patient's allergies / chronic conditions for the
   // safety banner. Fails silently when the doctor has no profile access.
   useEffect(() => {
-    if (!selectedPatient) {
-      setPatientAllergies([]);
-      setPatientChronic([]);
-      return;
-    }
+    if (!patientId) return;
     let cancelled = false;
-    getDoctorPatientProfile(selectedPatient.id)
+    getDoctorPatientProfile(patientId)
       .then((profile) => {
         if (cancelled) return;
         setPatientAllergies(extractTerms(profile?.allergies));
@@ -662,22 +687,22 @@ export default function NewPrescriptionPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedPatient?.id]);
+  }, [patientId]);
 
-  // Drug interaction check whenever medicines change (2+ with salt_id).
-  // Any edit invalidates a prior safety acknowledgment.
-  useEffect(() => {
+  // Any medicine edit invalidates a prior safety acknowledgment — adjusted
+  // during render via the prev-value pattern.
+  const [prevMedicines, setPrevMedicines] = useState(medicines);
+  if (prevMedicines !== medicines) {
+    setPrevMedicines(medicines);
     setSafetyAckRequired(false);
     setSafetyAcknowledged(false);
+  }
 
-    const saltIds = medicines
-      .map((m) => m.salt_id)
-      .filter((id): id is string => !!id);
-
-    if (saltIds.length < 2) {
-      setInteractions([]);
-      return;
-    }
+  // Drug interaction check whenever medicines change (2+ with salt_id).
+  // The debounce and cancellation are unchanged; stale results are hidden
+  // by the derived `interactions` view once salt count drops below 2.
+  useEffect(() => {
+    if (saltIds.length < 2) return;
 
     const timer = setTimeout(() => {
       checkDrugInteractions(saltIds)
@@ -686,7 +711,7 @@ export default function NewPrescriptionPage() {
     }, 600);
 
     return () => clearTimeout(timer);
-  }, [medicines]);
+  }, [saltIds]);
 
   // ---------------------------------------------------------------------------
   // Derived safety data — allergies vs selected medicines. Server-side check
@@ -694,23 +719,21 @@ export default function NewPrescriptionPage() {
   // medicines with no salt_id and acts as the fail-open fallback.
   // ---------------------------------------------------------------------------
 
-  const [serverAllergyConflicts, setServerAllergyConflicts] = useState<
+  const [fetchedServerConflicts, setServerAllergyConflicts] = useState<
     AllergyConflict[]
   >([]);
+  // Gated view — hidden (rather than reset inside the effect) when there is
+  // no patient or no salt-tagged medicine.
+  const serverAllergyConflicts =
+    patientId && saltIds.length > 0 ? fetchedServerConflicts : [];
 
   useEffect(() => {
-    const saltIds = medicines
-      .map((m) => m.salt_id)
-      .filter((id): id is string => !!id);
-    if (!selectedPatient || saltIds.length === 0) {
-      setServerAllergyConflicts([]);
-      return;
-    }
+    if (!patientId || saltIds.length === 0) return;
     let cancelled = false;
     const timer = setTimeout(() => {
       api
         .post("/api/v1/interactions/check-allergies", {
-          patient_id: selectedPatient.id,
+          patient_id: patientId,
           salt_ids: saltIds,
         })
         .then((res) => {
@@ -731,7 +754,7 @@ export default function NewPrescriptionPage() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [selectedPatient?.id, medicines]);
+  }, [patientId, saltIds]);
 
   const localConflicts = findAllergyConflicts(medicines, patientAllergies);
   const seenConflicts = new Set<string>();
@@ -864,6 +887,8 @@ export default function NewPrescriptionPage() {
     setValidUntil("");
     setSelectedClinicId("");
     setSelectedBranchId("");
+    setBranches([]);
+    pendingBranchRef.current = null;
     setInteractions([]);
     setDraftRestored(false);
   };
@@ -1274,7 +1299,12 @@ export default function NewPrescriptionPage() {
               <select
                 id="rx-clinic"
                 value={selectedClinicId}
-                onChange={(e) => setSelectedClinicId(e.target.value)}
+                onChange={(e) => {
+                  setSelectedClinicId(e.target.value);
+                  setSelectedBranchId("");
+                  setBranches([]);
+                  setBranchesLoading(Boolean(e.target.value));
+                }}
                 className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
               >
                 <option value="">No clinic (private)</option>

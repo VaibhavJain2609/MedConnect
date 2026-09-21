@@ -91,15 +91,15 @@ export function useViewMode(
   key: string,
   defaultMode: ViewMode = "grid"
 ): [ViewMode, (mode: ViewMode) => void] {
-  const [viewMode, setViewMode] = React.useState<ViewMode>(defaultMode);
-
-  // Load from localStorage on mount
-  React.useEffect(() => {
-    const stored = localStorage.getItem(key);
-    if (stored && ["grid", "table", "list"].includes(stored)) {
-      setViewMode(stored as ViewMode);
-    }
-  }, [key]);
+  // Lazy initializer reads localStorage once on mount (guarded for SSR).
+  // `key` is a constant per call site, so no re-read effect is needed.
+  const [viewMode, setViewMode] = React.useState<ViewMode>(() => {
+    if (typeof window === "undefined") return defaultMode;
+    const stored = window.localStorage.getItem(key);
+    return stored && ["grid", "table", "list"].includes(stored)
+      ? (stored as ViewMode)
+      : defaultMode;
+  });
 
   // Save to localStorage on change
   const handleChange = React.useCallback(

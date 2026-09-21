@@ -55,16 +55,16 @@ function flattenMedications(
  */
 function useTakenToday() {
   const storageKey = `medconnect:taken:${new Date().toISOString().slice(0, 10)}`;
-  const [taken, setTaken] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
+  // Lazy initializer — reads localStorage once (guarded for SSR).
+  const [taken, setTaken] = useState<Set<string>>(() => {
     try {
       const raw = window.localStorage.getItem(storageKey);
-      if (raw) setTaken(new Set(JSON.parse(raw)));
+      return raw ? new Set<string>(JSON.parse(raw)) : new Set();
     } catch {
-      // ignore malformed storage
+      // ignore malformed storage / SSR
+      return new Set();
     }
-  }, [storageKey]);
+  });
 
   const toggle = (key: string) => {
     setTaken((prev) => {

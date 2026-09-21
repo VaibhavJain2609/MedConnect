@@ -170,7 +170,11 @@ export default function DoctorPatientProfilePage() {
     enabled: !!patientId,
   });
 
-  const { data: prescriptionsData, isLoading: prescriptionsLoading } = useQuery({
+  const {
+    data: prescriptionsData,
+    isLoading: prescriptionsLoading,
+    dataUpdatedAt: prescriptionsUpdatedAt,
+  } = useQuery({
     queryKey: ["doctor-patient-prescriptions-latest", patientId],
     queryFn: async () => {
       const res = await api.get(`/api/v1/doctors/patients/${patientId}/prescriptions`, {
@@ -263,8 +267,9 @@ export default function DoctorPatientProfilePage() {
   const activeMedicines: string[] = (() => {
     const names = new Set<string>();
     for (const rx of prescriptionsData?.data ?? []) {
+      // Compared against the query's fetch timestamp — pure during render.
       const stillValid = rx.is_expired === false || !rx.valid_until ||
-        new Date(rx.valid_until).getTime() >= Date.now();
+        new Date(rx.valid_until).getTime() >= prescriptionsUpdatedAt;
       if (!stillValid) continue;
       for (const m of rx.medicines ?? []) {
         const name = m.name ?? m.brand_name;

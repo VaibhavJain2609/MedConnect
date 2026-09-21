@@ -53,7 +53,21 @@ export const GlobalSearch: React.FC = () => {
     enabled: searchQuery.length >= 2,
   });
 
-  const results = data?.results || [];
+  // Kept as the query's stable array reference (no `|| []`) so the keydown
+  // effect below doesn't re-subscribe on every render.
+  const results = data?.results;
+
+  const handleSelectResult = React.useCallback(
+    (result: SearchResult) => {
+      if (result.url) {
+        router.push(result.url);
+      }
+      setIsOpen(false);
+      setSearchQuery("");
+      setSelectedIndex(0);
+    },
+    [router, setIsOpen]
+  );
 
   // Keyboard shortcut handler
   React.useEffect(() => {
@@ -92,7 +106,7 @@ export const GlobalSearch: React.FC = () => {
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, results, selectedIndex, setIsOpen]);
+  }, [isOpen, results, selectedIndex, setIsOpen, handleSelectResult]);
 
   // Focus input when modal opens
   React.useEffect(() => {
@@ -100,15 +114,6 @@ export const GlobalSearch: React.FC = () => {
       inputRef.current.focus();
     }
   }, [isOpen]);
-
-  const handleSelectResult = (result: SearchResult) => {
-    if (result.url) {
-      router.push(result.url);
-    }
-    setIsOpen(false);
-    setSearchQuery("");
-    setSelectedIndex(0);
-  };
 
   const getResultIcon = (type: SearchResult["type"]) => {
     switch (type) {

@@ -35,6 +35,16 @@ export function TemplateLoadModal({ onClose, onLoad }: Props) {
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
+    const fetchTemplates = async () => {
+      try {
+        const response = await api.get("/api/v1/doctors/prescription-templates");
+        setTemplates(response.data.data);
+      } catch (err: any) {
+        setError("Failed to load templates");
+      } finally {
+        setLoading(false);
+      }
+    };
     fetchTemplates();
   }, []);
 
@@ -46,17 +56,6 @@ export function TemplateLoadModal({ onClose, onLoad }: Props) {
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
-
-  const fetchTemplates = async () => {
-    try {
-      const response = await api.get("/api/v1/doctors/prescription-templates");
-      setTemplates(response.data.data);
-    } catch (err: any) {
-      setError("Failed to load templates");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const filteredTemplates = templates.filter((t) =>
     t.name.toLowerCase().includes(searchTerm.toLowerCase())

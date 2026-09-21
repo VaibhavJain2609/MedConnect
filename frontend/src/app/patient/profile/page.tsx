@@ -62,8 +62,10 @@ export default function PatientProfilePage() {
     emergency_contact_phone: "",
   });
 
-  // Sync form when profile loads
-  useEffect(() => {
+  // Sync form when profile loads / refetches (adjusted during render).
+  const [prevProfile, setPrevProfile] = useState(profile);
+  if (profile !== prevProfile) {
+    setPrevProfile(profile);
     if (profile) {
       setForm({
         phone: profile.phone ?? "",
@@ -72,7 +74,7 @@ export default function PatientProfilePage() {
         emergency_contact_phone: profile.emergency_contact_phone ?? "",
       });
     }
-  }, [profile]);
+  }
 
   const mutation = useMutation({
     mutationFn: async (data: typeof form) => {

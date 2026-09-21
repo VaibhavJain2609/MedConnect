@@ -152,10 +152,8 @@ function PushDeviceControl() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!pushSupported()) {
-      setSubscribed(null);
-      return;
-    }
+    // `subscribed` stays null (control hidden) when push is unsupported.
+    if (!pushSupported()) return;
     let cancelled = false;
     getPushSubscription()
       .then((sub) => {

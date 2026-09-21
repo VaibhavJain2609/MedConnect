@@ -102,12 +102,15 @@ function SettingCard({
   const [saving, setSaving] = useState(false);
   const [confirmMaintenanceOpen, setConfirmMaintenanceOpen] = useState(false);
 
-  // Re-sync local state when the server value changes (e.g. after refetch).
-  useEffect(() => {
+  // Re-sync local state when the server value changes (e.g. after refetch) —
+  // adjusted during render via the prev-value pattern.
+  const [prevValue, setPrevValue] = useState(setting.value);
+  if (prevValue !== setting.value) {
+    setPrevValue(setting.value);
     setDraft(setting.value);
     setJsonText(JSON.stringify(setting.value, null, 2));
     setJsonError(null);
-  }, [setting.value]);
+  }
 
   const isKnownBool = BOOLEAN_KEYS.has(setting.key);
   const isKnownNumber = NUMBER_KEYS.has(setting.key);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, ChevronDown, X } from "lucide-react";
@@ -45,19 +45,23 @@ interface ChecklistItem {
  * dismissible (`pt-onboarding-dismissed`) and auto-hides once every item is
  * complete.
  */
+// Hydration-safe "is client" signal: the server snapshot renders nothing,
+// then the client snapshot flips to true after hydration — no effect needed.
+const subscribeNoop = () => () => {};
+
 export function OnboardingChecklist() {
   // Mounted gate: localStorage reads must happen client-side only, so the
   // card renders nothing until after hydration (avoids SSR mismatch/flash).
-  const [mounted, setMounted] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
+  const mounted = useSyncExternalStore(
+    subscribeNoop,
+    () => true,
+    () => false
+  );
+  const [dismissed, setDismissed] = useState(() => readFlag(DISMISSED_KEY));
   const [collapsed, setCollapsed] = useState(false);
-  const [prefsVisited, setPrefsVisited] = useState(false);
-
-  useEffect(() => {
-    setDismissed(readFlag(DISMISSED_KEY));
-    setPrefsVisited(readFlag(PREFS_VISITED_KEY));
-    setMounted(true);
-  }, []);
+  const [prefsVisited, setPrefsVisited] = useState(() =>
+    readFlag(PREFS_VISITED_KEY)
+  );
 
   const enabled = mounted && !dismissed;
 

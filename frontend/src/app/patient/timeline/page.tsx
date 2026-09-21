@@ -39,8 +39,15 @@ export default function TimelinePage() {
     return () => clearTimeout(t);
   }, [search]);
 
-  // Reset to page 1 when filters change
-  useEffect(() => { setPage(1); setCursors({ 1: null }); setAllRecords([]); }, [type, debouncedSearch]);
+  // Reset to page 1 when filters change (adjusted during render).
+  const filterKey = `${type}|${debouncedSearch}`;
+  const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+  if (prevFilterKey !== filterKey) {
+    setPrevFilterKey(filterKey);
+    setPage(1);
+    setCursors({ 1: null });
+    setAllRecords([]);
+  }
 
   const { data, isLoading } = useQuery({
     queryKey: ["timeline", type, debouncedSearch, page],
