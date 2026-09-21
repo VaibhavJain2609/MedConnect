@@ -4,7 +4,7 @@ import * as React from "react";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { Calendar, Clock, Stethoscope, Building2, XCircle, Plus, X, Link2, Video } from "lucide-react";
+import { Calendar, Clock, Stethoscope, Building2, XCircle, Plus, X, Link2, Video, BadgeCheck } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
 import { getAppointments, updateAppointmentStatus, createAppointment, generateMeetingLink, type Appointment } from "@/lib/api/appointments";
@@ -81,6 +81,7 @@ interface DoctorSuggestion {
   specialization: string | null;
   facility_name: string | null;
   facility_city: string | null;
+  verified?: boolean;
 }
 
 function DoctorSearchInput({
@@ -155,7 +156,10 @@ function DoctorSearchInput({
               }}
             >
               <div className="flex-1">
-                <p className="text-sm font-medium text-dreams-textPrimary">{d.full_name}</p>
+                <p className="flex items-center gap-1.5 text-sm font-medium text-dreams-textPrimary">
+                  {d.full_name}
+                  {d.verified && <BadgeCheck className="h-4 w-4 text-dreams-blue" aria-label="Verified doctor" />}
+                </p>
                 {d.specialization && (
                   <p className="text-xs text-dreams-textSecondary">{d.specialization}</p>
                 )}
@@ -409,7 +413,10 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
             ) : selectedDoctor ? (
               <div className="flex items-center gap-3 rounded-lg border border-dreams-blue bg-dreams-blue/5 px-4 py-2.5">
                 <div className="flex-1">
-                  <p className="text-sm font-semibold text-dreams-textPrimary">{selectedDoctor.full_name}</p>
+                  <p className="flex items-center gap-1.5 text-sm font-semibold text-dreams-textPrimary">
+                    {selectedDoctor.full_name}
+                    {selectedDoctor.verified && <BadgeCheck className="h-4 w-4 text-dreams-blue" aria-label="Verified doctor" />}
+                  </p>
                   {selectedDoctor.specialization && (
                     <p className="text-xs text-dreams-textSecondary">{selectedDoctor.specialization}</p>
                   )}
