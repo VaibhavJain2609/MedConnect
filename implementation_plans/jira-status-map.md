@@ -125,7 +125,16 @@
   - Encounter summary PDF + doctor download button
   - Keycloak erasure ops path: anonymize/disable script + DPDP runbook + keycloak_identity_retained flag
   - starlette 1.x deprecations cleaned (status constants, TestClient)
-- **Round-10 queue:** OCR/AI ingest scaffold, barcode source, pydantic class-config deprecation sweep, encounter-patient view (patient encounters UI), remaining lint warnings, ABDM (BLOCKED pending approval)
+- **Round-10 — ALL LANDED (838 backend tests, 45+ frontend tests green):**
+  - pydantic ConfigDict sweep (37 class-Config blocks → 0 deprecation warnings)
+  - Patient visits page (encounter list + SOAP + vitals + PDF download)
+  - Coverage: auth/patient-links/clinic-invites (109 tests) → 4 REAL BUGS FIXED: /clinics/search route shadow, join-request FK 500, membership reinsert 500s on redeem+approve
+  - i18n expansion: patient appointments/notifications/profile + pagination (en/hi, key-parity test)
+  - Medicine barcode: pack barcode index + /by-barcode + digit-query search + admin packaging field
+  - Queue-position notifications (called/next-up, meta-deduped, kill-switch gated)
+  - billing_items table + itemized create/detail/list + receipt lines + admin bill-create modal
+  - OCR/AI lab ingest scaffold (provider protocol, human-review ingest, disabled by default)
+- **Round-11 queue:** ABDM (BLOCKED pending approval), remaining 9 lint warnings, datetime.utcnow() deprecation sweep, real LLM-OCR provider impl when creds exist, e2e CI run validation, production secrets/config audit
 - **BLOCKED — ABDM/ABHA: awaiting regulatory approval (user-confirmed)** — do not implement: ABHA creation/linking, NRCeS-conformant FHIR, HIP module (tickets 107–116)
 - **Blocked/external:** SMS/WhatsApp live provider accounts (code adapters anyway), OCR/AI features, load testing env, i18n assets, barcode data source, push VAPID/service
 
