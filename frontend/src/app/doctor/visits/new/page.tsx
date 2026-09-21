@@ -184,14 +184,14 @@ function NewEncounterForm() {
   }, [initialPatientId]);
 
   const [appointmentId, setAppointmentId] = useState(initialAppointmentId);
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [fetchedAppointments, setFetchedAppointments] = useState<Appointment[]>([]);
+  // Only surfaced while a patient is selected — derived so clearing the
+  // patient doesn't need a synchronous state reset in the effect.
+  const appointments = selectedPatient ? fetchedAppointments : [];
 
   // Load this patient's appointments for the optional link
   useEffect(() => {
-    if (!selectedPatient) {
-      setAppointments([]);
-      return;
-    }
+    if (!selectedPatient) return;
     let cancelled = false;
     Promise.all([
       getAppointments({}),
@@ -212,9 +212,9 @@ function NewEncounterForm() {
             new Date(b.scheduled_at).getTime() -
             new Date(a.scheduled_at).getTime()
         );
-        setAppointments(list);
+        setFetchedAppointments(list);
       })
-      .catch(() => setAppointments([]));
+      .catch(() => setFetchedAppointments([]));
     return () => {
       cancelled = true;
     };

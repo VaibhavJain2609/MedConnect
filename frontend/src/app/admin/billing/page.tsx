@@ -48,7 +48,6 @@ export default function BillingPage() {
   const [statusFilter, setStatusFilter] = useState("");
 
   useEffect(() => {
-    setLoading(true);
     const params = statusFilter ? `?status=${statusFilter}` : "";
     api
       .get(`/api/v1/billing${params}`)
@@ -127,7 +126,12 @@ export default function BillingPage() {
         {["", "pending", "paid", "cancelled", "refunded"].map((s) => (
           <button
             key={s}
-            onClick={() => setStatusFilter(s)}
+            onClick={() => {
+              if (s !== statusFilter) {
+                setStatusFilter(s);
+                setLoading(true);
+              }
+            }}
             className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
               statusFilter === s
                 ? "bg-dreams-blue text-white"

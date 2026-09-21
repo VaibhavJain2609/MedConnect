@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Plus, Search, Mail, Phone, Briefcase, Calendar } from "lucide-react";
 import { getDoctors, getDoctorSpecialties, Doctor } from "@/lib/api/doctors";
@@ -9,6 +10,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
 export default function AdminDoctorsPage() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [specialtyFilter, setSpecialtyFilter] = useState("all");
   const [page, setPage] = useState(1);
@@ -91,7 +93,7 @@ export default function AdminDoctorsPage() {
         </div>
 
         <button
-          onClick={() => window.location.href = "/admin/doctors/pending"}
+          onClick={() => router.push("/admin/doctors/pending")}
           className="flex items-center gap-2 px-4 py-2 bg-dreams-blue text-white rounded-lg hover:opacity-90 transition-opacity"
         >
           <Plus className="h-5 w-5" />

@@ -29,8 +29,14 @@ export default function DoctorPrescriptionsPage() {
     return () => clearTimeout(t);
   }, [search]);
 
-  // Reset to page 1 when search changes
-  useEffect(() => { setPage(1); setCursors({ 1: null }); setAllRecords([]); }, [debouncedSearch]);
+  // Reset to page 1 when search changes (adjusted during render).
+  const [prevSearch, setPrevSearch] = useState(debouncedSearch);
+  if (prevSearch !== debouncedSearch) {
+    setPrevSearch(debouncedSearch);
+    setPage(1);
+    setCursors({ 1: null });
+    setAllRecords([]);
+  }
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["doctor-prescriptions", debouncedSearch, page],

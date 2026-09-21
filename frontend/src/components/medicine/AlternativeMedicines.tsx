@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Brand, getBrandAlternatives } from '@/lib/api/medicines-emr';
 import { RefreshCw, ShoppingCart } from 'lucide-react';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -22,27 +22,15 @@ export default function AlternativeMedicines({
   onSelect,
   className = '',
 }: AlternativeMedicinesProps) {
-  const [alternatives, setAlternatives] = useState<Brand[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    loadAlternatives();
-  }, [brandId]);
-
-  const loadAlternatives = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const data = await getBrandAlternatives(brandId);
-      setAlternatives(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load alternatives');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const {
+    data: alternatives = [],
+    isLoading: loading,
+    error,
+    refetch,
+  } = useQuery<Brand[]>({
+    queryKey: ['brand-alternatives', brandId],
+    queryFn: () => getBrandAlternatives(brandId),
+  });
 
   if (loading) {
     return (
@@ -59,9 +47,11 @@ export default function AlternativeMedicines({
   if (error) {
     return (
       <div className={`rounded-lg border border-red-200 bg-red-50 p-4 ${className}`}>
-        <p className="text-sm text-red-800">Error loading alternatives: {error}</p>
+        <p className="text-sm text-red-800">
+          Error loading alternatives: {error.message}
+        </p>
         <button
-          onClick={loadAlternatives}
+          onClick={() => refetch()}
           className="mt-2 text-sm text-red-600 hover:text-red-700 font-medium flex items-center gap-1"
         >
           <RefreshCw className="w-4 h-4" />

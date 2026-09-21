@@ -161,7 +161,9 @@ export function DoctorSidebar({
     }))
     .filter((section) => section.items.length > 0);
 
-  const SidebarContent = ({ mobile = false }: { mobile?: boolean }) => (
+  // Plain render function (not a component) — a component created inside
+  // render gets a new identity each render, which remounts its subtree.
+  const renderSidebarContent = ({ mobile = false }: { mobile?: boolean }) => (
     <>
       {/* Header */}
       <div className="flex h-16 items-center justify-between px-4 border-b border-gray-800">
@@ -256,7 +258,7 @@ export function DoctorSidebar({
           isOpen ? "w-64" : "w-16"
         )}
       >
-        <SidebarContent />
+        {renderSidebarContent({})}
       </aside>
 
       {/* Mobile sidebar */}
@@ -266,7 +268,7 @@ export function DoctorSidebar({
           isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <SidebarContent mobile />
+        {renderSidebarContent({ mobile: true })}
       </aside>
 
       {/* Mobile overlay */}

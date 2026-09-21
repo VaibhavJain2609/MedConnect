@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { useClinicStore } from "@/stores/clinic-store";
 
@@ -194,34 +195,24 @@ export default function QueuePage() {
   // interceptor attaches it as X-Clinic-Id automatically.
   const clinicId = useClinicStore((s) => s.activeClinicId) ?? "";
 
-  const [entries, setEntries] = useState<QueueEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [billModal, setBillModal] = useState<BillModalState | null>(null);
 
-  const fetchQueue = useCallback(async () => {
-    if (!clinicId) {
-      setError("No active clinic selected. Set clinic from the clinic page.");
-      setLoading(false);
-      return;
-    }
-    try {
+  // Polling query replaces the manual fetch + setInterval loop.
+  const {
+    data: entries = [],
+    isLoading: loading,
+    isError,
+    refetch: fetchQueue,
+  } = useQuery<QueueEntry[]>({
+    queryKey: ["doctor-queue", clinicId],
+    queryFn: async () => {
       const res = await api.get("/api/v1/queue");
-      setEntries(res.data.data ?? res.data);
-      setError("");
-    } catch {
-      setError("Failed to load queue.");
-    } finally {
-      setLoading(false);
-    }
-  }, [clinicId]);
-
-  useEffect(() => {
-    fetchQueue();
-    const timer = setInterval(fetchQueue, 30_000);
-    return () => clearInterval(timer);
-  }, [fetchQueue]);
+      return res.data.data ?? res.data;
+    },
+    enabled: !!clinicId,
+    refetchInterval: 30_000,
+  });
 
   async function updateStatus(id: string, status: QueueEntry["status"]) {
     setActionLoading(id + status);
@@ -239,7 +230,7 @@ export default function QueuePage() {
   const inConsultation = entries.filter((e) => e.status === "in_consultation");
   const done = entries.filter((e) => e.status === "completed" || e.status === "cancelled");
 
-  if (loading) {
+  if (clinicId && loading) {
     return (
       <div className="flex items-center justify-center min-h-[300px]">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600" />
@@ -247,11 +238,19 @@ export default function QueuePage() {
     );
   }
 
-  if (error) {
+  // Derived error surface: a fixed message when no clinic is selected,
+  // otherwise the last fetch failure.
+  const displayError = clinicId
+    ? isError
+      ? "Failed to load queue."
+      : ""
+    : "No active clinic selected. Set clinic from the clinic page.";
+
+  if (displayError) {
     return (
       <div className="p-6">
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
+          {displayError}
         </div>
       </div>
     );
@@ -280,7 +279,7 @@ export default function QueuePage() {
               {waiting.length} waiting · {inConsultation.length} in consultation
             </span>
             <button
-              onClick={fetchQueue}
+              onClick={() => void fetchQueue()}
               className="px-3 py-1.5 text-sm border border-dreams-border rounded-lg hover:bg-gray-50 transition-colors"
             >
               Refresh

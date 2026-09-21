@@ -10,6 +10,13 @@ import {
   type Locale,
 } from "@/i18n/locale";
 
+// Module-level so the cookie mutation lives outside the component body —
+// it is only ever invoked from a click handler.
+function persistLocale(next: Locale) {
+  // 1-year preference cookie; read by src/i18n/request.ts on each request.
+  document.cookie = `${LOCALE_COOKIE}=${next};path=/;max-age=31536000;samesite=lax`;
+}
+
 /**
  * EN/HI language toggle. Writes the NEXT_LOCALE cookie and calls
  * router.refresh() — the root layout re-renders server-side with the new
@@ -24,8 +31,7 @@ export function LanguageSwitcher({ className }: { className?: string }) {
 
   function select(next: Locale) {
     if (next === locale) return;
-    // 1-year preference cookie; read by src/i18n/request.ts on each request.
-    document.cookie = `${LOCALE_COOKIE}=${next};path=/;max-age=31536000;samesite=lax`;
+    persistLocale(next);
     router.refresh();
   }
 

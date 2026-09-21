@@ -65,7 +65,9 @@ export function TodaySchedule() {
 
   const appointments = query.data?.data ?? [];
   const total = query.data?.total ?? appointments.length;
-  const now = Date.now();
+  // Use the query's fetch timestamp as "now" — pure during render and always
+  // consistent with the data being displayed (refetches every 60s refresh it).
+  const now = query.dataUpdatedAt;
   const nextUp = appointments
     .filter(
       (a) =>

@@ -38,17 +38,20 @@ export function Autocomplete({
 }: AutocompleteProps) {
   const [open, setOpen] = React.useState(false)
   const [searchValue, setSearchValue] = React.useState("")
-  const [selectedLabel, setSelectedLabel] = React.useState("")
   const containerRef = React.useRef<HTMLDivElement>(null)
 
-  // Find selected option label
-  React.useEffect(() => {
-    const selected = options.find((opt) => opt.value === value)
-    if (selected) {
-      setSelectedLabel(selected.label)
-      setSearchValue(selected.label)
+  // Reflect the selected option's label in the input. Adjusted during render
+  // (prev-value pattern) when the selected option itself changes — this avoids
+  // clobbering an in-progress search on unrelated `options` identity changes.
+  const selectedOption = options.find((opt) => opt.value === value)
+  const [prevSelectedOption, setPrevSelectedOption] =
+    React.useState(selectedOption)
+  if (selectedOption !== prevSelectedOption) {
+    setPrevSelectedOption(selectedOption)
+    if (selectedOption) {
+      setSearchValue(selectedOption.label)
     }
-  }, [value, options])
+  }
 
   // Close dropdown when clicking outside
   React.useEffect(() => {
@@ -74,14 +77,11 @@ export function Autocomplete({
     // Clear selection if input is cleared
     if (!newValue) {
       onValueChange("")
-      setSelectedLabel("")
     }
   }
 
   const handleSelect = (option: AutocompleteOption) => {
-    console.log('[Autocomplete] handleSelect called with:', option.label);
     onValueChange(option.value)
-    setSelectedLabel(option.label)
     setSearchValue(option.label)
     setOpen(false)
   }
@@ -95,7 +95,6 @@ export function Autocomplete({
 
   const handleClear = () => {
     setSearchValue("")
-    setSelectedLabel("")
     onValueChange("")
     if (onSearchChange) {
       onSearchChange("")
@@ -112,8 +111,6 @@ export function Autocomplete({
         opt.label.toLowerCase().includes(searchValue.toLowerCase())
       )
     : options
-
-  console.log('[Autocomplete] searchValue:', searchValue, 'options:', options.length, 'filtered:', filteredOptions.length);
 
   const showCreateButton =
     allowCreate &&

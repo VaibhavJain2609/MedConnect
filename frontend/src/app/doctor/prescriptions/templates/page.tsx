@@ -28,19 +28,18 @@ export default function TemplatesPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
+    const fetchTemplates = async () => {
+      try {
+        const response = await api.get("/api/v1/doctors/prescription-templates");
+        setTemplates(response.data.data);
+      } catch (err: any) {
+        setError("Failed to load templates");
+      } finally {
+        setLoading(false);
+      }
+    };
     fetchTemplates();
   }, []);
-
-  const fetchTemplates = async () => {
-    try {
-      const response = await api.get("/api/v1/doctors/prescription-templates");
-      setTemplates(response.data.data);
-    } catch (err: any) {
-      setError("Failed to load templates");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleDelete = async (id: string) => {
     try {

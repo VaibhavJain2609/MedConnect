@@ -12,7 +12,7 @@ import {
   type Appointment,
   type UpdateAppointmentData,
 } from "@/lib/api/appointments";
-import { getClinicBranches, type ClinicBranch } from "@/lib/api/clinics";
+import { getClinicBranches } from "@/lib/api/clinics";
 import api from "@/lib/api";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { DataTable, DataTableColumnHeader } from "@/components/ui/data-table";
@@ -261,8 +261,6 @@ function CreateAppointmentModal({ onClose, onSuccess }: { onClose: () => void; o
   const [clinicId, setClinicId] = useState("");
   const [branchId, setBranchId] = useState("");
   const [clinics, setClinics] = useState<ClinicOption[]>([]);
-  const [branches, setBranches] = useState<ClinicBranch[]>([]);
-  const [branchesLoading, setBranchesLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -272,15 +270,13 @@ function CreateAppointmentModal({ onClose, onSuccess }: { onClose: () => void; o
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    setBranchId(""); setBranches([]);
-    if (!clinicId) return;
-    setBranchesLoading(true);
-    getClinicBranches(clinicId)
-      .then((d) => setBranches(d))
-      .catch(() => setBranches([]))
-      .finally(() => setBranchesLoading(false));
-  }, [clinicId]);
+  // Branches for the selected clinic; selection resets in the clinic
+  // select's onChange below.
+  const { data: branches = [], isFetching: branchesLoading } = useQuery({
+    queryKey: ["clinic-branches", clinicId],
+    queryFn: () => getClinicBranches(clinicId),
+    enabled: !!clinicId,
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -410,7 +406,7 @@ function CreateAppointmentModal({ onClose, onSuccess }: { onClose: () => void; o
           {clinics.length > 0 && (
             <div>
               <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Clinic</label>
-              <select value={clinicId} onChange={(e) => setClinicId(e.target.value)}
+              <select value={clinicId} onChange={(e) => { setClinicId(e.target.value); setBranchId(""); }}
                 className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20">
                 <option value="">No clinic (private)</option>
                 {clinics.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -481,8 +477,6 @@ function EditAppointmentModal({
   const [clinicId, setClinicId] = useState(appointment.clinic_id ?? "");
   const [branchId, setBranchId] = useState(appointment.branch_id ?? "");
   const [clinics, setClinics] = useState<ClinicOption[]>([]);
-  const [branches, setBranches] = useState<ClinicBranch[]>([]);
-  const [branchesLoading, setBranchesLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -492,15 +486,14 @@ function EditAppointmentModal({
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    setBranchId(""); setBranches([]);
-    if (!clinicId) return;
-    setBranchesLoading(true);
-    getClinicBranches(clinicId)
-      .then((d) => setBranches(d))
-      .catch(() => setBranches([]))
-      .finally(() => setBranchesLoading(false));
-  }, [clinicId]);
+  // Branches for the selected clinic; selection resets in the clinic
+  // select's onChange below. The appointment's existing branch is preserved
+  // on open (it is only cleared when the user actually changes clinic).
+  const { data: branches = [], isFetching: branchesLoading } = useQuery({
+    queryKey: ["clinic-branches", clinicId],
+    queryFn: () => getClinicBranches(clinicId),
+    enabled: !!clinicId,
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -618,7 +611,7 @@ function EditAppointmentModal({
           {clinics.length > 0 && (
             <div>
               <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Clinic</label>
-              <select value={clinicId} onChange={(e) => setClinicId(e.target.value)}
+              <select value={clinicId} onChange={(e) => { setClinicId(e.target.value); setBranchId(""); }}
                 className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20">
                 <option value="">No clinic (private)</option>
                 {clinics.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
