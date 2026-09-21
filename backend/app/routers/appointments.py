@@ -557,11 +557,14 @@ async def list_appointments(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
+    clinic_ctx: tuple | None = Depends(get_active_clinic),
     db: AsyncSession = Depends(get_db),
 ):
     """
     List appointments.
     - doctor role: returns their own appointments; default today unless date/upcoming param provided
+    - clinic staff (any active membership incl. receptionist) with X-Clinic-Id:
+      the clinic's full schedule, same date/upcoming filtering as doctors
     - patient role: returns their own appointments
     - admin with all=true: returns all appointments
     """
@@ -569,7 +572,14 @@ async def list_appointments(
 
     stmt = select(Appointment).where(Appointment.deleted_at.is_(None))
 
-    if all_appointments and current_user.role == "admin":
+    # Front-desk staff (e.g. a receptionist membership) view the clinic-wide
+    # schedule. Global-role doctors keep their own-appointments view even when
+    # X-Clinic-Id is present, so the doctor list is unchanged.
+    clinic_id_ctx: UUID | None = clinic_ctx[0] if (clinic_ctx is not None and current_user.role != "doctor") else None
+
+    admin_sees_all = bool(all_appointments and current_user.role == "admin")
+
+    if admin_sees_all:
         # Admin sees everything
         pass
     elif current_user.role == "doctor":
@@ -584,7 +594,13 @@ async def list_appointments(
                 detail={"error": {"code": "NOT_FOUND", "message": "Doctor profile not found"}},
             )
         stmt = stmt.where(Appointment.doctor_id == doctor.id)
+    elif clinic_id_ctx is not None:
+        stmt = stmt.where(Appointment.clinic_id == clinic_id_ctx)
+    else:
+        # Patient sees their own
+        stmt = stmt.where(Appointment.patient_id == current_user.id)
 
+    if not admin_sees_all and (current_user.role == "doctor" or clinic_id_ctx is not None):
         if upcoming:
             stmt = stmt.where(Appointment.scheduled_at >= now)
         elif date_param:
@@ -604,9 +620,6 @@ async def list_appointments(
             day_start = datetime(today.year, today.month, today.day, 0, 0, 0, tzinfo=timezone.utc)
             day_end = datetime(today.year, today.month, today.day, 23, 59, 59, tzinfo=timezone.utc)
             stmt = stmt.where(Appointment.scheduled_at >= day_start, Appointment.scheduled_at <= day_end)
-    else:
-        # Patient sees their own
-        stmt = stmt.where(Appointment.patient_id == current_user.id)
 
     if status_filter:
         stmt = stmt.where(Appointment.status == status_filter)

@@ -2,7 +2,7 @@
 Clinic queue endpoints.
 
 Access: any active clinic member (owner | admin | doctor | receptionist) via
-`require_active_clinic`. Receptionists handle front-desk queue operations —
+`get_clinic_staff`. Receptionists handle front-desk queue operations —
 patient check-in (add_to_queue) and status advancement — so no endpoint here
 may assume the member is a doctor.
 """
@@ -16,7 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import require_active_clinic
+from app.dependencies import get_clinic_staff
 from app.models.doctor import Doctor
 from app.models.queue import QueueEntry
 from app.models.user import User
@@ -89,11 +89,12 @@ async def _resolve_names(
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def add_to_queue(
     req: QueueEntryCreate,
-    clinic_ctx: tuple = Depends(require_active_clinic),
+    staff: tuple = Depends(get_clinic_staff),
     db: AsyncSession = Depends(get_db),
 ):
-    """Add a patient to the clinic queue. Auto-assigns queue number for the day."""
-    clinic_id, _clinic_role = clinic_ctx
+    """Add a patient to the clinic queue. Auto-assigns queue number for the day.
+    Any clinic staff member (incl. receptionist) may check a patient in."""
+    _user, clinic_id, _clinic_role = staff
 
     # Verify patient exists
     patient_res = await db.execute(
@@ -191,11 +192,11 @@ async def add_to_queue(
 async def get_queue(
     status_filter: str | None = Query(None, alias="status"),
     doctor_id: UUID | None = Query(None),
-    clinic_ctx: tuple = Depends(require_active_clinic),
+    staff: tuple = Depends(get_clinic_staff),
     db: AsyncSession = Depends(get_db),
 ):
     """Get today's queue for the clinic, ordered by queue_number."""
-    clinic_id, _clinic_role = clinic_ctx
+    _user, clinic_id, _clinic_role = staff
 
     today = datetime.now(tz=timezone.utc).date()
     day_start = datetime(today.year, today.month, today.day, 0, 0, 0, tzinfo=timezone.utc)
@@ -244,11 +245,11 @@ async def get_queue(
 @router.get("/{entry_id}")
 async def get_queue_entry(
     entry_id: UUID,
-    clinic_ctx: tuple = Depends(require_active_clinic),
+    staff: tuple = Depends(get_clinic_staff),
     db: AsyncSession = Depends(get_db),
 ):
     """Get a single queue entry by ID."""
-    clinic_id, _clinic_role = clinic_ctx
+    _user, clinic_id, _clinic_role = staff
 
     result = await db.execute(
         select(QueueEntry).where(
@@ -276,11 +277,16 @@ async def get_queue_entry(
 async def update_queue_status(
     entry_id: UUID,
     req: QueueStatusUpdate,
-    clinic_ctx: tuple = Depends(require_active_clinic),
+    staff: tuple = Depends(get_clinic_staff),
     db: AsyncSession = Depends(get_db),
 ):
-    """Update the status of a queue entry."""
-    clinic_id, _clinic_role = clinic_ctx
+    """Update the status of a queue entry.
+
+    Receptionists run front-desk flow only: they may call the next patient in
+    (waiting -> in_consultation) but cannot skip/cancel an entry or close out
+    a consultation — those stay with clinical staff (owner | admin | doctor).
+    """
+    _user, clinic_id, clinic_role = staff
 
     if req.status not in VALID_STATUSES:
         raise HTTPException(
@@ -289,6 +295,17 @@ async def update_queue_status(
                 "error": {
                     "code": "INVALID_STATUS",
                     "message": f"status must be one of: {', '.join(sorted(VALID_STATUSES))}",
+                }
+            },
+        )
+
+    if clinic_role == "receptionist" and req.status != "in_consultation":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": {
+                    "code": "FORBIDDEN",
+                    "message": "Receptionists can only advance queue entries to 'in_consultation'",
                 }
             },
         )
@@ -352,11 +369,19 @@ async def update_queue_status(
 @router.delete("/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_from_queue(
     entry_id: UUID,
-    clinic_ctx: tuple = Depends(require_active_clinic),
+    staff: tuple = Depends(get_clinic_staff),
     db: AsyncSession = Depends(get_db),
 ):
-    """Soft-delete a queue entry (remove from queue)."""
-    clinic_id, _clinic_role = clinic_ctx
+    """Soft-delete a queue entry (remove from queue).
+    Removing a patient from the queue is clinical staff only
+    (owner | admin | doctor) — receptionists cannot skip/remove."""
+    _user, clinic_id, clinic_role = staff
+
+    if clinic_role not in {"owner", "admin", "doctor"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": {"code": "FORBIDDEN", "message": "Only clinic staff (owner, admin, doctor) can remove queue entries"}},
+        )
 
     result = await db.execute(
         select(QueueEntry).where(
