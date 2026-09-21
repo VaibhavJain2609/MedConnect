@@ -16,6 +16,7 @@ from app.dependencies import require_admin
 from app.models.user import User
 from app.models.medicine.commercial import Brand, Manufacturer, BrandComposition
 from app.models.medicine.salts import SaltStrength
+from app.services import medicine_cache
 
 
 # Pydantic schemas for request/response
@@ -148,6 +149,7 @@ async def create_brand(
         db.add(composition)
 
     await db.commit()
+    await medicine_cache.invalidate_catalog()
 
     # Reload with relationships for response
     result = await db.execute(
@@ -280,6 +282,7 @@ async def update_brand(
             db.add(composition)
 
     await db.commit()
+    await medicine_cache.invalidate_catalog()
     # The in-session compositions collection still holds the deleted rows
     # (expire_on_commit=False in tests, and the identity map may serve stale
     # data) — expire so the reload below reflects the new composition set.
@@ -334,6 +337,7 @@ async def delete_brand(
 
     await db.delete(brand)
     await db.commit()
+    await medicine_cache.invalidate_catalog()
     return None
 
 
@@ -527,6 +531,7 @@ async def bulk_import_brands(
     # Commit all successful rows
     if successful > 0:
         await db.commit()
+        await medicine_cache.invalidate_catalog()
 
     return BulkImportResponse(
         total=len(rows),
