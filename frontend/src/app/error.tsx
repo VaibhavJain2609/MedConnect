@@ -11,6 +11,13 @@ export default function Error({
 }) {
   useEffect(() => {
     console.error("Application error:", error);
+    // Dynamic import: no-op unless NEXT_PUBLIC_SENTRY_DSN is set, and keeps
+    // @sentry/nextjs out of the initial bundle.
+    if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
+      import("@sentry/nextjs")
+        .then((Sentry) => Sentry.captureException(error))
+        .catch(() => {});
+    }
   }, [error]);
 
   return (

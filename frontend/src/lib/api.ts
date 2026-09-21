@@ -82,6 +82,15 @@ api.interceptors.response.use(
       // Handle 500 Server Error
       if (status >= 500) {
         error.userMessage = "Server error. Please try again later";
+        // Report server-side failures to Sentry. 4xx is intentionally not
+        // captured — expected client errors would just be noise. Dynamic
+        // import keeps @sentry/nextjs out of the initial bundle and makes
+        // this a no-op when the DSN isn't configured.
+        if (typeof window !== "undefined" && process.env.NEXT_PUBLIC_SENTRY_DSN) {
+          import("@sentry/nextjs")
+            .then((Sentry) => Sentry.captureException(error))
+            .catch(() => {});
+        }
       }
 
       // Extract error message from backend error envelope.
