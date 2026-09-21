@@ -20,6 +20,7 @@ import {
   Receipt,
   X,
   Ticket,
+  SlidersHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/auth";
@@ -72,6 +73,7 @@ const navSections: NavSection[] = [
     label: "ACCOUNT",
     items: [
       { href: "/patient/billing", label: "Billing", icon: Receipt },
+      { href: "/patient/preferences", label: "Preferences", icon: SlidersHorizontal },
       { href: "/patient/profile", label: "My Profile", icon: User },
     ],
   },

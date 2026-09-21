@@ -21,6 +21,7 @@ from app.models.medical_record import MedicalRecord
 from app.models.patient_link import PatientClinicLink, PatientLinkCode
 from app.models.prescription import Prescription
 from app.models.user import User
+from app.services import access_service
 from app.services.notification_service import create_notification
 
 router = APIRouter(prefix="/api/v1/appointments", tags=["appointments"])
@@ -243,45 +244,16 @@ async def _doctor_patient_relationship_exists(
     patient_id: UUID,
     allow_revoked: bool = True,
 ) -> bool:
-    """
-    Mirrors doctors.py::_check_doctor_patient_relationship (module-private there).
-
-    True if the doctor has authored at least one medical record for the patient,
-    or the doctor's user shares a clinic that has an approved/revoked
-    PatientClinicLink for the patient.
+    """Delegates to access_service.doctor_patient_relationship_exists —
+    the single source of truth for the doctor↔patient access rule.
 
     ``allow_revoked=False`` restricts the clinic-link path to ``approved`` —
     revoked consent must never authorize NEW writes (appointments, encounters,
     prescriptions), only reads of pre-revocation data.
     """
-    allowed_consent = ["approved", "revoked"] if allow_revoked else ["approved"]
-    if doctor_id is not None:
-        record_exists = await db.execute(
-            select(MedicalRecord.id)
-            .where(
-                MedicalRecord.doctor_id == doctor_id,
-                MedicalRecord.patient_id == patient_id,
-                MedicalRecord.deleted_at.is_(None),
-            )
-            .limit(1)
-        )
-        if record_exists.scalar_one_or_none() is not None:
-            return True
-
-    shared_clinic = await db.execute(
-        select(ClinicMembership.id)
-        .join(PatientClinicLink, PatientClinicLink.clinic_id == ClinicMembership.clinic_id)
-        .where(
-            ClinicMembership.user_id == doctor_user_id,
-            ClinicMembership.is_active.is_(True),
-            ClinicMembership.deleted_at.is_(None),
-            PatientClinicLink.patient_id == patient_id,
-            PatientClinicLink.consent_status.in_(allowed_consent),
-            PatientClinicLink.deleted_at.is_(None),
-        )
-        .limit(1)
+    return await access_service.doctor_patient_relationship_exists(
+        db, doctor_user_id, doctor_id, patient_id, allow_revoked=allow_revoked
     )
-    return shared_clinic.scalar_one_or_none() is not None
 
 
 async def _validate_clinic_and_branch(

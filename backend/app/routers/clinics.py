@@ -75,6 +75,36 @@ async def create_clinic(
     # Only doctors may create clinics (they become the owner member).
     user, _doctor = doctor_info
     clinic = await clinic_service.create_clinic(db, data, user.id)
+
+    # Audit clinic creation + the owner membership row the service created.
+    from app.services.audit_service import log_change
+    await log_change(
+        db=db,
+        table_name="clinics",
+        record_id=clinic.id,
+        action="INSERT",
+        old_values=None,
+        new_values={
+            "created_by": str(user.id),
+            "record_sharing_mode": clinic.record_sharing_mode,
+            "is_active": clinic.is_active,
+        },
+    )
+    owner_membership = await clinic_service.get_user_membership(db, user.id, clinic.id)
+    if owner_membership:
+        await log_change(
+            db=db,
+            table_name="clinic_memberships",
+            record_id=owner_membership.id,
+            action="INSERT",
+            old_values=None,
+            new_values={
+                "clinic_id": str(clinic.id),
+                "user_id": str(user.id),
+                "role": "owner",
+            },
+        )
+
     return ClinicResponse.model_validate(clinic)
 
 
@@ -107,7 +137,20 @@ async def update_clinic(
 ):
     await _require_membership(db, user, clinic_id, roles=["owner", "admin"])
     clinic = await _get_clinic_or_404(db, clinic_id)
+    fields_changed = sorted(data.model_dump(exclude_none=True).keys())
     clinic = await clinic_service.update_clinic(db, clinic, data)
+
+    # Audit clinic update — field names only, never values.
+    from app.services.audit_service import log_change
+    await log_change(
+        db=db,
+        table_name="clinics",
+        record_id=clinic.id,
+        action="UPDATE",
+        old_values=None,
+        new_values={"fields_changed": fields_changed},
+    )
+
     return ClinicResponse.model_validate(clinic)
 
 
@@ -130,7 +173,20 @@ async def update_settings(
 ):
     await _require_membership(db, user, clinic_id, roles=["owner", "admin"])
     clinic = await _get_clinic_or_404(db, clinic_id)
+    old_sharing_mode = clinic.record_sharing_mode
     clinic = await clinic_service.update_clinic_settings(db, clinic, data)
+
+    # Audit the settings change (old -> new record_sharing_mode).
+    from app.services.audit_service import log_change
+    await log_change(
+        db=db,
+        table_name="clinics",
+        record_id=clinic.id,
+        action="UPDATE",
+        old_values={"record_sharing_mode": old_sharing_mode},
+        new_values={"record_sharing_mode": clinic.record_sharing_mode},
+    )
+
     return ClinicResponse.model_validate(clinic)
 
 
@@ -144,6 +200,21 @@ async def create_branch(
 ):
     await _require_membership(db, user, clinic_id, roles=["owner", "admin"])
     branch = await clinic_service.create_branch(db, uuid.UUID(clinic_id), data)
+
+    # Audit branch creation — ids + name only.
+    from app.services.audit_service import log_change
+    await log_change(
+        db=db,
+        table_name="clinic_branches",
+        record_id=branch.id,
+        action="INSERT",
+        old_values=None,
+        new_values={
+            "clinic_id": str(branch.clinic_id),
+            "name": branch.name,
+        },
+    )
+
     return ClinicBranchResponse.model_validate(branch)
 
 

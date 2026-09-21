@@ -46,14 +46,17 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str | None = None
     SMTP_FROM: str | None = None
     SMTP_TLS: bool = True  # STARTTLS after connect
-    # SMS via MSG91 (provider stub — real wiring pending)
+    # SMS via MSG91 (services/providers/sms.py — flow API adapter)
     MSG91_AUTH_KEY: str | None = None
+    MSG91_AUTHKEY: str | None = None  # preferred name; MSG91_AUTH_KEY still honoured
     MSG91_SENDER_ID: str | None = None
     MSG91_TEMPLATE_ID: str | None = None
-    # WhatsApp Business Cloud API (provider stub — real wiring pending)
+    # WhatsApp Business Cloud API (services/providers/whatsapp.py — Graph API adapter)
     WHATSAPP_ACCESS_TOKEN: str | None = None
     WHATSAPP_PHONE_NUMBER_ID: str | None = None
     WHATSAPP_BUSINESS_ACCOUNT_ID: str | None = None
+    WHATSAPP_TEMPLATE_NAME: str | None = None  # approved template; required to send
+    WHATSAPP_TEMPLATE_LANG: str = "en_US"
 
     @model_validator(mode="after")
     def check_production_config(self) -> "Settings":

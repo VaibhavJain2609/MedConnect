@@ -21,10 +21,9 @@ from app.models.appointment import Appointment
 from app.models.clinic import Clinic, ClinicMembership
 from app.models.doctor import Doctor
 from app.models.encounter import Encounter
-from app.models.medical_record import MedicalRecord
-from app.models.patient_link import PatientClinicLink
 from app.models.user import User
 from app.schemas.encounter import EncounterCreate, EncounterResponse, EncounterUpdate
+from app.services import access_service
 
 router = APIRouter(prefix="/api/v1/encounters", tags=["encounters"])
 
@@ -90,48 +89,22 @@ async def _doctor_patient_relationship_exists(
     appointment: Appointment | None = None,
 ) -> bool:
     """
-    Mirrors doctors.py::_check_doctor_patient_relationship (module-private there)
-    and appointments.py::_doctor_patient_relationship_exists.
+    Delegates to access_service.doctor_patient_relationship_exists with
+    allow_revoked=False (revoked consent must never authorize new writes —
+    it only preserves reads of pre-revocation data).
 
-    True if:
-    - the doctor has authored at least one medical record for the patient, OR
-    - the doctor's user shares a clinic that has an APPROVED
-      PatientClinicLink for the patient (revoked consent must never authorize
-      new writes — it only preserves reads of pre-revocation data), OR
-    - a non-terminal appointment between this doctor and the patient was
-      supplied (the appointment was already authorized when it was created).
+    Encounter-specific extension: a non-terminal appointment between this
+    doctor and the patient short-circuits the check — the appointment was
+    already authorized when it was created. A cancelled/no-show appointment
+    is not an active relationship (a stale appointment must not grant
+    indefinite write access).
     """
     if appointment is not None:
-        # A cancelled/no-show appointment is not an active relationship —
-        # otherwise a stale appointment grants indefinite write access.
         return appointment.status in {"scheduled", "arrived", "in-progress", "completed"}
 
-    record_exists = await db.execute(
-        select(MedicalRecord.id)
-        .where(
-            MedicalRecord.doctor_id == doctor.id,
-            MedicalRecord.patient_id == patient_id,
-            MedicalRecord.deleted_at.is_(None),
-        )
-        .limit(1)
+    return await access_service.doctor_patient_relationship_exists(
+        db, doctor.user_id, doctor.id, patient_id, allow_revoked=False
     )
-    if record_exists.scalar_one_or_none() is not None:
-        return True
-
-    shared_clinic = await db.execute(
-        select(ClinicMembership.id)
-        .join(PatientClinicLink, PatientClinicLink.clinic_id == ClinicMembership.clinic_id)
-        .where(
-            ClinicMembership.user_id == doctor.user_id,
-            ClinicMembership.is_active.is_(True),
-            ClinicMembership.deleted_at.is_(None),
-            PatientClinicLink.patient_id == patient_id,
-            PatientClinicLink.consent_status == "approved",
-            PatientClinicLink.deleted_at.is_(None),
-        )
-        .limit(1)
-    )
-    return shared_clinic.scalar_one_or_none() is not None
 
 
 async def _validate_clinic_membership(
@@ -251,6 +224,23 @@ async def create_encounter(
     if effective_clinic_id is None and appointment is not None:
         effective_clinic_id = appointment.clinic_id
     await _validate_clinic_membership(db, user, effective_clinic_id)
+
+    # Receptionists hold clinic memberships but must not author clinical
+    # notes — reject whenever the encounter is scoped to a clinic.
+    if effective_clinic_id is not None:
+        membership_role = await access_service.get_membership_role(
+            db, user.id, effective_clinic_id
+        )
+        if membership_role == "receptionist":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": {
+                        "code": "RECEPTIONIST_NO_CLINICAL_ACCESS",
+                        "message": "Receptionists cannot create clinical encounters",
+                    }
+                },
+            )
 
     enc = Encounter(
         id=uuid.uuid4(),

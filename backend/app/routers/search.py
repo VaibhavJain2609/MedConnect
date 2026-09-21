@@ -16,18 +16,17 @@ Response shape matches frontend/src/lib/api/search.ts:
 import time
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, or_, select, union
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db, get_medicine_db
 from app.dependencies import get_current_user
 from app.models.appointment import Appointment
-from app.models.clinic import Clinic, ClinicMembership
+from app.models.clinic import Clinic
 from app.models.doctor import Doctor
 from app.models.medical_record import MedicalRecord
 from app.models.medicine.commercial import Brand, Manufacturer
 from app.models.medicine.salts import Salt
-from app.models.patient_link import PatientClinicLink
 from app.models.user import User
 
 router = APIRouter(prefix="/api/v1/search", tags=["search"])
@@ -51,36 +50,21 @@ async def _search_patients(
     )
 
     if doctor is not None:
-        # Visible patients = patients with records authored by this doctor OR
-        # patients with an approved link to a clinic the doctor belongs to.
-        records_subq = (
-            select(User.id.label("id"))
-            .join(MedicalRecord, MedicalRecord.patient_id == User.id)
-            .where(
-                MedicalRecord.doctor_id == doctor.id,
-                MedicalRecord.deleted_at.is_(None),
-            )
-        )
-        clinic_subq = (
-            select(User.id.label("id"))
-            .join(PatientClinicLink, PatientClinicLink.patient_id == User.id)
-            .join(
-                ClinicMembership,
-                ClinicMembership.clinic_id == PatientClinicLink.clinic_id,
-            )
-            .where(
-                ClinicMembership.user_id == doctor.user_id,
-                ClinicMembership.is_active.is_(True),
-                ClinicMembership.deleted_at.is_(None),
-                PatientClinicLink.consent_status == "approved",
-                PatientClinicLink.deleted_at.is_(None),
-            )
-        )
-        visible = union(records_subq, clinic_subq).subquery()
+        # Visible patients per the centralized rule: records authored by this
+        # doctor OR an approved link to a clinic the doctor belongs to.
+        from app.services.access_service import accessible_patient_ids_select
         stmt = (
             select(User)
-            .join(visible, visible.c.id == User.id)
-            .where(User.deleted_at.is_(None), User.role == "patient", match)
+            .where(
+                User.id.in_(
+                    accessible_patient_ids_select(
+                        doctor.user_id, doctor.id, allow_revoked=False
+                    )
+                ),
+                User.deleted_at.is_(None),
+                User.role == "patient",
+                match,
+            )
         )
         url_prefix = "/doctor/patients"
     else:

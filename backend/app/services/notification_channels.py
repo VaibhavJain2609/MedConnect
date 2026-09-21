@@ -15,11 +15,13 @@ Channels:
     email    — SMTP via stdlib ``smtplib`` in ``asyncio.to_thread`` (no extra
                dependency). Requires ``SMTP_HOST`` + ``SMTP_FROM`` and a
                ``user.email``; unconfigured -> skipped(channel_unavailable).
-    sms      — MSG91 provider stub, gated on ``MSG91_AUTH_KEY``. Real HTTP
-               wiring lands later; the interface, preference lookup and
-               availability checks are real.
-    whatsapp — WhatsApp Business Cloud API stub, gated on ``WHATSAPP_*``
-               settings. Same story as sms.
+    sms      — MSG91 flow API adapter (``services/providers/sms.py``), gated
+               on ``MSG91_AUTHKEY``/``MSG91_AUTH_KEY`` + ``MSG91_TEMPLATE_ID``;
+               unconfigured -> skipped(provider_not_configured).
+    whatsapp — WhatsApp Business Cloud API adapter
+               (``services/providers/whatsapp.py``), gated on
+               ``WHATSAPP_ACCESS_TOKEN`` + ``WHATSAPP_PHONE_NUMBER_ID`` +
+               ``WHATSAPP_TEMPLATE_NAME``; unconfigured -> skipped.
 
 PHI note: never log message bodies, names, emails or phone numbers —
 identifiers (user_id, channel, status) only.
@@ -40,6 +42,8 @@ from app.config import settings
 from app.models.notification import NotificationPreferences, NotificationType
 from app.models.user import User
 from app.services import notification_service
+from app.services.providers import sms as sms_provider
+from app.services.providers import whatsapp as whatsapp_provider
 
 logger = structlog.get_logger()
 
@@ -153,8 +157,8 @@ async def send(
     if kind == "email":
         return await _send_email(user, title, body)
     if kind == "sms":
-        return _send_sms(user, body)
-    return _send_whatsapp(user, body)
+        return await _send_sms(user, body)
+    return await _send_whatsapp(user, body)
 
 
 async def send_all(
@@ -260,68 +264,11 @@ async def _send_email(user: User, title: str, body: str) -> ChannelResult:
         return ChannelResult(channel="email", status="failed", reason="send_error")
 
 
-def _send_sms(user: User, body: str) -> ChannelResult:
-    """
-    SMS via MSG91 — provider stub.
-
-    Interface, preference gating and availability checks are real; the HTTP
-    call (POST https://control.msg91.com/api/v5/flow/ with MSG91_AUTH_KEY +
-    MSG91_TEMPLATE_ID) is intentionally not wired yet.
-    """
-    if not settings.MSG91_AUTH_KEY:
-        logger.info(
-            "notification_channel_not_configured",
-            channel="sms",
-            provider="msg91",
-            user_id=str(user.id),
-        )
-        return ChannelResult(channel="sms", status="skipped", reason="channel_unavailable")
-    if not user.phone:
-        logger.info(
-            "notification_channel_no_recipient",
-            channel="sms",
-            user_id=str(user.id),
-        )
-        return ChannelResult(channel="sms", status="skipped", reason="no_recipient")
-
-    # TODO(msg91): implement flow API call once sender/template IDs are live.
-    logger.info(
-        "notification_channel_provider_stub",
-        channel="sms",
-        provider="msg91",
-        user_id=str(user.id),
-    )
-    return ChannelResult(channel="sms", status="skipped", reason="provider_not_implemented")
+async def _send_sms(user: User, body: str) -> ChannelResult:
+    """SMS via the MSG91 provider adapter (services/providers/sms.py)."""
+    return await sms_provider.send(user, body)
 
 
-def _send_whatsapp(user: User, body: str) -> ChannelResult:
-    """
-    WhatsApp via the Business Cloud API — provider stub.
-
-    Gated on WHATSAPP_ACCESS_TOKEN + WHATSAPP_PHONE_NUMBER_ID; the Graph API
-    call (POST /{phone_number_id}/messages) is intentionally not wired yet.
-    """
-    if not settings.WHATSAPP_ACCESS_TOKEN or not settings.WHATSAPP_PHONE_NUMBER_ID:
-        logger.info(
-            "notification_channel_not_configured",
-            channel="whatsapp",
-            provider="meta",
-            user_id=str(user.id),
-        )
-        return ChannelResult(channel="whatsapp", status="skipped", reason="channel_unavailable")
-    if not user.phone:
-        logger.info(
-            "notification_channel_no_recipient",
-            channel="whatsapp",
-            user_id=str(user.id),
-        )
-        return ChannelResult(channel="whatsapp", status="skipped", reason="no_recipient")
-
-    # TODO(whatsapp): implement Graph API messages call with an approved template.
-    logger.info(
-        "notification_channel_provider_stub",
-        channel="whatsapp",
-        provider="meta",
-        user_id=str(user.id),
-    )
-    return ChannelResult(channel="whatsapp", status="skipped", reason="provider_not_implemented")
+async def _send_whatsapp(user: User, body: str) -> ChannelResult:
+    """WhatsApp via the Cloud API adapter (services/providers/whatsapp.py)."""
+    return await whatsapp_provider.send(user, body)

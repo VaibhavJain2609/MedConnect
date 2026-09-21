@@ -153,6 +153,24 @@ async def create_bill(
     db.add(bill)
     await db.flush()
     await db.refresh(bill)
+
+    # Audit the invoice creation — ids/status/amount only, no notes text.
+    from app.services.audit_service import log_change
+    await log_change(
+        db=db,
+        table_name="billing",
+        record_id=bill.id,
+        action="INSERT",
+        old_values=None,
+        new_values={
+            "patient_id": str(bill.patient_id),
+            "clinic_id": str(bill.clinic_id) if bill.clinic_id else None,
+            "appointment_id": str(bill.appointment_id) if bill.appointment_id else None,
+            "status": bill.status,
+            "amount": str(bill.amount),
+        },
+    )
+
     return await _load_bill_with_names(db, bill)
 
 
@@ -312,6 +330,9 @@ async def update_bill(
     if current_user.role == "doctor":
         await _require_bill_clinic_access(db, current_user, bill)
 
+    old_status = bill.status
+    old_payment_method = bill.payment_method
+
     if req.status is not None:
         bill.status = req.status
     if req.payment_method is not None:
@@ -321,4 +342,28 @@ async def update_bill(
 
     await db.flush()
     await db.refresh(bill)
+
+    # Audit status/payment-method transitions (old -> new). Notes content is
+    # never logged — only that the field was touched.
+    old_values: dict = {}
+    new_values: dict = {}
+    if req.status is not None:
+        old_values["status"] = old_status
+        new_values["status"] = bill.status
+    if req.payment_method is not None:
+        old_values["payment_method"] = old_payment_method
+        new_values["payment_method"] = bill.payment_method
+    if req.notes is not None:
+        new_values["notes_updated"] = True
+    if old_values or new_values:
+        from app.services.audit_service import log_change
+        await log_change(
+            db=db,
+            table_name="billing",
+            record_id=bill.id,
+            action="UPDATE",
+            old_values=old_values or None,
+            new_values=new_values or None,
+        )
+
     return await _load_bill_with_names(db, bill)

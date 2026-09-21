@@ -9,6 +9,7 @@ Routes:
 import logging
 import mimetypes
 import os
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import FileResponse
@@ -24,6 +25,7 @@ from app.models.doctor import Doctor
 from app.models.medical_record import MedicalRecord
 from app.models.patient_link import PatientClinicLink
 from app.models.user import User
+from app.services import access_service
 from app.services.storage_service import (
     MAX_UPLOAD_BYTES,
     generate_presigned_upload,
@@ -220,47 +222,55 @@ async def upload_file(
             detail={"error": {"code": "ALREADY_EXISTS", "message": "An object already exists at this key"}},
         )
 
+    # Audit the successful upload — object metadata only, never content.
+    # record_id is derived deterministically from object_key (uuid5).
+    from app.services.audit_service import log_change
+    await log_change(
+        db=db,
+        table_name="uploads",
+        record_id=uuid.uuid5(uuid.NAMESPACE_URL, object_key),
+        action="INSERT",
+        old_values=None,
+        new_values={
+            "object_key": object_key,
+            "size_bytes": len(body_bytes),
+            "mime_type": inferred_type,
+        },
+    )
+
     return {"status": "ok", "object_key": object_key}
 
 
 async def _doctor_has_patient_relationship(
     db: AsyncSession, doctor: Doctor, patient_id, record_created_at=None
 ) -> bool:
-    """Mirror of the doctor↔patient access rules used by the doctors router:
-    the doctor authored a record for the patient, or shares a clinic with an
-    approved PatientClinicLink (a revoked link still grants read access to
-    records created before revocation)."""
-    record_exists = await db.execute(
-        select(MedicalRecord.id)
-        .where(
-            MedicalRecord.doctor_id == doctor.id,
-            MedicalRecord.patient_id == patient_id,
-            MedicalRecord.deleted_at.is_(None),
-        )
-        .limit(1)
-    )
-    if record_exists.scalar_one_or_none():
+    """Delegates to access_service.doctor_patient_relationship_exists for the
+    base rule (authored record, or shared clinic with an approved link),
+    then applies the upload-specific extension: a revoked link still grants
+    read access to records created before its revoked_at timestamp."""
+    if await access_service.doctor_patient_relationship_exists(
+        db, doctor.user_id, doctor.id, patient_id, allow_revoked=False
+    ):
         return True
 
+    # Revoked consent: read-only access to data created before revocation.
+    if record_created_at is None:
+        return False
     links = await db.execute(
-        select(PatientClinicLink.consent_status, PatientClinicLink.revoked_at)
+        select(PatientClinicLink.revoked_at)
         .join(ClinicMembership, PatientClinicLink.clinic_id == ClinicMembership.clinic_id)
         .where(
             ClinicMembership.user_id == doctor.user_id,
             ClinicMembership.is_active.is_(True),
             ClinicMembership.deleted_at.is_(None),
             PatientClinicLink.patient_id == patient_id,
-            PatientClinicLink.consent_status.in_(["approved", "revoked"]),
+            PatientClinicLink.consent_status == "revoked",
             PatientClinicLink.deleted_at.is_(None),
         )
     )
-    for consent_status, revoked_at in links.all():
-        if consent_status == "approved":
+    for (revoked_at,) in links.all():
+        if revoked_at is not None and record_created_at <= revoked_at:
             return True
-        # Revoked consent: read-only access to data created before revocation.
-        if revoked_at is not None and record_created_at is not None:
-            if record_created_at <= revoked_at:
-                return True
     return False
 
 

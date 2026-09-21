@@ -8,6 +8,8 @@ import { Calendar, Clock, Stethoscope, Building2, XCircle, Plus, X, Link2, Video
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
 import { getAppointments, updateAppointmentStatus, createAppointment, generateMeetingLink, type Appointment } from "@/lib/api/appointments";
+import { getDoctorSlots, type AvailabilitySlot } from "@/lib/api/availability";
+import { SlotPicker, slotDurationMinutes } from "@/components/appointments/slot-picker";
 import { useAuthStore } from "@/stores/auth-store";
 import api from "@/lib/api";
 
@@ -192,6 +194,8 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
   const [duration, setDuration] = useState(30);
   const [type, setType] = useState<"in-person" | "teleconsult" | "follow-up">("in-person");
   const [chiefComplaint, setChiefComplaint] = useState("");
+  const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(null);
+  const [customTime, setCustomTime] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -222,10 +226,47 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
   });
   const clinicDoctors: DoctorSuggestion[] = clinicDoctorsData?.data ?? [];
 
+  // Fetch bookable slots once doctor + date are known. Scoped to the selected
+  // clinic so only that clinic's availability windows are used.
+  const slotsQuery = useQuery({
+    queryKey: ["doctor-slots", selectedDoctor?.id, date, selectedClinicId],
+    queryFn: () =>
+      getDoctorSlots(selectedDoctor!.id, date, selectedClinicId || undefined),
+    enabled: !!selectedDoctor && !!date,
+  });
+  const slots: AvailabilitySlot[] = slotsQuery.data?.slots ?? [];
+  const slotsEnabled = !!selectedDoctor && !!date;
+  // Manual time/duration entry is the fallback: no doctor picked yet, user
+  // opted for a custom time, slots failed to load, or none were published.
+  const showManualTime =
+    !slotsEnabled ||
+    customTime ||
+    slotsQuery.isError ||
+    (slotsQuery.isFetched && slots.length === 0);
+  // Slot picker governs scheduled_at/duration whenever it's shown and the
+  // user hasn't fallen back to manual entry.
+  const requireSlot = slotsEnabled && !showManualTime;
+
+  const resetTimeSelection = () => {
+    setSelectedSlot(null);
+    setCustomTime(false);
+  };
+
   // Reset doctor when clinic changes
   const handleClinicChange = (clinicId: string) => {
     setSelectedClinicId(clinicId);
     setSelectedDoctor(null);
+    resetTimeSelection();
+  };
+
+  const handleDoctorChange = (d: DoctorSuggestion | null) => {
+    setSelectedDoctor(d);
+    resetTimeSelection();
+  };
+
+  const handleDateChange = (value: string) => {
+    setDate(value);
+    resetTimeSelection();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -235,15 +276,29 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
       setError("Please select a doctor");
       return;
     }
+    if (requireSlot && !selectedSlot) {
+      setError("Please pick an available time slot");
+      return;
+    }
     setSubmitting(true);
     try {
-      const scheduledAt = new Date(`${date}T${time}:00`).toISOString();
+      // A picked slot supplies the exact scheduled_at/duration the backend
+      // computed (slot.start is the bookable instant verbatim), plus the
+      // clinic/branch of the underlying availability window. Manual entry
+      // falls back to the date+time inputs.
+      const scheduledAt = selectedSlot
+        ? selectedSlot.start
+        : new Date(`${date}T${time}:00`).toISOString();
+      const durationMinutes = selectedSlot
+        ? slotDurationMinutes(selectedSlot)
+        : duration;
       await createAppointment({
         patient_id: patientId,
         doctor_id: selectedDoctor.id,
-        clinic_id: selectedClinicId || undefined,
+        clinic_id: selectedSlot?.clinic_id ?? (selectedClinicId || undefined),
+        branch_id: selectedSlot?.branch_id ?? undefined,
         scheduled_at: scheduledAt,
-        duration_minutes: duration,
+        duration_minutes: durationMinutes,
         type,
         chief_complaint: chiefComplaint || undefined,
       });
@@ -269,7 +324,7 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
         role="dialog"
         aria-modal="true"
         aria-label="Book appointment"
-        className="w-[calc(100%-2rem)] sm:w-full sm:max-w-lg rounded-xl bg-white shadow-xl"
+        className="w-[calc(100%-2rem)] sm:w-full sm:max-w-lg rounded-xl bg-white shadow-xl max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -339,7 +394,7 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
                   value={selectedDoctor?.id ?? ""}
                   onChange={(e) => {
                     const doc = clinicDoctors.find((d) => d.id === e.target.value) ?? null;
-                    setSelectedDoctor(doc);
+                    handleDoctorChange(doc);
                   }}
                   className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20 bg-white"
                 >
@@ -364,7 +419,7 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
                 </div>
                 <button
                   type="button"
-                  onClick={() => setSelectedDoctor(null)}
+                  onClick={() => handleDoctorChange(null)}
                   aria-label="Clear selected doctor"
                   className="text-dreams-textSecondary hover:text-red-500 transition-colors"
                 >
@@ -372,62 +427,83 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
                 </button>
               </div>
             ) : (
-              <DoctorSearchInput onSelect={setSelectedDoctor} />
+              <DoctorSearchInput onSelect={handleDoctorChange} />
             )}
           </div>
 
-          {/* Date + Time */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Date *</label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                min={formatDateInput(new Date())}
-                required
-                className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Time *</label>
-              <input
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                required
-                className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
-              />
-            </div>
+          {/* Date */}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Date *</label>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => handleDateChange(e.target.value)}
+              min={formatDateInput(new Date())}
+              required
+              className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+            />
           </div>
 
-          {/* Duration + Type */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Duration</label>
-              <select
-                value={duration}
-                onChange={(e) => setDuration(Number(e.target.value))}
-                className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
-              >
-                <option value={15}>15 min</option>
-                <option value={30}>30 min</option>
-                <option value={45}>45 min</option>
-                <option value={60}>60 min</option>
-              </select>
+          {/* Available slots (doctor + date chosen) */}
+          {slotsEnabled && (
+            <SlotPicker
+              slots={slotsQuery.data?.slots}
+              isLoading={slotsQuery.isLoading}
+              isError={slotsQuery.isError}
+              isRetrying={slotsQuery.isFetching && !slotsQuery.isLoading}
+              customTime={customTime}
+              selected={selectedSlot}
+              onSelect={setSelectedSlot}
+              onRetry={() => slotsQuery.refetch()}
+              onPickCustomTime={() => {
+                setCustomTime(true);
+                setSelectedSlot(null);
+              }}
+              onShowSlots={() => setCustomTime(false)}
+            />
+          )}
+
+          {/* Manual time + duration fallback */}
+          {showManualTime && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Time *</label>
+                <input
+                  type="time"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  required
+                  className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Duration</label>
+                <select
+                  value={duration}
+                  onChange={(e) => setDuration(Number(e.target.value))}
+                  className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+                >
+                  <option value={15}>15 min</option>
+                  <option value={30}>30 min</option>
+                  <option value={45}>45 min</option>
+                  <option value={60}>60 min</option>
+                </select>
+              </div>
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Type *</label>
-              <select
-                value={type}
-                onChange={(e) => setType(e.target.value as typeof type)}
-                className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
-              >
-                <option value="in-person">In Person</option>
-                <option value="teleconsult">Teleconsult</option>
-                <option value="follow-up">Follow-up</option>
-              </select>
-            </div>
+          )}
+
+          {/* Type */}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Type *</label>
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value as typeof type)}
+              className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+            >
+              <option value="in-person">In Person</option>
+              <option value="teleconsult">Teleconsult</option>
+              <option value="follow-up">Follow-up</option>
+            </select>
           </div>
 
           {/* Chief Complaint */}

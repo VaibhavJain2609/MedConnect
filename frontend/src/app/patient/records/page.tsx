@@ -4,9 +4,10 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
+import { downloadFile } from "@/lib/download";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { formatDate, recordTypeLabel, recordTypeColor } from "@/lib/utils";
-import { FileText, Search, FilePlus } from "lucide-react";
+import { FileText, Search, FilePlus, Download } from "lucide-react";
 
 const RECORD_TYPES = [
   { value: "", label: "All Records" },
@@ -24,6 +25,8 @@ export default function PatientRecordsPage() {
   const [typeFilter, setTypeFilter] = useState("");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
 
   // Debounce search input so we don't fire a request per keystroke
   useEffect(() => {
@@ -45,6 +48,21 @@ export default function PatientRecordsPage() {
 
   const records: any[] = data?.data ?? [];
 
+  // Authenticated blob download — the Authorization header is only
+  // attached by the axios interceptor, so a plain <a href> would 401.
+  const handleExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    setExportError("");
+    try {
+      await downloadFile("/api/v1/patients/records/export?format=json");
+    } catch {
+      setExportError("Export failed. Please try again.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Breadcrumb items={[{ label: "My Records" }]} />
@@ -54,14 +72,29 @@ export default function PatientRecordsPage() {
           <h1 className="text-3xl font-bold text-dreams-textPrimary">My Records</h1>
           <p className="text-dreams-textSecondary mt-1">All your medical records in one place</p>
         </div>
-        <Link
-          href="/patient/records/new"
-          className="flex items-center gap-2 px-4 py-2 bg-dreams-blue text-white rounded-lg hover:opacity-90 transition-opacity text-sm font-medium"
-        >
-          <FilePlus className="h-4 w-4" />
-          Add Record
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={exporting}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-dreams-border text-dreams-textPrimary rounded-lg hover:border-dreams-blue/50 transition-colors text-sm font-medium disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" />
+            {exporting ? "Exporting…" : "Export All (FHIR)"}
+          </button>
+          <Link
+            href="/patient/records/new"
+            className="flex items-center gap-2 px-4 py-2 bg-dreams-blue text-white rounded-lg hover:opacity-90 transition-opacity text-sm font-medium"
+          >
+            <FilePlus className="h-4 w-4" />
+            Add Record
+          </Link>
+        </div>
       </div>
+
+      {exportError && (
+        <p className="text-sm text-red-600">{exportError}</p>
+      )}
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
