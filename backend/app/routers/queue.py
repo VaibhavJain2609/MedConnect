@@ -455,7 +455,7 @@ async def update_queue_status(
     allowed = STATUS_TRANSITIONS.get(entry.status, set())
     if req.status not in allowed:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={
                 "error": {
                     "code": "INVALID_TRANSITION",

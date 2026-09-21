@@ -166,7 +166,6 @@ class TestRateLimitMiddlewareIntegration:
 
     def _make_app_with_mock_redis(self, incr_return: int):
         from fastapi import FastAPI
-        from fastapi.testclient import TestClient
         from app.middleware.rate_limit import RateLimitMiddleware
 
         mini_app = FastAPI()

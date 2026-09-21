@@ -780,7 +780,7 @@ async def update_appointment(
 
     if appt.status != "scheduled":
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={"error": {"code": "INVALID_STATUS", "message": "Only scheduled appointments can be modified"}},
         )
 
@@ -999,7 +999,7 @@ async def update_appointment_status(
         allowed = allowed - {"completed"}
     if req.status not in allowed:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={
                 "error": {
                     "code": "INVALID_TRANSITION",
@@ -1059,7 +1059,7 @@ async def delete_appointment(
     # Enforce status transitions — cannot cancel terminal appointments
     if appt.status in {"completed", "cancelled", "no-show"}:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={
                 "error": {
                     "code": "INVALID_TRANSITION",
@@ -1248,7 +1248,7 @@ async def generate_meeting_link(
 
     if appt.type != "teleconsult":
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={"error": {"code": "NOT_TELECONSULT", "message": "Meeting links are only available for teleconsult appointments"}},
         )
 

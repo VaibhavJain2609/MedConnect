@@ -679,7 +679,7 @@ async def amend_record(
     # MD-392: Prevent chained amendments — only original records can be amended
     if original.amended_from_id is not None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={"error": {"code": "CANNOT_AMEND_AMENDMENT", "message": "Cannot amend an amendment. Please amend the original record."}},
         )
 

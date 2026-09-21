@@ -123,7 +123,7 @@ async def link_patient(
         cid = uuid.UUID(clinic_id)
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={"error": {"code": "INVALID_ID", "message": "Invalid clinic ID format"}},
         )
 
@@ -292,7 +292,7 @@ async def update_consent(
         lid = uuid.UUID(link_id)
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={"error": {"code": "INVALID_ID", "message": "Invalid link ID format"}},
         )
 

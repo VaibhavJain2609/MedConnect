@@ -75,7 +75,7 @@ async def get_clinic_detail(
     try:
         cid = uuid.UUID(clinic_id)
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                             detail={"error": {"code": "INVALID_ID", "message": "Invalid clinic ID"}})
     detail = await clinic_service.admin_get_clinic_detail(db, cid)
     if not detail:
@@ -93,7 +93,7 @@ async def update_clinic(
     try:
         cid = uuid.UUID(clinic_id)
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                             detail={"error": {"code": "INVALID_ID", "message": "Invalid clinic ID"}})
     clinic = await clinic_service.get_clinic(db, cid)
     if not clinic:
@@ -112,7 +112,7 @@ async def delete_clinic(
     try:
         cid = uuid.UUID(clinic_id)
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                             detail={"error": {"code": "INVALID_ID", "message": "Invalid clinic ID"}})
     clinic = await clinic_service.get_clinic(db, cid)
     if not clinic:
@@ -134,7 +134,7 @@ async def admin_add_patient_to_clinic(
         pid = uuid.UUID(body.patient_id)
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={"error": {"code": "INVALID_ID", "message": "Invalid ID format"}},
         )
 
@@ -196,7 +196,7 @@ async def get_clinic_metrics(
     try:
         cid = uuid.UUID(clinic_id)
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                             detail={"error": {"code": "INVALID_ID", "message": "Invalid clinic ID"}})
     clinic = await clinic_service.get_clinic(db, cid)
     if not clinic:

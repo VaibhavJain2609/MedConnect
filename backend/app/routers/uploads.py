@@ -177,7 +177,7 @@ async def upload_file(
             )
         if declared > max_upload_bytes:
             raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                 detail={"error": {"code": "FILE_TOO_LARGE", "message": f"File exceeds maximum size of {max_upload_bytes // (1024 * 1024)} MB"}},
             )
 
@@ -187,7 +187,7 @@ async def upload_file(
         chunks.extend(chunk)
         if len(chunks) > max_upload_bytes:
             raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                 detail={"error": {"code": "FILE_TOO_LARGE", "message": f"File exceeds maximum size of {max_upload_bytes // (1024 * 1024)} MB"}},
             )
     body_bytes = bytes(chunks)

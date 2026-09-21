@@ -42,7 +42,7 @@ async def _get_clinic_or_404(db: AsyncSession, clinic_id: str):
     try:
         cid = uuid.UUID(clinic_id)
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                             detail={"error": {"code": "INVALID_ID", "message": "Invalid clinic ID"}})
     clinic = await clinic_service.get_clinic(db, cid)
     if not clinic:
@@ -56,7 +56,7 @@ async def _require_membership(db: AsyncSession, user: User, clinic_id: str, role
     try:
         cid = uuid.UUID(clinic_id)
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                             detail={"error": {"code": "INVALID_ID", "message": "Invalid clinic ID"}})
     membership = await clinic_service.get_user_membership(db, user.id, cid)
     if not membership:
@@ -184,7 +184,7 @@ async def list_clinic_doctors(
         cid = uuid.UUID(clinic_id)
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={"error": {"code": "INVALID_ID", "message": "Invalid clinic ID format"}},
         )
 

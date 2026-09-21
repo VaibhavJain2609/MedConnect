@@ -289,7 +289,7 @@ async def get_active_clinic(
         clinic_id = uuid.UUID(x_clinic_id)
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={"error": {"code": "INVALID_CLINIC_ID", "message": "Invalid clinic ID format"}},
         )
 
