@@ -203,23 +203,36 @@ async def redeem_invite(
             detail={"error": {"code": "CODE_EXHAUSTED", "message": "Invite code has reached max uses"}},
         )
 
-    # Check if already a member
-    existing = await clinic_service.get_user_membership(db, user.id, invite.clinic_id)
-    if existing:
+    # Check if already a member — include deactivated rows: the unique index
+    # covers them, so a deactivated member must be reactivated, not re-inserted.
+    existing = (
+        await db.execute(
+            select(ClinicMembership).where(
+                ClinicMembership.clinic_id == invite.clinic_id,
+                ClinicMembership.user_id == user.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is not None and existing.is_active and existing.deleted_at is None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"error": {"code": "ALREADY_MEMBER", "message": "Already a member of this clinic"}},
         )
-
-    membership = ClinicMembership(
-        id=uuid.uuid4(),
-        clinic_id=invite.clinic_id,
-        user_id=user.id,
-        role=invite.role,
-        is_active=True,
-        joined_at=datetime.now(timezone.utc),
-    )
-    db.add(membership)
+    if existing is not None:
+        existing.is_active = True
+        existing.role = invite.role
+        existing.deleted_at = None
+    else:
+        db.add(
+            ClinicMembership(
+                id=uuid.uuid4(),
+                clinic_id=invite.clinic_id,
+                user_id=user.id,
+                role=invite.role,
+                is_active=True,
+                joined_at=datetime.now(timezone.utc),
+            )
+        )
     invite.use_count += 1
     await db.flush()
 
@@ -270,6 +283,12 @@ async def create_join_request(
         cid = uuid.UUID(clinic_id)
     except ValueError:
         raise HTTPException(status_code=422, detail={"error": {"code": "INVALID_ID"}})
+
+    clinic = await db.get(Clinic, cid)
+    if clinic is None or clinic.deleted_at is not None:
+        raise HTTPException(
+            status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Clinic not found"}}
+        )
 
     # Check already a member
     existing = await clinic_service.get_user_membership(db, user.id, cid)
@@ -395,15 +414,31 @@ async def review_join_request(
     req.reviewed_at = datetime.now(timezone.utc)
 
     if data.action == "approved":
-        membership = ClinicMembership(
-            id=uuid.uuid4(),
-            clinic_id=cid,
-            user_id=req.user_id,
-            role=data.role,
-            is_active=True,
-            joined_at=datetime.now(timezone.utc),
-        )
-        db.add(membership)
+        # Reactivate an existing (incl. deactivated) membership rather than
+        # inserting — the unique index covers inactive rows too.
+        existing_mem = (
+            await db.execute(
+                select(ClinicMembership).where(
+                    ClinicMembership.clinic_id == cid,
+                    ClinicMembership.user_id == req.user_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if existing_mem is not None:
+            existing_mem.is_active = True
+            existing_mem.role = data.role
+            existing_mem.deleted_at = None
+        else:
+            db.add(
+                ClinicMembership(
+                    id=uuid.uuid4(),
+                    clinic_id=cid,
+                    user_id=req.user_id,
+                    role=data.role,
+                    is_active=True,
+                    joined_at=datetime.now(timezone.utc),
+                )
+            )
 
     await db.flush()
 

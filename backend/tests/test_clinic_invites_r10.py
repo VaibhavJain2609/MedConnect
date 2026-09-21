@@ -445,16 +445,6 @@ class TestRedeemInvite:
         resp = await client.post("/api/v1/invites/redeem", json={"code": "X"})
         assert resp.status_code == 401
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "BUG (report-only): redeem_invite checks membership via "
-            "get_user_membership (is_active filter) but inserts unconditionally — "
-            "the uq_membership_user_clinic partial index still covers "
-            "is_active=False rows, so rejoining after deactivation 500s on "
-            "UniqueViolation instead of reactivating or 409ing."
-        ),
-    )
     async def test_rejoin_after_membership_deactivated(
         self, client, db, clinic, owner_membership, doctor_user
     ):
@@ -486,15 +476,6 @@ class TestRedeemInvite:
 
 
 class TestClinicSearch:
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "BUG (report-only): GET /api/v1/clinics/search is unreachable — "
-            "clinics.router is included before clinic_invites.router in main.py, "
-            "so /clinics/{clinic_id} matches 'search' first and returns "
-            "422 INVALID_ID instead of running the search handler."
-        ),
-    )
     async def test_search_by_name(self, doctor_client, clinic):
         resp = await doctor_client.get("/api/v1/clinics/search", params={"q": "Invite"})
         assert resp.status_code == 200, resp.text
@@ -507,14 +488,6 @@ class TestClinicSearch:
         resp = await doctor_client.get("/api/v1/clinics/search", params={"q": "x"})
         assert resp.status_code == 422
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "BUG (report-only): GET /api/v1/clinics/search is unreachable — "
-            "shadowed by /clinics/{clinic_id} (router include order in main.py); "
-            "returns 422 INVALID_ID."
-        ),
-    )
     async def test_search_excludes_inactive(self, doctor_client, db, clinic):
         clinic.is_active = False
         await db.commit()
@@ -570,14 +543,6 @@ class TestJoinRequests:
         assert resp.status_code == 409
         assert resp.json()["error"]["code"] == "ALREADY_MEMBER"
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "BUG (report-only): POST /clinics/{id}/join-request never verifies "
-            "the clinic exists — a nonexistent clinic_id violates the "
-            "clinic_join_requests FK and returns 500 instead of 404."
-        ),
-    )
     async def test_join_request_nonexistent_clinic(
         self, client, db
     ):
@@ -720,15 +685,6 @@ class TestJoinRequests:
         )
         assert again.status_code == 404
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "BUG (report-only): review_join_request approves unconditionally "
-            "INSERT a membership without checking whether the requester is "
-            "already a member — a pending request approved after the user "
-            "joined via invite 500s on uq_membership_user_clinic."
-        ),
-    )
     async def test_approve_after_requester_became_member(
         self, doctor_client, db, clinic, owner_membership, doctor_user
     ):

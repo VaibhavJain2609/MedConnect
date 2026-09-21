@@ -296,9 +296,11 @@ app.include_router(admin_lab_results.router)
 app.include_router(admin_exports.router)
 app.include_router(admin_broadcast.router)
 app.include_router(admin_patients.router)
+# clinic_invites before clinics: /api/v1/clinics/search must match before
+# clinics.router's /{clinic_id} path param swallows the literal "search".
+app.include_router(clinic_invites.router)
 app.include_router(clinics.router)
 app.include_router(onboarding.router)
-app.include_router(clinic_invites.router)
 app.include_router(patient_links.router)
 app.include_router(record_access.router)
 app.include_router(appointments.router)
