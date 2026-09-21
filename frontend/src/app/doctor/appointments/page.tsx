@@ -274,6 +274,10 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
   const [clinics, setClinics] = useState<ClinicOption[]>([]);
   const [branches, setBranches] = useState<ClinicBranch[]>([]);
   const [branchesLoading, setBranchesLoading] = useState(false);
+  // Receptionist path: caller has no Doctor profile, so pick the clinician.
+  const [clinicDoctors, setClinicDoctors] = useState<{ id: string; full_name: string; specialization: string | null }[]>([]);
+  const [pickedDoctorId, setPickedDoctorId] = useState("");
+  const effectiveDoctorId = doctorId ?? (pickedDoctorId || undefined);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -296,7 +300,13 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
       .then((data) => setBranches(data))
       .catch(() => setBranches([]))
       .finally(() => setBranchesLoading(false));
-  }, [clinicId]);
+    if (!doctorId) {
+      api
+        .get(`/api/v1/clinics/${clinicId}/doctors`)
+        .then((res) => setClinicDoctors(res.data?.data ?? []))
+        .catch(() => setClinicDoctors([]));
+    }
+  }, [clinicId, doctorId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -307,12 +317,13 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
       if (!walkinName.trim()) { setError("Patient name is required"); return; }
       if (!walkinPhone.trim()) { setError("Phone number is required"); return; }
       if (!clinicId) { setError("A clinic must be selected for walk-in bookings"); return; }
+      if (!doctorId && !pickedDoctorId) { setError("Please select a doctor"); return; }
       setSubmitting(true);
       try {
         await createGuestAppointment(clinicId, {
           patient_name: walkinName.trim(),
           patient_phone: walkinPhone.trim(),
-          doctor_id: doctorId ?? undefined,
+          doctor_id: effectiveDoctorId,
           branch_id: branchId || undefined,
           scheduled_at: scheduledAt,
           duration_minutes: duration,
@@ -335,7 +346,7 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
     try {
       await createAppointment({
         patient_id: selectedPatient.id,
-        doctor_id: doctorId ?? undefined,
+        doctor_id: effectiveDoctorId,
         clinic_id: clinicId || undefined,
         branch_id: branchId || undefined,
         scheduled_at: scheduledAt,
@@ -438,6 +449,25 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
             <option value="">{tab === "walkin" ? "Select clinic" : "No clinic (private)"}</option>
             {clinics.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Doctor — only for staff without a Doctor profile (e.g. receptionists) */}
+      {!doctorId && clinicId && (
+        <div>
+          <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Doctor *</label>
+          <select
+            value={pickedDoctorId}
+            onChange={(e) => setPickedDoctorId(e.target.value)}
+            className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+          >
+            <option value="">Select doctor</option>
+            {clinicDoctors.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.full_name}{d.specialization ? ` — ${d.specialization}` : ""}
+              </option>
             ))}
           </select>
         </div>

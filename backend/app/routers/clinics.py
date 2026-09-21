@@ -13,10 +13,12 @@ GET    /api/v1/clinics/{id}/branches — list branches [MD-274]
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_current_doctor, get_current_user
+from app.models.clinic import ClinicMembership
 from app.models.doctor import Doctor
 from app.models.user import User
 from app.schemas.clinic import (
@@ -162,6 +164,41 @@ async def list_members(
 ):
     await _require_membership(db, user, clinic_id)
     return await clinic_service.list_clinic_members(db, uuid.UUID(clinic_id))
+
+
+@router.get("/{clinic_id}/doctors")
+async def list_clinic_doctors(
+    clinic_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Active clinician members — used by receptionists booking guest appointments."""
+    await _require_membership(db, user, clinic_id)
+    cid = uuid.UUID(clinic_id)
+    res = await db.execute(
+        select(Doctor.id, User.full_name, Doctor.specialization)
+        .join(User, Doctor.user_id == User.id)
+        .join(
+            ClinicMembership,
+            (ClinicMembership.user_id == Doctor.user_id)
+            & (ClinicMembership.clinic_id == cid),
+        )
+        .where(
+            ClinicMembership.is_active.is_(True),
+            ClinicMembership.deleted_at.is_(None),
+            ClinicMembership.role.in_(["owner", "admin", "doctor"]),
+            Doctor.deleted_at.is_(None),
+            User.deleted_at.is_(None),
+            User.is_active.is_(True),
+        )
+        .order_by(User.full_name.asc())
+    )
+    return {
+        "data": [
+            {"id": str(did), "full_name": name, "specialization": spec}
+            for did, name, spec in res.all()
+        ]
+    }
 
 
 @router.put("/{clinic_id}/settings", response_model=ClinicResponse)
