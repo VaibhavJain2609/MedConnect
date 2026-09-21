@@ -43,11 +43,13 @@ target must already be serving.
 Useful flags:
 
 ```bash
-npm run test:e2e                     # headless run
-npm run test:e2e:ui                  # Playwright UI mode (watch/debug)
-npm run test:e2e -- smoke.spec.ts    # single file
-npm run test:e2e -- --headed         # watch the browser
-npm run test:e2e:report              # open the last HTML report
+npm run test:e2e                        # headless run
+npm run test:e2e:ui                     # Playwright UI mode (watch/debug)
+npm run test:e2e -- smoke.spec.ts       # single spec file
+npm run test:e2e -- queue.spec.ts -g "check a patient in"   # single test by name
+npm run test:e2e -- --headed            # watch the browser
+npm run test:e2e -- --list              # list tests without launching browsers
+npm run test:e2e:report                 # open the last HTML report
 ```
 
 ## What runs without credentials
@@ -59,29 +61,79 @@ Keycloak is down; when it answers, they also check the hosted login form.
 
 ## Authenticated tests
 
-`e2e/auth.setup.ts` performs one real Keycloak login and saves the session
-to `e2e/.auth/user.json` (gitignored). Specs like
-`e2e/appointments.spec.ts` reuse it via `test.use({ storageState })`.
+Each portal role has its own `*.setup.ts` file in the `setup` project —
+they all perform one real Keycloak login (via the shared helper in
+`e2e/auth-helpers.ts`) and save the session to `e2e/.auth/` (gitignored).
+Specs reuse the matching file via `test.use({ storageState })`.
 
-Both are **skipped by default** and only run when credentials exist:
+| Setup file | Env vars | Session file | Consumed by |
+|---|---|---|---|
+| `auth.setup.ts` | `E2E_TEST_EMAIL` / `E2E_TEST_PASSWORD` | `e2e/.auth/user.json` | `appointments.spec.ts`, `patient-journey.spec.ts` |
+| `auth.doctor.setup.ts` | `E2E_DOCTOR_EMAIL` / `E2E_DOCTOR_PASSWORD` | `e2e/.auth/doctor.json` | `queue.spec.ts` |
+| `auth.admin.setup.ts` | `E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD` | `e2e/.auth/admin.json` | `admin.spec.ts` |
+
+Every setup is **skipped by default** and only runs when its credential
+pair is set — set only the roles you have accounts for:
 
 ```bash
 E2E_TEST_EMAIL=patient@example.com \
 E2E_TEST_PASSWORD=secret \
+E2E_DOCTOR_EMAIL=doctor@example.com \
+E2E_DOCTOR_PASSWORD=secret \
+E2E_ADMIN_EMAIL=admin@example.com \
+E2E_ADMIN_PASSWORD=secret \
 npm run test:e2e
 ```
 
-The test user must already exist in the Keycloak realm the app points at
-(`NEXT_PUBLIC_KEYCLOAK_*`). `appointments.spec.ts` assumes a **patient**
-account — adjust the target route for doctor/admin accounts.
+Each account must already exist in the Keycloak realm the app points at
+(`NEXT_PUBLIC_KEYCLOAK_*`) and have the matching realm role — the
+doctor/admin setups fail fast if the account lands on the wrong portal.
+
+### Seeded demo data
+
+Some authenticated specs assert on the demo dataset — run it **first**:
+
+```bash
+make seed   # idempotent; see docs/seed.md
+```
+
+The seeded users can't log in directly: the seeder writes placeholder
+`keycloak_sub` values. Create a Keycloak user for each role you want to
+test and update the seeded row's `keycloak_sub` to the `sub` Keycloak
+assigns (docs/seed.md). Expected pairings:
+
+| Env vars | Seeded account |
+|---|---|
+| `E2E_TEST_*` | `rohan.verma@medconnect.demo`, `ananya.iyer@medconnect.demo`, or `kabir.singh@medconnect.demo` |
+| `E2E_DOCTOR_*` | `dr.priya@medconnect.demo` (clinic owner) or `dr.arjun@medconnect.demo` |
+| `E2E_ADMIN_*` | `admin@medconnect.demo` |
+
+Per-spec requirements:
+
+| Spec | Needs credentials | Needs `make seed` |
+|---|---|---|
+| `smoke.spec.ts` | — | — |
+| `appointments.spec.ts` | patient | — (assertions are placeholders) |
+| `patient-journey.spec.ts` | patient | appointments test only |
+| `queue.spec.ts` | doctor | yes — asserts seeded patients by name |
+| `admin.spec.ts` | admin | no (works on any DB) |
+
+`queue.spec.ts` performs the front-desk check-in through
+`POST /api/v1/queue` (there is no check-in UI yet), reusing the
+Authorization and `X-Clinic-Id` headers the app itself sent — no separate
+API credentials needed.
 
 ## Environment variables
 
 | Variable | Purpose | Where set |
 |---|---|---|
 | `PLAYWRIGHT_BASE_URL` | Target URL; skips local `webServer` when set | shell / `vars.E2E_BASE_URL` in CI |
-| `E2E_TEST_EMAIL` | Test user email — enables auth.setup + authenticated specs | shell / `secrets.E2E_TEST_EMAIL` |
-| `E2E_TEST_PASSWORD` | Test user password | shell / `secrets.E2E_TEST_PASSWORD` |
+| `E2E_TEST_EMAIL` | Patient test user email — enables auth.setup + patient specs | shell / `secrets.E2E_TEST_EMAIL` |
+| `E2E_TEST_PASSWORD` | Patient test user password | shell / `secrets.E2E_TEST_PASSWORD` |
+| `E2E_DOCTOR_EMAIL` | Doctor test user email — enables auth.doctor.setup + `queue.spec.ts` | shell / `secrets.E2E_DOCTOR_EMAIL` |
+| `E2E_DOCTOR_PASSWORD` | Doctor test user password | shell / `secrets.E2E_DOCTOR_PASSWORD` |
+| `E2E_ADMIN_EMAIL` | Admin test user email — enables auth.admin.setup + `admin.spec.ts` | shell / `secrets.E2E_ADMIN_EMAIL` |
+| `E2E_ADMIN_PASSWORD` | Admin test user password | shell / `secrets.E2E_ADMIN_PASSWORD` |
 | `CI` | Set automatically in GitHub Actions: retries=2, workers=1, no server reuse | — |
 
 ## Adding tests
@@ -91,8 +143,11 @@ account — adjust the target route for doctor/admin accounts.
 2. Prefer `getByRole` / `getByLabel` / `getByText` selectors; add
    `data-testid` to components rather than coupling to Tailwind classes.
 3. For authenticated specs, copy the pattern from `appointments.spec.ts`:
-   file-level `test.skip(...)` on the env vars plus
-   `test.use({ storageState: authFile })`.
+   file-level `test.skip(...)` on the role's env vars plus
+   `test.use({ storageState })` pointing at that role's session file
+   (`authFile` / `doctorAuthFile` / `adminAuthFile` from
+   `e2e/auth-file.ts`). A new role needs a new `auth.<role>.setup.ts`
+   (see `auth.doctor.setup.ts`) plus its own env-var pair.
 4. Keep public and authenticated coverage in separate files — the
    `chromium` project has **no** global storage state, so anything without
    `test.use({ storageState })` runs logged out.
@@ -110,5 +165,8 @@ account — adjust the target route for doctor/admin accounts.
   has no test profile and builds four custom images, too heavy for per-PR
   runs. To enable it, uncomment the step in the workflow and leave
   `E2E_BASE_URL` unset.
-- Set the `E2E_TEST_EMAIL`/`E2E_TEST_PASSWORD` repo secrets to light up the
-  authenticated specs; without them they skip cleanly.
+- Set the `E2E_TEST_*`, `E2E_DOCTOR_*`, and/or `E2E_ADMIN_*` repo secrets
+  to light up the authenticated specs — each pair is independent, and
+  whatever isn't set skips cleanly. `queue.spec.ts` additionally needs the
+  staging environment to carry the seeded demo dataset (`make seed`); the
+  spec fails with a clear "run `make seed`" message if it's missing.
