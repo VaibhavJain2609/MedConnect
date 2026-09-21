@@ -235,7 +235,7 @@ DEFAULT_SETTINGS: dict[str, dict[str, Any]] = {
         "description": "When false, new user registration is disabled",
     },
     "reminder_channels_enabled": {
-        "value": {"in_app": True, "email": False, "sms": False, "whatsapp": False},
+        "value": {"in_app": True, "email": False, "sms": False, "whatsapp": False, "push": False},
         "description": "Which channels appointment/notification reminders may use",
     },
     "max_upload_mb": {

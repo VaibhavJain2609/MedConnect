@@ -26,6 +26,7 @@ const REMINDER_CHANNELS = [
   { key: "email", label: "Email" },
   { key: "sms", label: "SMS" },
   { key: "whatsapp", label: "WhatsApp" },
+  { key: "push", label: "Push" },
 ] as const;
 
 const BOOLEAN_KEYS = new Set(["maintenance_mode", "registration_enabled"]);

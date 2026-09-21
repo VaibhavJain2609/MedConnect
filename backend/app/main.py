@@ -38,7 +38,7 @@ from app.routers import appointments
 from app.routers import uploads
 from app.routers import vitals
 from app.routers import prescriptions_pdf
-from app.routers import billing, revenue, queue
+from app.routers import billing, revenue, queue, push
 from app.routers import availability
 from app.routers import encounters
 from app.routers.admin import visits as admin_visits
@@ -319,6 +319,7 @@ app.include_router(prescriptions_pdf.router)
 app.include_router(billing.router)
 app.include_router(revenue.router)
 app.include_router(queue.router)
+app.include_router(push.router)
 app.include_router(availability.router)
 app.include_router(encounters.router)
 app.include_router(admin_visits.router)

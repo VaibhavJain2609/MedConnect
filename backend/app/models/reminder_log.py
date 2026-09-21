@@ -12,7 +12,7 @@ ReminderTypeEnum = Enum("24h", "2h", name="reminder_type_enum")
 # real channel dispatch existed; new rows always use a real channel value.
 # DB-side enum values must be added via an Alembic migration
 # (ALTER TYPE reminder_channel_enum ADD VALUE ...).
-ChannelEnum = Enum("in_app", "log", "email", "sms", "whatsapp", name="reminder_channel_enum")
+ChannelEnum = Enum("in_app", "log", "email", "sms", "whatsapp", "push", name="reminder_channel_enum")
 ReminderStatusEnum = Enum("pending", "sent", "failed", "skipped", name="reminder_status_enum")
 
 

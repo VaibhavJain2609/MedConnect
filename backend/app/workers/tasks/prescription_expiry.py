@@ -5,7 +5,8 @@ Finds prescriptions whose ``valid_until`` falls inside the notification
 window (expiring within 3 days, or expired up to 30 days ago) and notifies:
 
 - the PATIENT over every enabled channel (in_app baseline + email/sms/
-  whatsapp per NotificationPreferences and the platform channel kill-switch);
+  whatsapp/push per NotificationPreferences and the platform channel
+  kill-switch);
 - the prescribing DOCTOR in-app only.
 
 Dedupe / idempotency
