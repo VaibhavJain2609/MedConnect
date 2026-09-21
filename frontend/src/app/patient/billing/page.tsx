@@ -101,29 +101,60 @@ function BillRow({ bill }: { bill: PatientBill }) {
 
       {expanded && (
         <div className="border-t border-dreams-border px-4 py-4 space-y-4">
-          {/* Bill detail — the billing model stores a single amount rather
-              than itemized lines, so the notes field acts as the description. */}
+          {/* Line items — itemized bills render their rows; older bills fall
+              back to a single notes/amount line (mirrors the receipt PDF). */}
           <div className="rounded-lg border border-dreams-border overflow-hidden">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-dreams-lightBg text-dreams-textSecondary text-xs uppercase tracking-wide">
                   <th className="text-left px-4 py-2 font-medium">Description</th>
+                  {(bill.items?.length ?? 0) > 0 && (
+                    <>
+                      <th className="text-right px-4 py-2 font-medium">Qty</th>
+                      <th className="text-right px-4 py-2 font-medium">Unit Price</th>
+                    </>
+                  )}
                   <th className="text-right px-4 py-2 font-medium">Amount</th>
                 </tr>
               </thead>
               <tbody>
-                <tr className="border-t border-dreams-border">
-                  <td className="px-4 py-3 text-dreams-textPrimary">
-                    {bill.notes ?? "Medical services"}
-                  </td>
-                  <td className="px-4 py-3 text-right text-dreams-textPrimary">
-                    {formatCurrency(bill.amount)}
-                  </td>
-                </tr>
+                {(bill.items?.length ?? 0) > 0 ? (
+                  bill.items.map((item) => (
+                    <tr key={item.id} className="border-t border-dreams-border">
+                      <td className="px-4 py-3 text-dreams-textPrimary">
+                        {item.description}
+                      </td>
+                      <td className="px-4 py-3 text-right text-dreams-textSecondary">
+                        {Number(item.quantity)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-dreams-textSecondary">
+                        {formatCurrency(item.unit_amount)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-dreams-textPrimary">
+                        {formatCurrency(item.amount)}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr className="border-t border-dreams-border">
+                    <td className="px-4 py-3 text-dreams-textPrimary">
+                      {bill.notes ?? "Medical services"}
+                    </td>
+                    <td className="px-4 py-3 text-right text-dreams-textPrimary">
+                      {formatCurrency(bill.amount)}
+                    </td>
+                  </tr>
+                )}
                 <tr className="border-t border-dreams-border bg-dreams-lightBg/50">
                   <td className="px-4 py-3 font-semibold text-dreams-textPrimary">
                     Total
                   </td>
+                  {(bill.items?.length ?? 0) > 0 && (
+                    <>
+                      <td />
+                      <td />
+                    </>
+                  )}
                   <td className="px-4 py-3 text-right font-semibold text-dreams-textPrimary">
                     {formatCurrency(bill.amount)}
                   </td>

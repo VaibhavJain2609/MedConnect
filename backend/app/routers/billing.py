@@ -1,6 +1,7 @@
 import io
 import uuid
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from uuid import UUID
 from xml.sax.saxutils import escape
 
@@ -24,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_current_doctor, get_current_user, require_admin
 from app.models.appointment import Appointment
-from app.models.billing import BILLING_STATUSES, PAYMENT_METHODS, Billing
+from app.models.billing import BILLING_STATUSES, PAYMENT_METHODS, Billing, BillingItem
 from app.models.clinic import Clinic, ClinicMembership
 from app.models.doctor import Doctor
 from app.models.user import User
@@ -52,6 +53,18 @@ def _serialize_bill(
         "status": bill.status,
         "payment_method": bill.payment_method,
         "notes": bill.notes,
+        # `items` is a selectin-loaded relationship — populated on every
+        # Billing select, and explicitly assigned on the create path.
+        "items": [
+            {
+                "id": str(item.id),
+                "description": item.description,
+                "quantity": str(item.quantity),
+                "unit_amount": str(item.unit_amount),
+                "amount": str(item.amount),
+            }
+            for item in (bill.items or [])
+        ],
         "created_at": bill.created_at,
         "updated_at": bill.updated_at,
     }
@@ -164,10 +177,32 @@ async def create_bill(
         patient_id=req.patient_id,
         clinic_id=req.clinic_id,
         appointment_id=req.appointment_id,
-        amount=req.amount,
+        amount=req.amount if req.amount is not None else Decimal(0),
         status="pending",
         notes=req.notes,
     )
+
+    # Line items: server computes each line amount and the bill total —
+    # the model has no tax column, so billing.amount = sum(item amounts)
+    # and any client-supplied `amount` is ignored when items are given.
+    if req.items:
+        line_items: list[BillingItem] = []
+        total = Decimal(0)
+        for it in req.items:
+            line_amount = (it.quantity * it.unit_amount).quantize(Decimal("0.01"))
+            total += line_amount
+            line_items.append(
+                BillingItem(
+                    id=uuid.uuid4(),
+                    description=it.description,
+                    quantity=it.quantity,
+                    unit_amount=it.unit_amount,
+                    amount=line_amount,
+                )
+            )
+        bill.items = line_items
+        bill.amount = total.quantize(Decimal("0.01"))
+
     db.add(bill)
     await db.flush()
     await db.refresh(bill)
@@ -400,36 +435,53 @@ def _fmt_amount(value, currency: str) -> str:
         return str(value)
 
 
+def _item_field(item, *names: str):
+    """Read the first non-None field from a dict or an ORM row.
+
+    ``bill.items`` may be a JSONB-style list of dicts (legacy tolerance) or a
+    selectin-loaded list of ``BillingItem`` objects — accept both.
+    """
+    if isinstance(item, dict):
+        for name in names:
+            if item.get(name) is not None:
+                return item[name]
+    else:
+        for name in names:
+            value = getattr(item, name, None)
+            if value is not None:
+                return value
+    return None
+
+
 def _normalize_line_items(bill: Billing) -> list[dict]:
     """
     Normalize the bill's line items.
 
-    The Billing model may carry an `items` JSONB list of dicts. Accepts the
-    common key variants (description/name, quantity/qty, unit_price/price,
-    amount). Falls back to a single line derived from the bill's notes +
-    amount when no itemized list exists.
+    ``Billing.items`` is the ``billing_items`` relationship (BillingItem ORM
+    rows); a JSONB-style list of dicts is also tolerated. Accepts the common
+    key variants (description/name, quantity/qty, unit_price/unit_amount/
+    price, amount). Falls back to a single line derived from the bill's
+    notes + amount when no itemized list exists.
     """
     raw_items = getattr(bill, "items", None)
     line_items: list[dict] = []
     if isinstance(raw_items, list):
         for item in raw_items:
-            if not isinstance(item, dict):
+            if not isinstance(item, dict) and not isinstance(item, BillingItem):
                 continue
-            description = item.get("description") or item.get("name") or "Item"
+            description = _item_field(item, "description", "name") or "Item"
             try:
-                qty = float(item.get("quantity") or item.get("qty") or 1)
+                qty = float(_item_field(item, "quantity", "qty") or 1)
             except (TypeError, ValueError):
                 qty = 1
-            unit_price = item.get("unit_price")
+            unit_price = _item_field(item, "unit_price", "unit_amount", "price")
             if unit_price is None:
-                unit_price = item.get("price")
-            if unit_price is None:
-                unit_price = item.get("amount")
+                unit_price = _item_field(item, "amount")
             try:
                 unit_price = float(unit_price) if unit_price is not None else 0.0
             except (TypeError, ValueError):
                 unit_price = 0.0
-            amount = item.get("amount")
+            amount = _item_field(item, "amount")
             try:
                 amount = float(amount) if amount is not None else qty * unit_price
             except (TypeError, ValueError):

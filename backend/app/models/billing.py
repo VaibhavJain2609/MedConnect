@@ -35,6 +35,15 @@ class Billing(Base):
     patient: Mapped["User"] = relationship(foreign_keys=[patient_id])
     clinic: Mapped["Clinic"] = relationship(foreign_keys=[clinic_id])
     appointment: Mapped["Appointment"] = relationship(foreign_keys=[appointment_id])
+    # selectin keeps `bill.items` populated wherever bills are loaded —
+    # serialization and the receipt-PDF path must never hit a lazy load
+    # under AsyncSession (MissingGreenlet).
+    items: Mapped[list["BillingItem"]] = relationship(
+        back_populates="bill",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        order_by="BillingItem.created_at",
+    )
 
     __table_args__ = (
         Index("idx_billing_patient", "patient_id", postgresql_where=(deleted_at.is_(None))),
@@ -42,3 +51,34 @@ class Billing(Base):
         Index("idx_billing_created_at", "created_at", postgresql_where=(deleted_at.is_(None))),
         Index("idx_billing_appointment", "appointment_id", postgresql_where=(deleted_at.is_(None))),
     )
+
+
+class BillingItem(Base):
+    """A single line item on a bill.
+
+    Child rows follow the reminder_logs convention: FK cascade on the
+    parent, no soft-delete column (the parent bill is soft-deleted; its
+    items are hard-deleted only if the billing row itself ever is).
+    `amount` is the server-computed line total (quantity * unit_amount);
+    `unit_amount` is the per-unit price.
+    """
+
+    __tablename__ = "billing_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    billing_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("billing.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    description: Mapped[str] = mapped_column(String(500), nullable=False)
+    quantity: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False, default=1)
+    unit_amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    bill: Mapped["Billing"] = relationship(back_populates="items")

@@ -53,6 +53,14 @@ export async function getMyLabResult(id: string): Promise<PatientLabResult> {
 
 // ─── Billing ─────────────────────────────────────────────────────────────────
 
+export interface BillItem {
+  id: string;
+  description: string;
+  quantity: string;
+  unit_amount: string;
+  amount: string;
+}
+
 export interface PatientBill {
   id: string;
   patient_id: string;
@@ -64,6 +72,7 @@ export interface PatientBill {
   status: string; // pending | paid | cancelled | refunded
   payment_method: string | null;
   notes: string | null;
+  items: BillItem[];
   created_at: string;
   updated_at: string;
 }
