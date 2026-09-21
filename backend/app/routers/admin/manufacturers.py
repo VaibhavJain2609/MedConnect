@@ -5,7 +5,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.database import get_medicine_db
 from app.dependencies import require_admin
@@ -42,8 +42,7 @@ class ManufacturerResponse(BaseModel):
     contact_info: Optional[dict]
     is_active: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 router = APIRouter(

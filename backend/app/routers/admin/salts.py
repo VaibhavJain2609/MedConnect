@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.database import get_medicine_db
 from app.dependencies import require_admin
@@ -33,8 +33,7 @@ class SaltStrengthResponse(BaseModel):
     is_standard_strength: bool
     pediatric_approved: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SaltCreateRequest(BaseModel):
@@ -93,8 +92,7 @@ class SaltResponse(BaseModel):
     action_class_id: Optional[UUID]
     strengths: list[SaltStrengthResponse] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 router = APIRouter(

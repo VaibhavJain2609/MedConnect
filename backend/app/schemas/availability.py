@@ -1,7 +1,7 @@
 from datetime import date, datetime, time
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AvailabilityWindowCreate(BaseModel):
@@ -38,8 +38,7 @@ class AvailabilityWindowResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DoctorLeaveCreate(BaseModel):
@@ -55,8 +54,7 @@ class DoctorLeaveResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AvailabilitySlot(BaseModel):

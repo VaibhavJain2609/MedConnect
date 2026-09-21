@@ -3,7 +3,7 @@
 from uuid import UUID
 from datetime import datetime, date
 from decimal import Decimal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # ============================================================================
@@ -18,8 +18,7 @@ class ChemicalClassBase(BaseModel):
 class ChemicalClassResponse(ChemicalClassBase):
     chemical_class_id: UUID
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TherapeuticClassBase(BaseModel):
@@ -31,8 +30,7 @@ class TherapeuticClassBase(BaseModel):
 class TherapeuticClassResponse(TherapeuticClassBase):
     therapeutic_class_id: UUID
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ActionClassBase(BaseModel):
@@ -44,8 +42,7 @@ class ActionClassBase(BaseModel):
 class ActionClassResponse(ActionClassBase):
     action_class_id: UUID
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============================================================================
@@ -64,8 +61,7 @@ class SaltStrengthResponse(SaltStrengthBase):
     salt_id: UUID
     display_strength: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SaltBase(BaseModel):
@@ -111,8 +107,7 @@ class SaltResponse(SaltBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SaltListResponse(BaseModel):
@@ -139,8 +134,7 @@ class ManufacturerResponse(ManufacturerBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class BrandCompositionResponse(BaseModel):
@@ -152,8 +146,7 @@ class BrandCompositionResponse(BaseModel):
     display_strength: str
     sequence: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class BrandBase(BaseModel):
@@ -173,8 +166,7 @@ class BrandResponse(BrandBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class BrandListResponse(BaseModel):
@@ -198,8 +190,7 @@ class SaltSearchResult(BaseModel):
     therapeutic_class: str | None = None
     strengths: list[dict]
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class BrandSearchResult(BaseModel):
@@ -211,8 +202,7 @@ class BrandSearchResult(BaseModel):
     composition: str
     is_discontinued: bool
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class UnifiedSearchResponse(BaseModel):
@@ -234,8 +224,7 @@ class SideEffectResponse(BaseModel):
     frequency: str | None = None
     description: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ContraindicationResponse(BaseModel):
@@ -245,8 +234,7 @@ class ContraindicationResponse(BaseModel):
     icd10_code: str | None = None
     severity: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DrugInteractionResponse(BaseModel):
@@ -259,8 +247,7 @@ class DrugInteractionResponse(BaseModel):
     management: str | None = None
     evidence_level: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============================================================================
@@ -274,5 +261,4 @@ class UseResponse(BaseModel):
     icd10_code: str | None = None
     is_primary_indication: bool = False
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

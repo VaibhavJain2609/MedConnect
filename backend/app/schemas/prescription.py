@@ -2,7 +2,7 @@ from datetime import date, datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class MedicineItem(BaseModel):
@@ -75,5 +75,4 @@ class PrescriptionResponse(BaseModel):
     # Populated only on POST /prescriptions (clinical safety gate outcome)
     safety: Optional[SafetyResult] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

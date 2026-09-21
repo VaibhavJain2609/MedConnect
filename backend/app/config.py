@@ -1,5 +1,5 @@
 from pydantic import model_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -94,8 +94,7 @@ class Settings(BaseSettings):
                 raise ValueError("UPLOADS_DIR must not use /tmp in production; set STORAGE_BACKEND=s3 or use a persistent path")
         return self
 
-    class Config:
-        env_file = ".env"
+    model_config = SettingsConfigDict(env_file=".env")
 
 
 settings = Settings()

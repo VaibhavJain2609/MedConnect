@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import Any, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class MedicineComponentInput(BaseModel):
@@ -72,8 +72,7 @@ class MedicineResponse(MedicineBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MedicineListItem(BaseModel):
@@ -87,8 +86,7 @@ class MedicineListItem(BaseModel):
     is_discontinued: bool
     components: list[MedicineComponentResponse]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MedicineSearchResponse(BaseModel):

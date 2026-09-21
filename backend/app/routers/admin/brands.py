@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 import re
 
 from app.database import get_medicine_db
@@ -35,7 +35,7 @@ class BrandCreateRequest(BaseModel):
     launch_date: Optional[date] = None
     discontinuation_date: Optional[date] = None
     ndhm_code: Optional[str] = Field(None, max_length=50)
-    compositions: list[BrandCompositionInput] = Field(..., min_items=1)
+    compositions: list[BrandCompositionInput] = Field(..., min_length=1)
 
 
 class BrandUpdateRequest(BaseModel):
@@ -63,8 +63,7 @@ class BrandResponse(BaseModel):
     discontinuation_date: Optional[date]
     ndhm_code: Optional[str]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 router = APIRouter(

@@ -6,7 +6,7 @@ return is represented so FastAPI's response_model filtering drops nothing.
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class AppointmentResponse(BaseModel):
@@ -33,8 +33,7 @@ class AppointmentResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AppointmentsListResponse(BaseModel):

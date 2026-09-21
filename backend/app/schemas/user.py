@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class DoctorProfileCreate(BaseModel):
@@ -20,8 +20,7 @@ class DoctorProfileResponse(BaseModel):
     facility_city: str | None
     verified: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PatientProfileUpdate(BaseModel):
@@ -40,8 +39,7 @@ class PatientProfileResponse(BaseModel):
     emergency_contact_name: str | None
     emergency_contact_phone: str | None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MedicalHistoryUpdate(BaseModel):
@@ -64,8 +62,7 @@ class AdminUserListItem(BaseModel):
     created_at: datetime
     consent_status: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AdminUsersListResponse(BaseModel):
@@ -98,8 +95,7 @@ class AdminUserDetailResponse(BaseModel):
     weight_kg: float | None = None
     last_visit: datetime | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AdminCreatePatientRequest(BaseModel):
@@ -122,8 +118,7 @@ class AdminCreatePatientResponse(BaseModel):
     def _id_to_str(cls, v):
         return str(v)
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AdminUserUpdateRequest(BaseModel):
@@ -160,8 +155,7 @@ class AdminUserPrescriptionItem(BaseModel):
     valid_until: date | None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AdminUserPrescriptionsResponse(BaseModel):
@@ -181,8 +175,7 @@ class AdminUserRecordItem(BaseModel):
     doctor_name: str | None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AdminUserRecordsResponse(BaseModel):

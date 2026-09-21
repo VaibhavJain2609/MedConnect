@@ -4,7 +4,7 @@ from typing import Optional
 from urllib.parse import urlsplit
 from uuid import UUID
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 VALID_RECORD_TYPES = [
     "prescription", "diagnostic_report", "discharge_summary",
@@ -79,8 +79,7 @@ class RecordResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RecordListItem(BaseModel):
@@ -91,5 +90,4 @@ class RecordListItem(BaseModel):
     doctor_name: str | None = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
