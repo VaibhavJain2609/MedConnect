@@ -328,6 +328,29 @@ async def require_active_clinic(
     return result  # type: ignore
 
 
+async def get_clinic_staff(
+    x_clinic_id: str | None = Header(None, alias="X-Clinic-Id"),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> tuple[User, uuid.UUID, str]:
+    """
+    Require an active ClinicMembership — any role (owner | admin | doctor |
+    receptionist) — for the clinic named by the X-Clinic-Id header.
+
+    Returns (user, clinic_id, membership_role). Use for front-desk endpoints
+    (queue, scheduling) that must admit non-doctor clinic staff; the caller
+    is responsible for gating individual actions on the returned role.
+    """
+    clinic_ctx = await get_active_clinic(x_clinic_id, user, db)
+    if clinic_ctx is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": {"code": "MISSING_CLINIC", "message": "X-Clinic-Id header required"}},
+        )
+    clinic_id, membership_role = clinic_ctx
+    return user, clinic_id, membership_role
+
+
 async def get_verified_doctor(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
