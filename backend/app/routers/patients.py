@@ -421,6 +421,7 @@ async def search_doctors(
                 "specialization": row.Doctor.specialization,
                 "facility_name": row.Doctor.facility_name,
                 "facility_city": row.Doctor.facility_city,
+                "verified": bool(row.Doctor.verified),
             }
             for row in rows
         ]

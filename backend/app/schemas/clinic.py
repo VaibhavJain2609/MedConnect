@@ -82,6 +82,19 @@ class ClinicUpdate(BaseModel):
     email: Optional[str] = Field(None, max_length=255)
     logo_url: Optional[str] = None
     is_active: Optional[bool] = None
+    timezone: Optional[str] = Field(None, max_length=50)
+
+    @field_validator("timezone")
+    @classmethod
+    def validate_timezone(cls, v):
+        if v is None:
+            return v
+        from zoneinfo import ZoneInfo
+        try:
+            ZoneInfo(v)
+        except Exception:
+            raise ValueError("timezone must be a valid IANA name (e.g. Asia/Kolkata)")
+        return v
 
 
 class ClinicSettingsUpdate(BaseModel):
@@ -107,6 +120,7 @@ class ClinicResponse(BaseModel):
     logo_url: Optional[str]
     is_active: bool
     record_sharing_mode: str
+    timezone: str
     created_by: Optional[str]
     created_at: datetime
     updated_at: datetime

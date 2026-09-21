@@ -111,6 +111,8 @@ async def update_clinic(
         clinic.phone = updates["phone"]
     if "email" in updates:
         clinic.email = updates["email"]
+    if "timezone" in updates:
+        clinic.timezone = updates["timezone"]
     if "logo_url" in updates:
         clinic.logo_url = updates["logo_url"]
     if "is_active" in updates:
