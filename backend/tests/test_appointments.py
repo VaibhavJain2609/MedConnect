@@ -108,11 +108,10 @@ class TestStatusTransitions:
         resp = await doctor_client.put(
             f"/api/v1/appointments/{appt.id}/status", json={"status": target}
         )
-        # NOTE: HTTPException(422) is remapped to 400 VALIDATION_ERROR by the
-        # app's status-code exception handler (MD-395); the INVALID_TRANSITION
-        # detail is intentionally swallowed.
-        assert resp.status_code == 400
-        assert resp.json()["error"]["code"] == "VALIDATION_ERROR"
+        # Deliberate HTTPException(422) domain errors pass through the 422
+        # handler with their envelope intact.
+        assert resp.status_code == 422
+        assert resp.json()["error"]["code"] == "INVALID_TRANSITION"
 
     @pytest.mark.parametrize("target", ["in-progress", "cancelled"])
     async def test_arrived_allows(
@@ -145,7 +144,7 @@ class TestStatusTransitions:
         resp = await doctor_client.put(
             f"/api/v1/appointments/{appt.id}/status", json={"status": target}
         )
-        assert resp.status_code == 400  # 422 remapped to 400 VALIDATION_ERROR
+        assert resp.status_code == 422  # INVALID_TRANSITION domain error
 
     @pytest.mark.parametrize("target", ["completed", "cancelled"])
     async def test_in_progress_allows(
@@ -180,11 +179,10 @@ class TestStatusTransitions:
         resp = await doctor_client.put(
             f"/api/v1/appointments/{appt.id}/status", json={"status": target}
         )
-        # NOTE: HTTPException(422) is remapped to 400 VALIDATION_ERROR by the
-        # app's status-code exception handler (MD-395); the INVALID_TRANSITION
-        # detail is intentionally swallowed.
-        assert resp.status_code == 400
-        assert resp.json()["error"]["code"] == "VALIDATION_ERROR"
+        # Deliberate HTTPException(422) domain errors pass through the 422
+        # handler with their envelope intact.
+        assert resp.status_code == 422
+        assert resp.json()["error"]["code"] == "INVALID_TRANSITION"
 
     async def test_invalid_status_value_returns_400(
         self, doctor_client, db, doctor_user, doctor_profile, patient_user
@@ -456,8 +454,8 @@ class TestDeleteAppointment:
             status=terminal,
         )
         resp = await doctor_client.delete(f"/api/v1/appointments/{appt.id}")
-        # HTTPException(422) is remapped to 400 VALIDATION_ERROR
-        assert resp.status_code == 400
+        # HTTPException(422) terminal-state guard passes through as 422
+        assert resp.status_code == 422
 
     async def test_doctor_can_delete_scheduled(
         self, doctor_client, db, doctor_user, doctor_profile, patient_user

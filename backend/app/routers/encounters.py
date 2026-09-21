@@ -82,6 +82,47 @@ async def _load_encounter_with_names(db: AsyncSession, enc: Encounter) -> dict:
     return _serialize_encounter(enc, patient_name, doctor_name, clinic_name)
 
 
+async def _load_encounters_with_names(
+    db: AsyncSession, encounters: list[Encounter]
+) -> list[dict]:
+    """Batched version of _load_encounter_with_names — one query per table."""
+    if not encounters:
+        return []
+
+    patient_ids = {e.patient_id for e in encounters}
+    doctor_ids = {e.doctor_id for e in encounters}
+    clinic_ids = {e.clinic_id for e in encounters if e.clinic_id}
+
+    patients_res = await db.execute(
+        select(User.id, User.full_name).where(User.id.in_(patient_ids))
+    )
+    patient_names = {pid: name for pid, name in patients_res.all()}
+
+    doctors_res = await db.execute(
+        select(Doctor.id, User.full_name)
+        .join(User, Doctor.user_id == User.id)
+        .where(Doctor.id.in_(doctor_ids))
+    )
+    doctor_names = {did: name for did, name in doctors_res.all()}
+
+    clinic_names: dict = {}
+    if clinic_ids:
+        clinics_res = await db.execute(
+            select(Clinic.id, Clinic.name).where(Clinic.id.in_(clinic_ids))
+        )
+        clinic_names = {cid: name for cid, name in clinics_res.all()}
+
+    return [
+        _serialize_encounter(
+            e,
+            patient_names.get(e.patient_id),
+            doctor_names.get(e.doctor_id),
+            clinic_names.get(e.clinic_id),
+        )
+        for e in encounters
+    ]
+
+
 async def _doctor_patient_relationship_exists(
     db: AsyncSession,
     doctor: Doctor,

@@ -179,8 +179,10 @@ class TestClinicMembershipEnforcement:
             },
             headers={"X-Clinic-Id": "not-a-uuid"},
         )
-        # HTTPException(422) is remapped to 400 VALIDATION_ERROR
-        assert resp.status_code == 400
+        # Deliberate HTTPException(422) domain errors pass through the 422
+        # handler with their envelope intact.
+        assert resp.status_code == 422
+        assert resp.json()["error"]["code"] == "INVALID_CLINIC_ID"
 
     async def test_inactive_membership_rejected(
         self, client, db, clinic, doctor_user, doctor_profile

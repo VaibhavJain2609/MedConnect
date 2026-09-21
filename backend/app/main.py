@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 
 import sentry_sdk
 import structlog
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -404,7 +404,12 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 
 @app.exception_handler(422)
 async def validation_exception_handler(request: Request, exc):
-    # MD-395: Do not expose Pydantic field names/types — they leak internal schema details
+    # MD-395: Do not expose Pydantic field names/types — they leak internal schema details.
+    # But a deliberate HTTPException(422) from app code carries a domain error
+    # envelope that must pass through untouched (INVALID_TRANSITION etc.).
+    detail = getattr(exc, "detail", None)
+    if isinstance(exc, HTTPException) and isinstance(detail, dict) and "error" in detail:
+        return JSONResponse(status_code=exc.status_code, content=detail, headers=exc.headers)
     return JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
         content={

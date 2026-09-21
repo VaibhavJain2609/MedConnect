@@ -504,17 +504,15 @@ class TestQueueOperations:
         entry_id = created.json()["id"]
 
         # waiting -> completed is not a legal transition.
-        # NB: the endpoint raises 422 INVALID_TRANSITION, but the global
-        # @app.exception_handler(422) (MD-395) flattens every 422 —
-        # including deliberate domain errors — to 400 VALIDATION_ERROR,
-        # so the specific code never reaches the client.
+        # The endpoint raises HTTPException(422) INVALID_TRANSITION; the
+        # 422 handler passes deliberate domain envelopes through.
         skip = await doctor_client.patch(
             f"/api/v1/queue/{entry_id}/status",
             json={"status": "completed"},
             headers=headers,
         )
-        assert skip.status_code == 400
-        assert skip.json()["error"]["code"] == "VALIDATION_ERROR"
+        assert skip.status_code == 422
+        assert skip.json()["error"]["code"] == "INVALID_TRANSITION"
 
     async def test_terminal_state_rejected(
         self, doctor_client, clinic, owner_membership, patient_user
@@ -530,14 +528,14 @@ class TestQueueOperations:
             headers=headers,
         )
         # cancelled is terminal — any further transition is rejected.
-        # (422 INVALID_TRANSITION -> flattened to 400 VALIDATION_ERROR, see above)
+        # (422 INVALID_TRANSITION — domain envelope passes through, see above)
         again = await doctor_client.patch(
             f"/api/v1/queue/{entry_id}/status",
             json={"status": "in_consultation"},
             headers=headers,
         )
-        assert again.status_code == 400
-        assert again.json()["error"]["code"] == "VALIDATION_ERROR"
+        assert again.status_code == 422
+        assert again.json()["error"]["code"] == "INVALID_TRANSITION"
 
     async def test_queue_entry_tenant_isolation(
         self, doctor_client, db, clinic, second_clinic, owner_membership, patient_user
@@ -710,12 +708,6 @@ class TestEncounterAccess:
         resp = await patient_client.delete(f"/api/v1/encounters/{encounter.id}")
         assert resp.status_code == 403
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="BUG: list_encounters calls _load_encounters_with_names() which is "
-               "not defined — only the singular _load_encounter_with_names exists "
-               "(app/routers/encounters.py:337). GET /api/v1/encounters always 500s.",
-    )
     async def test_list_encounters_scoped_by_role(
         self, doctor_client, patient_client, client, db, encounter
     ):
