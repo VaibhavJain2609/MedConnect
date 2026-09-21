@@ -177,6 +177,44 @@ jobs:
           NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: medconnect-frontend
         run: npm run build
 
+  # Contract drift check: regenerates the frontend's API types from the
+  # backend's OpenAPI schema and fails if the committed
+  # frontend/src/lib/api/schema.d.ts is stale. No docker/services needed —
+  # app.openapi() builds the schema purely from route/pydantic metadata;
+  # the app is never started, so no DB/Redis/Keycloak connections happen.
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA
+
+      - uses: actions/setup-python@v5 # pin: resolve tag to full commit SHA
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - uses: actions/setup-node@v4 # pin: resolve tag to full commit SHA
+        with:
+          node-version: "20" # matches frontend/Dockerfile's node:20-alpine
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install --no-cache-dir -r requirements.txt
+
+      - name: Export OpenAPI schema (no server needed)
+        working-directory: backend
+        run: python scripts/export_openapi.py
+
+      - working-directory: frontend
+        run: npm ci
+
+      - name: Verify generated API types are in sync
+        working-directory: frontend
+        run: npm run check:api-types
+
   # Builds every image the CD pipeline ships (plus postgres, built only for
   # local docker-compose) so a Dockerfile breakage fails here, on the PR —
   # not during a deploy. push: false; scanning/signing stays in cd.yml.
