@@ -15,6 +15,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.config import settings
 from app.middleware.audit_middleware import AuditReadMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
+from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.routers import auth, doctors, patients, notifications
 from app.routers import medicines_emr, interactions, search
 from app.routers.admin import brands as admin_brands
@@ -217,28 +218,13 @@ app.add_middleware(
 )
 
 
-@app.middleware("http")
-async def add_security_headers(request: Request, call_next):
-    response = await call_next(request)
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
-    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
-    # API-level CSP: strict policy for JSON/REST responses.
-    # No unsafe-inline — the backend serves data, not HTML/JS/CSS.
-    # frame-ancestors supersedes X-Frame-Options in modern browsers.
-    response.headers["Content-Security-Policy"] = (
-        "default-src 'none'; "
-        "script-src 'none'; "
-        "style-src 'none'; "
-        "img-src 'none'; "
-        "font-src 'none'; "
-        f"connect-src 'self' {settings.FRONTEND_URL}; "
-        "frame-ancestors 'none';"
-    )
-    if settings.APP_ENV == "production":
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    return response
+# Security headers (nosniff, X-Frame-Options, Referrer-Policy,
+# Permissions-Policy, API CSP, prod-only HSTS, and Cache-Control: no-store
+# on /api/v1/*) live in app/middleware/security_headers.py. Registered at
+# this point in the stack — same position the old @app.middleware("http")
+# function occupied — so headers are injected outside CORS/rate-limit and
+# also land on 429s, error envelopes and CORS preflight responses.
+app.add_middleware(SecurityHeadersMiddleware)
 
 
 class RequestIDMiddleware:
