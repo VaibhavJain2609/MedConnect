@@ -116,7 +116,16 @@
   - Audit-log diff viewer (diffValues + expanded-row UI)
   - +68 coverage tests (encounters lifecycle, uploads owner-binding/size-cap)
   - FIX: ReminderLog was never imported → absent from Base.metadata (alembic autogen + drop_all bug)
-- **Round-9 queue:** react-hooks v7 warnings triage (~45 lint warnings demoted), OCR/AI ingest, barcode source, Keycloak-side erasure (needs admin creds), contrast audit (real-browser axe), httpx→httpx2 (starlette testclient deprecation), ABDM (BLOCKED pending approval)
+- **Round-9 — ALL LANDED (665 backend tests, 45 frontend tests green):**
+  - react-hooks v7 triage: 45 warnings → 9; real bugs fixed (stale-closure access-before-declared, edit-modal branch discard, draft-branch restore, sidebar remounts)
+  - Real-browser axe sweep (Playwright + axe-core) — contrast fixes (badge pairs, placeholders), aria-prohibited-attr, heading-order; 4-page spec for CI
+  - Admin coverage: 139 tests → found + fixed 3 real 500s (UUID coerce, clinic timezone, uuid path params) + self-guard regression
+  - Shared Pagination/LoadMoreButton wired to 4 pages; fixed >50-appointment silent truncation
+  - Global search expanded: lab results, prescriptions, records, clinics, appointments w/ per-role scoping + per-user endpoint rate limit
+  - Encounter summary PDF + doctor download button
+  - Keycloak erasure ops path: anonymize/disable script + DPDP runbook + keycloak_identity_retained flag
+  - starlette 1.x deprecations cleaned (status constants, TestClient)
+- **Round-10 queue:** OCR/AI ingest scaffold, barcode source, pydantic class-config deprecation sweep, encounter-patient view (patient encounters UI), remaining lint warnings, ABDM (BLOCKED pending approval)
 - **BLOCKED — ABDM/ABHA: awaiting regulatory approval (user-confirmed)** — do not implement: ABHA creation/linking, NRCeS-conformant FHIR, HIP module (tickets 107–116)
 - **Blocked/external:** SMS/WhatsApp live provider accounts (code adapters anyway), OCR/AI features, load testing env, i18n assets, barcode data source, push VAPID/service
 
