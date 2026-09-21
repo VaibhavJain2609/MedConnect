@@ -9,6 +9,7 @@ Routes:
 import logging
 import mimetypes
 import os
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import FileResponse
@@ -219,6 +220,22 @@ async def upload_file(
             status_code=status.HTTP_409_CONFLICT,
             detail={"error": {"code": "ALREADY_EXISTS", "message": "An object already exists at this key"}},
         )
+
+    # Audit the successful upload — object metadata only, never content.
+    # record_id is derived deterministically from object_key (uuid5).
+    from app.services.audit_service import log_change
+    await log_change(
+        db=db,
+        table_name="uploads",
+        record_id=uuid.uuid5(uuid.NAMESPACE_URL, object_key),
+        action="INSERT",
+        old_values=None,
+        new_values={
+            "object_key": object_key,
+            "size_bytes": len(body_bytes),
+            "mime_type": inferred_type,
+        },
+    )
 
     return {"status": "ok", "object_key": object_key}
 

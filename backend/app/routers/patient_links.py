@@ -61,6 +61,7 @@ async def get_link_code(
 
     # Create or rotate if missing/expired
     if not link_code or link_code.expires_at < now:
+        old_code = link_code
         if link_code:
             link_code.deleted_at = now
         link_code = PatientLinkCode(
@@ -71,6 +72,30 @@ async def get_link_code(
         )
         db.add(link_code)
         await db.flush()
+
+        # Audit link-code generation (+ rotation soft-delete of the old one).
+        # The code value itself is not logged.
+        from app.services.audit_service import log_change
+        await log_change(
+            db=db,
+            table_name="patient_link_codes",
+            record_id=link_code.id,
+            action="INSERT",
+            old_values=None,
+            new_values={
+                "patient_id": str(link_code.patient_id),
+                "expires_at": link_code.expires_at.isoformat(),
+            },
+        )
+        if old_code is not None:
+            await log_change(
+                db=db,
+                table_name="patient_link_codes",
+                record_id=old_code.id,
+                action="DELETE",
+                old_values={"patient_id": str(old_code.patient_id)},
+                new_values={"deleted": True, "reason": "rotated"},
+            )
 
     return {
         "code": link_code.code,
@@ -159,6 +184,8 @@ async def link_patient(
         existing_link.consented_at = None
         existing_link.linked_by = user.id
         link = existing_link
+        link_action = "UPDATE"
+        link_old_values = {"consent_status": "revoked"}
     else:
         link = PatientClinicLink(
             id=uuid.uuid4(),
@@ -168,12 +195,39 @@ async def link_patient(
             consent_status="pending",
         )
         db.add(link)
+        link_action = "INSERT"
+        link_old_values = None
 
     # Consume the code: each link code may only establish a single link.
     # The patient can generate a fresh code on their next /link-code request.
     link_code.deleted_at = datetime.now(timezone.utc)
 
     await db.flush()
+
+    # Audit the provisional link (new INSERT or revoked->pending reactivation),
+    # plus consumption of the link code.
+    from app.services.audit_service import log_change
+    await log_change(
+        db=db,
+        table_name="patient_clinic_links",
+        record_id=link.id,
+        action=link_action,
+        old_values=link_old_values,
+        new_values={
+            "patient_id": str(link.patient_id),
+            "clinic_id": str(link.clinic_id),
+            "consent_status": link.consent_status,
+            "linked_by": str(link.linked_by),
+        },
+    )
+    await log_change(
+        db=db,
+        table_name="patient_link_codes",
+        record_id=link_code.id,
+        action="DELETE",
+        old_values={"patient_id": str(link_code.patient_id)},
+        new_values={"deleted": True, "reason": "consumed"},
+    )
 
     # Fetch patient name for response
     patient = await db.get(User, link_code.patient_id)

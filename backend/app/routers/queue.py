@@ -161,6 +161,24 @@ async def add_to_queue(
         await db.flush()
     await db.refresh(entry)
 
+    # Audit the check-in — ids/status only, no notes text.
+    from app.services.audit_service import log_change
+    await log_change(
+        db=db,
+        table_name="queue_entries",
+        record_id=entry.id,
+        action="INSERT",
+        old_values=None,
+        new_values={
+            "clinic_id": str(entry.clinic_id),
+            "patient_id": str(entry.patient_id),
+            "doctor_id": str(entry.doctor_id) if entry.doctor_id else None,
+            "appointment_id": str(entry.appointment_id) if entry.appointment_id else None,
+            "queue_number": entry.queue_number,
+            "status": entry.status,
+        },
+    )
+
     patient_names, doctor_names = await _resolve_names(db, [entry])
     return _serialize_entry(
         entry,
@@ -301,6 +319,7 @@ async def update_queue_status(
             },
         )
 
+    old_status = entry.status
     now = datetime.now(tz=timezone.utc)
     entry.status = req.status
     if req.status == "in_consultation":
@@ -310,6 +329,17 @@ async def update_queue_status(
 
     await db.flush()
     await db.refresh(entry)
+
+    # Audit the status transition (old -> new).
+    from app.services.audit_service import log_change
+    await log_change(
+        db=db,
+        table_name="queue_entries",
+        record_id=entry.id,
+        action="UPDATE",
+        old_values={"status": old_status},
+        new_values={"status": entry.status},
+    )
 
     patient_names, doctor_names = await _resolve_names(db, [entry])
     return _serialize_entry(
@@ -343,4 +373,20 @@ async def remove_from_queue(
         )
 
     entry.deleted_at = datetime.now(tz=timezone.utc)
+
+    # Audit the removal — ids/status only.
+    from app.services.audit_service import log_change
+    await log_change(
+        db=db,
+        table_name="queue_entries",
+        record_id=entry.id,
+        action="DELETE",
+        old_values={
+            "clinic_id": str(entry.clinic_id),
+            "patient_id": str(entry.patient_id),
+            "status": entry.status,
+        },
+        new_values={"deleted": True},
+    )
+
     await db.flush()

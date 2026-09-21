@@ -146,6 +146,22 @@ async def create_vital(
     await db.flush()
     await db.refresh(vital)
 
+    # Audit the PHI write (flushed/committed with the vital below).
+    # Values kept minimal — ids + vital_type only, never the reading or notes.
+    from app.services.audit_service import log_change
+    await log_change(
+        db=db,
+        table_name="patient_vitals",
+        record_id=vital.id,
+        action="INSERT",
+        old_values=None,
+        new_values={
+            "patient_id": str(vital.patient_id),
+            "vital_type": vital.vital_type,
+            "recorded_at": vital.recorded_at.isoformat() if vital.recorded_at else None,
+        },
+    )
+
     # Commit vital before firing notifications so the record is persisted
     # even if notification creation encounters an error
     await db.commit()
