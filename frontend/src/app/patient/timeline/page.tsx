@@ -8,6 +8,7 @@ import { formatDate, recordTypeLabel, recordTypeColor } from "@/lib/utils";
 import { PrescriptionCard } from "@/components/prescription/PrescriptionCard";
 import { extractPrescriptionFromRecord } from "@/lib/api/prescriptions";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
+import { OnboardingChecklist } from "@/components/patient/onboarding-checklist";
 
 const RECORD_TYPES = [
   { value: "", label: "All Types" },
@@ -95,6 +96,8 @@ export default function TimelinePage() {
           Upload Record
         </Link>
       </div>
+
+      <OnboardingChecklist />
 
       {/* Filters */}
       <div className="flex flex-col gap-3 sm:flex-row">

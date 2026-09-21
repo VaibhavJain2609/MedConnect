@@ -238,6 +238,41 @@ export async function deletePatient(id: string): Promise<void> {
 }
 
 /**
+ * Current patient's medical history profile fields.
+ * Used by the patient medical-history form and the onboarding checklist.
+ */
+export interface MedicalHistory {
+  blood_group: string | null;
+  allergies: string[];
+  chronic_conditions: string[];
+  height_cm: number | null;
+  weight_kg: number | null;
+}
+
+export async function getMedicalHistory(): Promise<MedicalHistory> {
+  const response = await api.get("/api/v1/patients/medical-history");
+  return response.data;
+}
+
+/**
+ * A patient ↔ clinic link row (GET /api/v1/patients/clinic-links).
+ */
+export interface ClinicLink {
+  id: string;
+  clinic_id: string;
+  clinic_name: string;
+  clinic_city: string | null;
+  consent_status: "pending" | "approved" | "revoked";
+  consented_at: string | null;
+  created_at: string;
+}
+
+export async function getMyClinicLinks(): Promise<{ data: ClinicLink[] }> {
+  const response = await api.get("/api/v1/patients/clinic-links");
+  return response.data;
+}
+
+/**
  * DPDP privacy status for the current patient (consent + erasure state).
  */
 export interface PrivacyStatus {
