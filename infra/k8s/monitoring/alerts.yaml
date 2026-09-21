@@ -1,0 +1,180 @@
+# PrometheusRule — MedConnect alert definitions.
+#
+# Apply per environment (the file is deliberately NOT in base/kustomization.yaml:
+# base is shared by staging + prod and kustomize cannot load a file outside its
+# own root, so this is applied once per namespace — see RUNBOOK.md §Alerts):
+#
+#   kubectl -n medconnect-staging apply -f infra/k8s/monitoring/alerts.yaml
+#   kubectl -n medconnect-prod    apply -f infra/k8s/monitoring/alerts.yaml
+#
+# The `release: kube-prometheus-stack` label is REQUIRED: the Helm-managed
+# Prometheus CR (helm_release.kube_prometheus_stack in
+# infra/terraform/modules/addons) keeps ruleSelectorNilUsesHelmValues=true, so
+# it only selects PrometheusRules carrying the Helm release label — the same
+# mechanism backend/servicemonitor.yaml relies on.
+#
+# Selector note: every expr matches `namespace=~"medconnect.*"` instead of a
+# hardcoded namespace so the SAME manifest works unmodified in both
+# medconnect-staging and medconnect-prod (and the raw `medconnect` base).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: medconnect
+  labels:
+    app.kubernetes.io/part-of: medconnect
+    release: kube-prometheus-stack
+spec:
+  groups:
+    # ---------------------------------------------------------------------
+    # Availability — "is it up at all"
+    # ---------------------------------------------------------------------
+    - name: medconnect.availability
+      rules:
+        - alert: BackendDown
+          # `up` on the ServiceMonitor scrape (infra/k8s/base/backend/
+          # servicemonitor.yaml). `service`/`endpoint` are target labels the
+          # ServiceMonitor relabeling adds; `job` is not used because its
+          # generated value embeds the ServiceMonitor's own name.
+          expr: up{namespace=~"medconnect.*", service="backend", endpoint="http"} == 0
+          for: 2m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: "Backend not reachable for 2m ({{ $labels.pod }} in {{ $labels.namespace }})"
+            description: "Prometheus cannot scrape /metrics — pod is down, crash-looping, or Service endpoints are empty. Check `kubectl -n {{ $labels.namespace }} get pods -l app=backend` and pod logs/events."
+            runbook_url: "https://github.com/medconnect/medconnect/blob/master/RUNBOOK.md#backenddown"
+
+        - alert: BackendUnavailable
+          # Complements BackendDown: pods may be RUNNING but failing the deep
+          # /health readiness probe — which is exactly what a Postgres/Redis
+          # dependency outage looks like (see deployment.yaml probe comments).
+          # This is the alert that actually fires on RDS/ElastiCache loss today.
+          expr: |
+            kube_deployment_status_replicas_available{namespace=~"medconnect.*", deployment="backend"} == 0
+            and
+            kube_deployment_status_replicas{namespace=~"medconnect.*", deployment="backend"} > 0
+          for: 5m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: "Backend deployment has 0 ready replicas ({{ $labels.namespace }})"
+            description: "Pods exist but none pass /health — most commonly a Postgres or Redis dependency outage. Curl /health on a running pod to see which of db/medicine_db/redis reports error."
+            runbook_url: "https://github.com/medconnect/medconnect/blob/master/RUNBOOK.md#backendunavailable"
+
+        - alert: PostgresDown
+          # Postgres is Amazon RDS (infra/terraform/modules/rds) — nothing in
+          # cluster produces `pg_up` today. This rule activates automatically
+          # IF a postgres exporter (e.g. prometheus-community
+          # postgres-exporter pointed at the RDS endpoint) is deployed into a
+          # medconnect* namespace. Until then, RDS health is covered by the
+          # BackendUnavailable alert above (readiness fails on DB loss) and
+          # should also be covered by an RDS CloudWatch alarm — see RUNBOOK.md.
+          expr: pg_up{namespace=~"medconnect.*"} == 0
+          for: 2m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: "Postgres exporter reports database down ({{ $labels.namespace }})"
+            description: "pg_up=0 — exporter cannot connect to the database. Verify RDS instance state in AWS console and backend connectivity (DATABASE_URL host/security group)."
+            runbook_url: "https://github.com/medconnect/medconnect/blob/master/RUNBOOK.md#postgresdown"
+
+        - alert: RedisDown
+          # Same caveat as PostgresDown: Redis is ElastiCache, no in-cluster
+          # exporter yet. Activates when a redis_exporter (redis_up metric)
+          # is deployed; until then ElastiCache loss shows as BackendUnavailable.
+          expr: redis_up{namespace=~"medconnect.*"} == 0
+          for: 2m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: "Redis exporter reports cache down ({{ $labels.namespace }})"
+            description: "redis_up=0 — exporter cannot reach ElastiCache. Rate limiting and the reminder-worker's arq queue depend on Redis; check node health in AWS console and REDIS_URL connectivity."
+            runbook_url: "https://github.com/medconnect/medconnect/blob/master/RUNBOOK.md#redisdown"
+
+    # ---------------------------------------------------------------------
+    # SLO — "it's up but it's sick"
+    # Metric names come from prometheus-fastapi-instrumentator 7.x
+    # (Instrumentator().instrument(app).expose() in backend/app/main.py):
+    #   http_requests_total{handler,method,status}         — counter
+    #   http_request_duration_seconds_{bucket,sum,count}   — histogram
+    # `status` is grouped by default ("2xx"/"4xx"/"5xx"); 5.. also matches
+    # ungrouped codes if grouping is ever turned off.
+    # ---------------------------------------------------------------------
+    - name: medconnect.slo
+      rules:
+        - alert: HighErrorRate
+          expr: |
+            sum(rate(http_requests_total{namespace=~"medconnect.*", service="backend", status=~"5.."}[5m]))
+              /
+            sum(rate(http_requests_total{namespace=~"medconnect.*", service="backend"}[5m]))
+              > 0.05
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "Backend 5xx rate above 5% for 5m ({{ $labels.namespace }})"
+            description: "More than 5% of HTTP responses are 5xx. Break down by handler: sum by (handler) (rate(http_requests_total{status=~\"5..\"}[5m])) — then grep backend logs for unhandled_exception events."
+            runbook_url: "https://github.com/medconnect/medconnect/blob/master/RUNBOOK.md#higherrorrate"
+
+        - alert: HighLatency
+          # p95 across all handlers; per-handler breakdown is in the runbook.
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(http_request_duration_seconds_bucket{namespace=~"medconnect.*", service="backend"}[5m])) by (le)
+            ) > 1.5
+          for: 10m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "Backend p95 latency above 1.5s for 10m ({{ $labels.namespace }})"
+            description: "p95 request duration > 1.5s. Usual suspects: slow SQL (check RDS Performance Insights / pg_stat_statements), Redis latency, or Keycloak JWKS fetch stalls."
+            runbook_url: "https://github.com/medconnect/medconnect/blob/master/RUNBOOK.md#highlatency"
+
+    # ---------------------------------------------------------------------
+    # Resources — "about to break"
+    # ---------------------------------------------------------------------
+    - name: medconnect.resources
+      rules:
+        - alert: HighMemoryUsage
+          # working_set vs container limit — same signal the kubelet OOM-kill
+          # logic uses. Excludes infra "POD" pause containers and containers
+          # with no memory limit (the join drops them: no limit series → no
+          # result, rather than a divide-by-zero).
+          expr: |
+            container_memory_working_set_bytes{namespace=~"medconnect.*", container!="", container!="POD"}
+              / on(namespace, pod, container) group_left()
+            kube_pod_container_resource_limits{namespace=~"medconnect.*", resource="memory", container!=""}
+              > 0.85
+          for: 10m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "Container {{ $labels.container }} in {{ $labels.pod }} above 85% memory limit ({{ $labels.namespace }})"
+            description: "Sustained >85% of the memory limit — the kernel will OOM-kill at 100%. Check for a leak or raise the limit in the deployment manifest."
+            runbook_url: "https://github.com/medconnect/medconnect/blob/master/RUNBOOK.md#highmemoryusage"
+
+        - alert: PersistentVolumeClaimNearlyFull
+          # kubelet_volume_stats_* are emitted per mounted PVC. No workload in
+          # base/ mounts a PVC today (uploads/tmp are emptyDir), so this is
+          # pre-wired coverage for the day uploads move to a PVC or a
+          # StatefulSet is added — it costs nothing until a PVC exists.
+          expr: |
+            kubelet_volume_stats_available_bytes{namespace=~"medconnect.*"}
+              /
+            kubelet_volume_stats_capacity_bytes{namespace=~"medconnect.*"}
+              < 0.15
+          for: 10m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "PVC {{ $labels.persistentvolumeclaim }} in {{ $labels.namespace }} has <15% free space"
+            description: "Volume nearly full. Expand the PVC (storage class permitting) or reclaim space before writes start failing."
+            runbook_url: "https://github.com/medconnect/medconnect/blob/master/RUNBOOK.md#persistentvolumeclaimnearlyfull"
