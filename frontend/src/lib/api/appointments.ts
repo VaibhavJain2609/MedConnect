@@ -44,11 +44,14 @@ export interface AppointmentsListParams {
   search?: string;
   page?: number;
   limit?: number;
+  offset?: number;
 }
 
 export interface AppointmentsListResponse {
   data: Appointment[];
   total: number;
+  limit?: number;
+  offset?: number;
   // Legacy pagination fields for admin table
   appointments?: Appointment[];
   totalPages?: number;
@@ -98,6 +101,8 @@ export async function getAppointments(
   if (params.status) queryParams.append("status", params.status);
   if (params.upcoming) queryParams.append("upcoming", "true");
   if (params.all) queryParams.append("all", "true");
+  if (params.limit) queryParams.append("limit", params.limit.toString());
+  if (params.offset) queryParams.append("offset", params.offset.toString());
 
   const response = await api.get(`/api/v1/appointments?${queryParams}`);
   const result = response.data as AppointmentsListResponse;

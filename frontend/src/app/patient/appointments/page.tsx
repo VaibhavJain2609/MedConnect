@@ -7,6 +7,7 @@ import Link from "next/link";
 import { Calendar, Clock, Stethoscope, Building2, XCircle, Plus, X, Link2, Video, BadgeCheck } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
+import { Pagination } from "@/components/ui/pagination";
 import { getAppointments, updateAppointmentStatus, createAppointment, generateMeetingLink, type Appointment } from "@/lib/api/appointments";
 import { getDoctorSlots, type AvailabilitySlot } from "@/lib/api/availability";
 import { SlotPicker, slotDurationMinutes } from "@/components/appointments/slot-picker";
@@ -70,6 +71,25 @@ function canJoinTeleconsult(appt: Appointment, now: number) {
 }
 
 const ACTIVE_STATUSES = ["scheduled", "arrived", "in-progress"];
+
+/**
+ * Fetch every appointment for the list view. The page splits results into
+ * upcoming/past tabs client-side (the backend only supports upcoming/date
+ * filtering for doctors and clinic staff), so it needs the full set — the
+ * endpoint paginates with limit/offset (max 100 per request) and returns a
+ * total, so we walk the offset until all rows are fetched.
+ */
+async function fetchAllAppointments(): Promise<Appointment[]> {
+  const PAGE = 100;
+  const MAX_PAGES = 10; // safety cap: 1000 appointments
+  const all: Appointment[] = [];
+  for (let i = 0; i < MAX_PAGES; i++) {
+    const res = await getAppointments({ limit: PAGE, offset: i * PAGE });
+    all.push(...res.data);
+    if (all.length >= res.total || res.data.length < PAGE) break;
+  }
+  return all;
+}
 
 // ---------------------------------------------------------------------------
 // Doctor search typeahead
@@ -700,8 +720,11 @@ function AppointmentCard({
 // Main page
 // ---------------------------------------------------------------------------
 
+const PAGE_SIZE = 10;
+
 export default function PatientAppointmentsPage() {
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
+  const [page, setPage] = useState(1);
   const [showBooking, setShowBooking] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<string | null>(null);
   const [linkError, setLinkError] = useState<string | null>(null);
@@ -710,7 +733,7 @@ export default function PatientAppointmentsPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ["patient-appointments"],
-    queryFn: () => getAppointments({}),
+    queryFn: fetchAllAppointments,
   });
 
   const cancelMutation = useMutation({
@@ -747,7 +770,7 @@ export default function PatientAppointmentsPage() {
     return () => document.removeEventListener("keydown", onKey);
   }, [cancelTarget]);
 
-  const allAppointments: Appointment[] = data?.data ?? [];
+  const allAppointments: Appointment[] = data ?? [];
   const upcomingAppointments = allAppointments.filter(isUpcoming).sort(
     (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()
   );
@@ -756,6 +779,13 @@ export default function PatientAppointmentsPage() {
     .sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime());
 
   const displayedAppointments = tab === "upcoming" ? upcomingAppointments : pastAppointments;
+  const totalPages = Math.ceil(displayedAppointments.length / PAGE_SIZE);
+  // Clamp in case the list shrank (e.g. a cancellation) while on a later page
+  const currentPage = Math.min(page, Math.max(totalPages, 1));
+  const pagedAppointments = displayedAppointments.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
 
   return (
     <div className="space-y-6">
@@ -795,7 +825,10 @@ export default function PatientAppointmentsPage() {
         ].map(({ key, label }) => (
           <button
             key={key}
-            onClick={() => setTab(key as "upcoming" | "past")}
+            onClick={() => {
+              setTab(key as "upcoming" | "past");
+              setPage(1);
+            }}
             className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
               tab === key
                 ? "bg-white shadow-sm text-dreams-textPrimary"
@@ -838,7 +871,7 @@ export default function PatientAppointmentsPage() {
       {/* Appointment list */}
       {!isLoading && displayedAppointments.length > 0 && (
         <div className="space-y-3">
-          {displayedAppointments.map((appt) => (
+          {pagedAppointments.map((appt) => (
             <AppointmentCard
               key={appt.id}
               appt={appt}
@@ -848,6 +881,12 @@ export default function PatientAppointmentsPage() {
               isGeneratingLink={meetingLinkMutation.isPending && meetingLinkMutation.variables === appt.id}
             />
           ))}
+          <Pagination
+            page={currentPage}
+            totalPages={totalPages}
+            total={displayedAppointments.length}
+            onPageChange={setPage}
+          />
         </div>
       )}
 
