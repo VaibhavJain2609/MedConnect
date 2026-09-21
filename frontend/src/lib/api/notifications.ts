@@ -137,3 +137,94 @@ export async function updateNotificationPreferences(
   const response = await api.put("/api/v1/notifications/preferences", preferences);
   return response.data;
 }
+
+/* ------------------------------------------------------------------------ */
+/* Admin announcement broadcasts                                             */
+/* ------------------------------------------------------------------------ */
+
+export type BroadcastAudience = "all" | "patients" | "doctors" | "admins";
+export type BroadcastType = "system" | "info" | "warning";
+
+export interface BroadcastRequest {
+  title: string;
+  body: string;
+  audience: BroadcastAudience;
+  type?: BroadcastType;
+  action_url?: string;
+}
+
+export interface BroadcastResult {
+  sent: number;
+  audience: BroadcastAudience;
+  broadcast_id: string;
+  title: string;
+  target_role: "all" | "patient" | "doctor" | "admin";
+  recipient_count: number;
+  type: BroadcastType;
+}
+
+export interface BroadcastAudienceCount {
+  audience: BroadcastAudience;
+  count: number;
+}
+
+export interface BroadcastEntry {
+  id: string;
+  broadcast_id: string;
+  title: string | null;
+  body: string | null;
+  audience: BroadcastAudience | null;
+  target_role: "all" | "patient" | "doctor" | "admin" | null;
+  type: BroadcastType | null;
+  action_url: string | null;
+  recipient_count: number | null;
+  sent_by: string | null;
+  sent_by_name: string | null;
+  sent_at: string;
+}
+
+export interface BroadcastsResponse {
+  data: BroadcastEntry[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+/**
+ * Broadcast an announcement notification to every active user in the audience (admin only)
+ */
+export async function broadcastNotification(
+  payload: BroadcastRequest
+): Promise<BroadcastResult> {
+  const response = await api.post(
+    "/api/v1/admin/notifications/broadcast",
+    payload
+  );
+  return response.data;
+}
+
+/**
+ * Preview how many active users a broadcast audience targets (admin only)
+ */
+export async function getBroadcastAudienceCount(
+  audience: BroadcastAudience
+): Promise<BroadcastAudienceCount> {
+  const response = await api.get(
+    `/api/v1/admin/notifications/broadcast/count?audience=${audience}`
+  );
+  return response.data;
+}
+
+/**
+ * List past announcement broadcasts, newest first (admin only)
+ */
+export async function listBroadcasts(
+  page = 1,
+  limit = 10
+): Promise<BroadcastsResponse> {
+  const response = await api.get(
+    `/api/v1/admin/notifications/broadcasts?page=${page}&limit=${limit}`
+  );
+  return response.data;
+}
