@@ -25,31 +25,3 @@ export async function getMe(): Promise<UserProfile> {
   return response.data;
 }
 
-/**
- * Verify user has specific role
- */
-export function hasRole(user: UserProfile | null, role: string): boolean {
-  if (!user) return false;
-  return user.role === role;
-}
-
-/**
- * Check if user has admin privileges
- */
-export function isAdmin(user: UserProfile | null): boolean {
-  return hasRole(user, "admin");
-}
-
-/**
- * Check if user has doctor privileges
- */
-export function isDoctor(user: UserProfile | null): boolean {
-  return hasRole(user, "doctor");
-}
-
-/**
- * Check if user has patient privileges
- */
-export function isPatient(user: UserProfile | null): boolean {
-  return hasRole(user, "patient");
-}
