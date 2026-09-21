@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, User, FileText, Building2, Loader2 } from "lucide-react";
 import api from "@/lib/api";
+import { FileUpload } from "@/components/ui/file-upload";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -13,7 +14,12 @@ interface OnboardingStatus {
   verified: boolean;
   nhr_verification_status: string;
   profile: { full_name: string; email: string; phone: string | null; specialization: string | null };
-  license: { license_number: string | null; license_council: string | null; license_year: number | null };
+  license: {
+    license_number: string | null;
+    license_council: string | null;
+    license_year: number | null;
+    license_document_url: string | null;
+  };
 }
 
 // ── API helpers ───────────────────────────────────────────────────────────
@@ -197,6 +203,8 @@ function StepLicense({ status, onDone }: { status: OnboardingStatus; onDone: () 
   const [num, setNum] = useState(status.license.license_number ?? "");
   const [council, setCouncil] = useState(status.license.license_council ?? "");
   const [year, setYear] = useState(status.license.license_year?.toString() ?? "");
+  const [docKey, setDocKey] = useState<string | null>(status.license.license_document_url ?? null);
+  const [uploading, setUploading] = useState(false);
   const mut = useMutation({ mutationFn: saveLicense, onSuccess: onDone });
 
   return (
@@ -242,11 +250,24 @@ function StepLicense({ status, onDone }: { status: OnboardingStatus; onDone: () 
         />
       </div>
 
+      <FileUpload
+        label="License Document"
+        hint="Registration certificate — PDF, JPG or PNG, max 10 MB"
+        initialObjectKey={status.license.license_document_url}
+        onUploaded={setDocKey}
+        onUploadingChange={setUploading}
+      />
+
       <button
         onClick={() =>
-          mut.mutate({ license_number: num, license_council: council, license_year: parseInt(year) })
+          mut.mutate({
+            license_number: num,
+            license_council: council,
+            license_year: parseInt(year),
+            license_document_url: docKey,
+          })
         }
-        disabled={!num || !council || !year || mut.isPending}
+        disabled={!num || !council || !year || uploading || mut.isPending}
         className="w-full rounded-lg bg-dreams-blue px-4 py-2.5 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
       >
         {mut.isPending ? <Loader2 className="mx-auto h-5 w-5 animate-spin" /> : "Continue"}

@@ -13,7 +13,7 @@ import uuid as _uuid_mod
 from datetime import timezone as _tz
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,6 +22,7 @@ from app.dependencies import get_current_user
 from app.models.doctor import Doctor
 from app.models.user import User
 from app.schemas.clinic import ClinicCreate
+from app.schemas.record import _validate_document_url
 from app.services import clinic_service
 from app.services.nhr_service import verify_license
 
@@ -75,6 +76,7 @@ async def get_onboarding_status(
             "license_number": doctor.license_number,
             "license_council": doctor.license_council,
             "license_year": doctor.license_year,
+            "license_document_url": doctor.license_document_url,
         },
     }
 
@@ -116,6 +118,14 @@ class LicenseStepRequest(BaseModel):
     license_number: str
     license_council: str
     license_year: int
+    license_document_url: Optional[str] = None
+
+    @field_validator("license_document_url")
+    @classmethod
+    def validate_license_document_url(cls, v: str | None) -> str | None:
+        # Reuse the record document_url rules: relative object key or
+        # https:// URL only — the value may be rendered into <a href>.
+        return _validate_document_url(v)
 
 
 @router.put("/license")
@@ -130,6 +140,8 @@ async def onboarding_license(
     doctor.license_number = data.license_number
     doctor.license_council = data.license_council
     doctor.license_year = data.license_year
+    if data.license_document_url is not None:
+        doctor.license_document_url = data.license_document_url
 
     if doctor.onboarding_step in ("pending", "profile", "license"):
         doctor.onboarding_step = "clinic"
