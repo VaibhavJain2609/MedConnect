@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Building2, MapPin, Phone, Mail, Users, FileText, Pill, ArrowLeft, Settings } from "lucide-react";
-import { getAdminClinic, updateAdminClinic, deleteAdminClinic } from "@/lib/api/clinics";
+import { Building2, MapPin, Phone, Mail, Users, FileText, Pill, ArrowLeft, Settings, Stethoscope, UserCheck, Hourglass, Calendar, Clock } from "lucide-react";
+import { getAdminClinic, updateAdminClinic, deleteAdminClinic, getClinicMetrics } from "@/lib/api/clinics";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -29,6 +29,11 @@ export default function AdminClinicDetailPage() {
   const { data: clinic, isLoading } = useQuery({
     queryKey: ["admin-clinic", id],
     queryFn: () => getAdminClinic(id),
+  });
+
+  const { data: metrics } = useQuery({
+    queryKey: ["admin-clinic-metrics", id],
+    queryFn: () => getClinicMetrics(id),
   });
 
   const updateMutation = useMutation({
@@ -137,6 +142,35 @@ export default function AdminClinicDetailPage() {
           </div>
         ))}
       </div>
+
+      {/* Usage metrics */}
+      {metrics && (
+        <div>
+          <h2 className="mb-4 text-base font-semibold text-dreams-textPrimary">Usage Metrics</h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {[
+              { label: "Doctors", value: metrics.members.doctors, icon: Stethoscope, color: "blue" },
+              { label: "Patients Linked", value: metrics.patients.approved, icon: UserCheck, color: "green" },
+              { label: "Pending Links", value: metrics.patients.pending, icon: Hourglass, color: "amber" },
+              { label: "Appointments (30d)", value: metrics.appointments.last_30d, icon: Calendar, color: "purple" },
+              { label: "In Queue Today", value: metrics.queue_today.waiting + metrics.queue_today.in_consultation, icon: Clock, color: "orange" },
+              { label: "Branches", value: metrics.branches, icon: Building2, color: "teal" },
+            ].map(({ label, value, icon: Icon, color }) => (
+              <div key={label} className="rounded-xl border border-dreams-border bg-white p-5 shadow-card">
+                <div className="flex items-center gap-3">
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg bg-${color}-50`}>
+                    <Icon className={`h-5 w-5 text-${color}-600`} />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-dreams-textPrimary">{value}</p>
+                    <p className="text-sm text-dreams-textSecondary">{label}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Clinic Info */}

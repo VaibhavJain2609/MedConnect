@@ -180,6 +180,38 @@ export async function deleteAdminClinic(id: string): Promise<void> {
   await api.delete(`/api/v1/admin/clinics/${id}`)
 }
 
+export interface AdminClinicMetrics {
+  members: {
+    total: number
+    doctors: number
+    receptionists: number
+    owners: number
+    inactive: number
+  }
+  patients: {
+    total_linked: number
+    approved: number
+    pending: number
+    revoked: number
+  }
+  appointments: {
+    total: number
+    last_30d: number
+    by_status: Record<string, number>
+  }
+  queue_today: {
+    waiting: number
+    in_consultation: number
+    completed: number
+  }
+  branches: number
+}
+
+export async function getClinicMetrics(id: string): Promise<AdminClinicMetrics> {
+  const res = await api.get(`/api/v1/admin/clinics/${id}/metrics`)
+  return res.data
+}
+
 export interface RedeemInviteResponse {
   message: string;
   clinic_id: string;

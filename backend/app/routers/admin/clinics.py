@@ -1,22 +1,27 @@
 """
 Admin clinic endpoints  [MD-198]
 
-POST   /api/v1/admin/clinics        — create a clinic (no owner)
-GET    /api/v1/admin/clinics        — list all clinics (paginated)
-GET    /api/v1/admin/clinics/{id}   — clinic detail with stats
-PUT    /api/v1/admin/clinics/{id}   — update any clinic
-DELETE /api/v1/admin/clinics/{id}   — soft delete
+POST   /api/v1/admin/clinics              — create a clinic (no owner)
+GET    /api/v1/admin/clinics              — list all clinics (paginated)
+GET    /api/v1/admin/clinics/{id}         — clinic detail with stats
+GET    /api/v1/admin/clinics/{id}/metrics — per-clinic usage metrics
+PUT    /api/v1/admin/clinics/{id}         — update any clinic
+DELETE /api/v1/admin/clinics/{id}         — soft delete
 """
 import uuid
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel as PydanticBaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import require_admin
+from app.models.appointment import Appointment
+from app.models.clinic import ClinicBranch, ClinicMembership
 from app.models.patient_link import PatientClinicLink
+from app.models.queue import QueueEntry
 from app.models.user import User
 from app.schemas.clinic import AdminClinicDetailResponse, ClinicCreate, ClinicUpdate
 from app.services import clinic_service
@@ -173,4 +178,119 @@ async def admin_add_patient_to_clinic(
         "patient_id": str(link.patient_id),
         "clinic_id": str(link.clinic_id),
         "consent_status": link.consent_status,
+    }
+
+
+@router.get("/{clinic_id}/metrics")
+async def get_clinic_metrics(
+    clinic_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Per-clinic usage metrics for the admin clinic detail page.
+
+    One GROUP BY query per aggregate — no N+1. All counts exclude
+    soft-deleted rows. Role counts (doctors/receptionists/owners) cover
+    active memberships only; `inactive` counts is_active=False rows and
+    `total` counts every live membership.
+    """
+    try:
+        cid = uuid.UUID(clinic_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail={"error": {"code": "INVALID_ID", "message": "Invalid clinic ID"}})
+    clinic = await clinic_service.get_clinic(db, cid)
+    if not clinic:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail={"error": {"code": "NOT_FOUND", "message": "Clinic not found"}})
+
+    # Members — single GROUP BY over (role, is_active)
+    member_rows = (
+        await db.execute(
+            select(ClinicMembership.role, ClinicMembership.is_active, func.count())
+            .where(ClinicMembership.clinic_id == cid, ClinicMembership.deleted_at.is_(None))
+            .group_by(ClinicMembership.role, ClinicMembership.is_active)
+        )
+    ).all()
+    members = {"total": 0, "doctors": 0, "receptionists": 0, "owners": 0, "inactive": 0}
+    for role, is_active, cnt in member_rows:
+        members["total"] += cnt
+        if not is_active:
+            members["inactive"] += cnt
+        elif role == "doctor":
+            members["doctors"] += cnt
+        elif role == "receptionist":
+            members["receptionists"] += cnt
+        elif role == "owner":
+            members["owners"] += cnt
+
+    # Patient links — single GROUP BY over consent_status
+    link_rows = (
+        await db.execute(
+            select(PatientClinicLink.consent_status, func.count())
+            .where(PatientClinicLink.clinic_id == cid, PatientClinicLink.deleted_at.is_(None))
+            .group_by(PatientClinicLink.consent_status)
+        )
+    ).all()
+    patients = {"total_linked": 0, "approved": 0, "pending": 0, "revoked": 0}
+    for consent_status, cnt in link_rows:
+        patients["total_linked"] += cnt
+        if consent_status in ("approved", "pending", "revoked"):
+            patients[consent_status] += cnt
+
+    # Appointments — single GROUP BY over status, with a FILTER for last-30d
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    appt_rows = (
+        await db.execute(
+            select(
+                Appointment.status,
+                func.count(),
+                func.count().filter(Appointment.scheduled_at >= cutoff),
+            )
+            .where(Appointment.clinic_id == cid, Appointment.deleted_at.is_(None))
+            .group_by(Appointment.status)
+        )
+    ).all()
+    by_status: dict[str, int] = {}
+    appt_total = 0
+    appt_last_30d = 0
+    for appt_status, cnt, recent in appt_rows:
+        by_status[appt_status] = cnt
+        appt_total += cnt
+        appt_last_30d += recent
+
+    # Queue today — single GROUP BY over status for today's (UTC) queue_date
+    today = datetime.now(timezone.utc).date()
+    queue_rows = (
+        await db.execute(
+            select(QueueEntry.status, func.count())
+            .where(
+                QueueEntry.clinic_id == cid,
+                QueueEntry.deleted_at.is_(None),
+                QueueEntry.queue_date == today,
+            )
+            .group_by(QueueEntry.status)
+        )
+    ).all()
+    queue_today = {"waiting": 0, "in_consultation": 0, "completed": 0}
+    for queue_status, cnt in queue_rows:
+        if queue_status in queue_today:
+            queue_today[queue_status] += cnt
+
+    # Branches — plain count
+    branch_count = await db.scalar(
+        select(func.count())
+        .select_from(ClinicBranch)
+        .where(ClinicBranch.clinic_id == cid, ClinicBranch.deleted_at.is_(None))
+    )
+
+    return {
+        "members": members,
+        "patients": patients,
+        "appointments": {
+            "total": appt_total,
+            "last_30d": appt_last_30d,
+            "by_status": by_status,
+        },
+        "queue_today": queue_today,
+        "branches": branch_count or 0,
     }
