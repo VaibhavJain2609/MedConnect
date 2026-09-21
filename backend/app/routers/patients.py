@@ -429,6 +429,11 @@ async def request_erasure(
     """DPDP right to erasure — anonymize account PII and revoke clinic consents.
 
     Idempotent: a second call returns ``{"status": "already_processed"}``.
+
+    The Keycloak identity (email/name in the IdP) is NOT erased here — the app
+    holds no IdP admin credential. The response always includes
+    ``keycloak_identity_retained: true``; ops completes erasure with
+    ``backend/scripts/keycloak_erasure.sh`` (see ``docs/dpdp-erasure.md``).
     """
     return await request_patient_erasure(db, user)
 

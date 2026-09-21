@@ -15,8 +15,11 @@ Semantics:
 * Audit: log_change(action="ERASE"). The audit payload records WHICH fields
   were erased, never the erased PII itself — audit_logs are immutable and
   copying the PII there would defeat the erasure.
-* Keycloak is intentionally NOT touched — identity-store cleanup is a
-  separate operational step (see caller notes).
+* Keycloak is intentionally NOT touched — the app holds no IdP admin
+  credential. Identity-store cleanup is a separate operational step:
+  `backend/scripts/keycloak_erasure.sh` (runbook: `docs/dpdp-erasure.md`).
+  Every response therefore carries ``keycloak_identity_retained: true`` so
+  ops automation can detect accounts awaiting that step.
 
 The operation is idempotent: a second request returns
 ``{"status": "already_processed", ...}`` without changing anything.
@@ -56,6 +59,7 @@ async def request_patient_erasure(db: AsyncSession, user: User) -> dict:
             "status": "already_processed",
             "erasure_requested_at": _iso(user.erasure_requested_at),
             "erased_at": _iso(user.erased_at),
+            "keycloak_identity_retained": True,
         }
 
     now = datetime.now(timezone.utc)
@@ -129,4 +133,7 @@ async def request_patient_erasure(db: AsyncSession, user: User) -> dict:
         "status": "erased",
         "erasure_requested_at": now.isoformat(),
         "erased_at": now.isoformat(),
+        # The Keycloak identity still holds the original name/email — see
+        # module docstring and docs/dpdp-erasure.md for the ops follow-up.
+        "keycloak_identity_retained": True,
     }
