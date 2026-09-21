@@ -30,6 +30,13 @@ class Settings(BaseSettings):
     BACKEND_URL: str = "http://localhost:8000"
     FRONTEND_URL: str = "http://localhost:3000"
 
+    # Rate limiting — flat per-user bucket (requests/minute) applied on top of
+    # the per-caller (IP/token-hash) limit whenever a Bearer JWT is present.
+    # Deliberately higher than the per-IP category limits so legitimate users
+    # behind shared NAT aren't throttled by neighbors, while a single account
+    # still can't hammer the API or evade limits by rotating tokens.
+    RATE_LIMIT_USER_PER_MINUTE: int = 240
+
     # Teleconsultation — base URL for generated Jitsi meeting rooms
     JITSI_BASE_URL: str = "https://meet.jit.si"
 

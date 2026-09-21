@@ -7,6 +7,7 @@ import pytest
 from app.middleware.rate_limit import (
     _check_limit,
     _get_category,
+    _get_jwt_sub,
     _get_user_key,
 )
 
@@ -186,6 +187,14 @@ class TestRateLimitMiddlewareIntegration:
         async def health():
             return {"ok": True}
 
+        @mini_app.post("/api/v1/uploads/presign")
+        async def presign():
+            return {"ok": True}
+
+        @mini_app.post("/api/v1/interactions/check")
+        async def interactions_check():
+            return {"ok": True}
+
         mini_app.add_middleware(RateLimitMiddleware)
         return mini_app
 
@@ -295,3 +304,238 @@ class TestRateLimitMiddlewareIntegration:
             resp = await self._call(app, "/api/v1/records", method="POST")
         assert resp.status_code == 429
         assert "20" in resp.json()["error"]["message"]
+
+
+# ---------------------------------------------------------------------------
+# Per-user bucket (JWT sub) + per-endpoint limit tests
+# ---------------------------------------------------------------------------
+
+def _mock_pipe(incr_return: int):
+    """Build a mock redis pipeline whose execute() returns [incr_return, True]."""
+    mock_pipe = AsyncMock()
+    mock_pipe.execute = AsyncMock(return_value=[incr_return, True])
+    mock_pipe.incr = MagicMock(return_value=mock_pipe)
+    mock_pipe.expire = MagicMock(return_value=mock_pipe)
+    mock_pipe.__aenter__ = AsyncMock(return_value=mock_pipe)
+    mock_pipe.__aexit__ = AsyncMock(return_value=False)
+    return mock_pipe
+
+
+def _mock_redis(*incr_returns: int):
+    """Mock redis whose pipeline() yields one pipe per call, in order.
+
+    Returns (mock_redis, pipes) so tests can inspect the keys each pipeline
+    was asked to increment.
+    """
+    pipes = [_mock_pipe(v) for v in incr_returns]
+    mock_redis = MagicMock()
+    mock_redis.pipeline = MagicMock(side_effect=pipes)
+    return mock_redis, pipes
+
+
+def _make_token(sub: str = "user-abc-123") -> str:
+    import jwt as pyjwt
+
+    return pyjwt.encode({"sub": sub}, "secret", algorithm="HS256")
+
+
+class TestGetJwtSub:
+    def _make_request(self, auth_header=None):
+        request = MagicMock()
+        request.headers = {"Authorization": auth_header} if auth_header else {}
+        return request
+
+    def test_returns_sub_from_valid_jwt(self):
+        token = _make_token("user-abc-123")
+        request = self._make_request(f"Bearer {token}")
+        assert _get_jwt_sub(request) == "user-abc-123"
+
+    def test_decodes_without_verifying_signature(self):
+        # The middleware decode is for bucketing only, not authz — a token
+        # signed with any key still yields its sub for rate-limit purposes.
+        import jwt as pyjwt
+
+        token = pyjwt.encode({"sub": "u-other"}, "a-different-key", algorithm="HS256")
+        request = self._make_request(f"Bearer {token}")
+        assert _get_jwt_sub(request) == "u-other"
+
+    def test_returns_none_without_authorization_header(self):
+        assert _get_jwt_sub(self._make_request()) is None
+
+    def test_returns_none_for_non_bearer_scheme(self):
+        assert _get_jwt_sub(self._make_request("Basic dXNlcjpwYXNz")) is None
+
+    def test_returns_none_for_malformed_jwt(self):
+        assert _get_jwt_sub(self._make_request("Bearer not-a-valid-jwt")) is None
+
+    def test_returns_none_when_sub_claim_missing(self):
+        import jwt as pyjwt
+
+        token = pyjwt.encode({"email": "a@b.c"}, "secret", algorithm="HS256")
+        assert _get_jwt_sub(self._make_request(f"Bearer {token}")) is None
+
+
+@pytest.mark.asyncio
+class TestPerUserBucketIntegration:
+    """Second (per-user) bucket evaluated alongside the caller/IP bucket."""
+
+    def _make_app(self):
+        from fastapi import FastAPI
+        from app.middleware.rate_limit import RateLimitMiddleware
+
+        mini_app = FastAPI()
+
+        @mini_app.get("/api/v1/patients/timeline")
+        async def timeline():
+            return {"ok": True}
+
+        @mini_app.post("/api/v1/uploads/presign")
+        async def presign():
+            return {"ok": True}
+
+        @mini_app.post("/api/v1/interactions/check")
+        async def interactions_check():
+            return {"ok": True}
+
+        mini_app.add_middleware(RateLimitMiddleware)
+        return mini_app
+
+    async def _call(self, app, path, method="GET", headers=None):
+        from httpx import ASGITransport, AsyncClient
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            fn = getattr(c, method.lower())
+            return await fn(path, headers=headers or {})
+
+    async def test_authenticated_request_uses_separate_user_bucket(self):
+        """Caller bucket and user bucket are distinct counters; both checked."""
+        app = self._make_app()
+        mock_redis, pipes = _mock_redis(1, 1)
+
+        with patch("app.middleware.rate_limit._get_redis", return_value=mock_redis):
+            resp = await self._call(
+                app,
+                "/api/v1/patients/timeline",
+                headers={"Authorization": f"Bearer {_make_token()}"},
+            )
+        assert resp.status_code == 200
+        assert mock_redis.pipeline.call_count == 2
+        caller_key = pipes[0].incr.call_args[0][0]
+        user_key = pipes[1].incr.call_args[0][0]
+        assert caller_key.startswith("rate_limit:token:")
+        assert user_key.startswith("rl:user:user-abc-123:all:")
+
+    async def test_429_when_user_limit_exceeded(self):
+        """Caller bucket passes but user bucket (240/min) is exhausted."""
+        app = self._make_app()
+        mock_redis, _ = _mock_redis(1, 241)
+
+        with patch("app.middleware.rate_limit._get_redis", return_value=mock_redis):
+            resp = await self._call(
+                app,
+                "/api/v1/patients/timeline",
+                headers={"Authorization": f"Bearer {_make_token()}"},
+            )
+        assert resp.status_code == 429
+        assert resp.json()["error"]["code"] == "RATE_LIMIT_EXCEEDED"
+        assert resp.headers["x-ratelimit-bucket"] == "user"
+        assert "240" in resp.json()["error"]["message"]
+        assert "retry-after" in resp.headers
+
+    async def test_caller_bucket_429_marks_bucket_ip(self):
+        app = self._make_app()
+        mock_redis, _ = _mock_redis(101)
+
+        with patch("app.middleware.rate_limit._get_redis", return_value=mock_redis):
+            resp = await self._call(app, "/api/v1/patients/timeline")
+        assert resp.status_code == 429
+        assert resp.headers["x-ratelimit-bucket"] == "ip"
+
+    async def test_malformed_jwt_falls_back_to_ip_only(self):
+        """An undecodable Bearer token skips the user bucket entirely."""
+        app = self._make_app()
+        mock_redis, _ = _mock_redis(101)
+
+        with patch("app.middleware.rate_limit._get_redis", return_value=mock_redis):
+            resp = await self._call(
+                app,
+                "/api/v1/patients/timeline",
+                headers={"Authorization": "Bearer not-a-valid-jwt"},
+            )
+        assert resp.status_code == 429
+        assert resp.headers["x-ratelimit-bucket"] == "ip"
+        # Only the caller bucket was evaluated — no second pipeline.
+        assert mock_redis.pipeline.call_count == 1
+
+    async def test_malformed_jwt_under_limit_allowed_with_single_check(self):
+        app = self._make_app()
+        mock_redis, _ = _mock_redis(1)
+
+        with patch("app.middleware.rate_limit._get_redis", return_value=mock_redis):
+            resp = await self._call(
+                app,
+                "/api/v1/patients/timeline",
+                headers={"Authorization": "Bearer not-a-valid-jwt"},
+            )
+        assert resp.status_code == 200
+        assert mock_redis.pipeline.call_count == 1
+
+
+@pytest.mark.asyncio
+class TestPerEndpointLimits:
+    """Expensive endpoints get a dedicated counter/limit on the caller bucket."""
+
+    def _make_app(self):
+        from fastapi import FastAPI
+        from app.middleware.rate_limit import RateLimitMiddleware
+
+        mini_app = FastAPI()
+
+        @mini_app.post("/api/v1/uploads/presign")
+        async def presign():
+            return {"ok": True}
+
+        @mini_app.post("/api/v1/interactions/check")
+        async def interactions_check():
+            return {"ok": True}
+
+        mini_app.add_middleware(RateLimitMiddleware)
+        return mini_app
+
+    async def _call(self, app, path, method="POST", headers=None):
+        from httpx import ASGITransport, AsyncClient
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            fn = getattr(c, method.lower())
+            return await fn(path, headers=headers or {})
+
+    async def test_presign_blocked_over_20(self):
+        app = self._make_app()
+        mock_redis, pipes = _mock_redis(21)
+
+        with patch("app.middleware.rate_limit._get_redis", return_value=mock_redis):
+            resp = await self._call(app, "/api/v1/uploads/presign")
+        assert resp.status_code == 429
+        assert "20" in resp.json()["error"]["message"]
+        # Dedicated endpoint counter, not the generic "write" bucket.
+        assert "endpoint:/api/v1/uploads/presign" in pipes[0].incr.call_args[0][0]
+
+    async def test_interactions_check_allows_more_than_write_limit(self):
+        """check is capped at 60/min on its own bucket — 30 passes even though
+        the generic write limit is only 20."""
+        app = self._make_app()
+        mock_redis, pipes = _mock_redis(30)
+
+        with patch("app.middleware.rate_limit._get_redis", return_value=mock_redis):
+            resp = await self._call(app, "/api/v1/interactions/check")
+        assert resp.status_code == 200
+        assert "endpoint:/api/v1/interactions/check" in pipes[0].incr.call_args[0][0]
+
+    async def test_interactions_check_blocked_over_60(self):
+        app = self._make_app()
+        mock_redis, _ = _mock_redis(61)
+
+        with patch("app.middleware.rate_limit._get_redis", return_value=mock_redis):
+            resp = await self._call(app, "/api/v1/interactions/check")
+        assert resp.status_code == 429
+        assert "60" in resp.json()["error"]["message"]
