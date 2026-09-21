@@ -13,6 +13,7 @@ from app.models.appointment import Appointment
 from app.models.doctor_availability import DoctorAvailability, DoctorLeave
 from app.models.encounter import Encounter
 from app.models.platform_setting import PlatformSetting
+from app.models.reminder_log import ReminderLog
 from app.models.vital import PatientVital, VITAL_TYPES
 from app.models.audit import AuditLog
 from app.models.lab_result import LabResult
@@ -76,6 +77,7 @@ __all__ = [
     "DoctorLeave",
     "Encounter",
     "PlatformSetting",
+    "ReminderLog",
     "PatientVital",
     "VITAL_TYPES",
     "AuditLog",
