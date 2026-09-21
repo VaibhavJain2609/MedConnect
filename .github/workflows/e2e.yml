@@ -1,0 +1,84 @@
+name: E2E
+
+# Runs the Playwright suite in frontend/e2e. Two modes:
+#
+#  * Staging-URL mode (default): set the repo variable E2E_BASE_URL to a
+#    deployed environment (e.g. https://staging.medconnect.example.com) and
+#    tests run against it. playwright.config.ts skips its local webServer
+#    whenever PLAYWRIGHT_BASE_URL is set.
+#  * Full-stack mode: leave E2E_BASE_URL unset and uncomment the
+#    "Start full stack" step below — Playwright then boots `npm run dev`
+#    itself via webServer and the compose stack supplies backend + Keycloak.
+#
+# Full-stack mode is DISABLED by default: docker-compose.yml has no test
+# profile and builds four custom images (postgres, keycloak, backend,
+# frontend) plus redis/nginx — several minutes of image builds and a
+# Keycloak realm import on every run, too heavy for per-PR CI. Keep it for
+# local reproduction or dedicated runners until the stack gets a lighter
+# test profile.
+
+on:
+  pull_request:
+  schedule:
+    - cron: "17 2 * * *" # nightly ~02:17 UTC
+  workflow_dispatch: # manual runs, e.g. after a staging deploy
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PLAYWRIGHT_BASE_URL: ${{ vars.E2E_BASE_URL }}
+      # Authenticated specs (e2e/appointments.spec.ts, auth.setup.ts) skip
+      # themselves when these secrets are unset.
+      E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
+      E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA
+
+      - uses: actions/setup-node@v4 # pin: resolve tag to full commit SHA
+        with:
+          node-version: "20" # matches frontend/Dockerfile's node:20-alpine
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright browser
+        working-directory: frontend
+        # Chromium only — kept deliberately cheap; add firefox/webkit here
+        # and in playwright.config.ts together if cross-browser coverage is
+        # ever needed.
+        run: npx playwright install --with-deps chromium
+
+      # OPTIONAL full-stack mode — see header comment. Requires the compose
+      # env vars; also add NEXT_PUBLIC_* if they ever diverge from the
+      # localhost defaults in src/lib/keycloak.ts.
+      # - name: Start full stack (docker compose)
+      #   env:
+      #     POSTGRES_USER: medconnect
+      #     POSTGRES_PASSWORD: medconnect
+      #     REDIS_PASSWORD: medconnect
+      #     KEYCLOAK_ADMIN: admin
+      #     KEYCLOAK_ADMIN_PASSWORD: admin
+      #   run: |
+      #     docker compose up -d --build
+      #     timeout 300 bash -c 'until curl -sf http://localhost:8000/health; do sleep 5; done'
+
+      - name: Run Playwright tests
+        working-directory: frontend
+        run: npx playwright test
+
+      - name: Upload Playwright report
+        if: always() # keep the report on green runs too — traces land there
+        uses: actions/upload-artifact@v4 # pin: resolve tag to full commit SHA
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 14
+          if-no-files-found: ignore

@@ -48,6 +48,9 @@ const customJestConfig = {
     '**/__tests__/**/*.[jt]s?(x)',
     '**/?(*.)+(spec|test).[jt]s?(x)',
   ],
+  // e2e/*.spec.ts are Playwright tests, not Jest — the spec-file testMatch
+  // above would otherwise collect them and fail on the @playwright/test import.
+  testPathIgnorePatterns: ['<rootDir>/node_modules/', '<rootDir>/e2e/'],
   transformIgnorePatterns: [
     'node_modules/(?!(msw|@mswjs|@bundled-es-modules)/)',
   ],

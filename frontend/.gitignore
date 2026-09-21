@@ -1,0 +1,5 @@
+# Playwright artifacts (see e2e/ and playwright.config.ts)
+/playwright-report/
+/test-results/
+/playwright/.cache/
+/e2e/.auth/
