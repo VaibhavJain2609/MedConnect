@@ -1,6 +1,7 @@
 import csv
 import io
 import math
+import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -39,6 +40,7 @@ def _audit_filters(
     from_date: Optional[datetime],
     to_date: Optional[datetime],
     changed_by_name: Optional[str],
+    user_id: Optional[uuid.UUID] = None,
 ):
     """Apply the shared audit-log filters to a select(AuditLog, changed_by_name) stmt."""
     if table_name and table_name != "all":
@@ -54,6 +56,9 @@ def _audit_filters(
         stmt = stmt.where(AuditLog.changed_at <= to_date)
     if changed_by_name:
         stmt = stmt.where(User.full_name.ilike(f"%{changed_by_name}%"))
+    if user_id:
+        # Actor filter — rows where this user made the change.
+        stmt = stmt.where(AuditLog.changed_by == user_id)
     return stmt
 
 
@@ -71,12 +76,16 @@ async def list_audit_logs(
     from_date: Optional[datetime] = Query(None),
     to_date: Optional[datetime] = Query(None),
     changed_by_name: Optional[str] = Query(None),
+    user_id: Optional[uuid.UUID] = Query(
+        None, description="Filter to changes made by this user (audit_logs.changed_by)"
+    ),
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = _audit_filters(
-        _audit_base_query(), table_name, record_id, from_date, to_date, changed_by_name
+        _audit_base_query(), table_name, record_id, from_date, to_date,
+        changed_by_name, user_id,
     )
 
     count_stmt = select(func.count()).select_from(stmt.subquery())
@@ -130,6 +139,7 @@ async def export_report(
     table_name: Optional[str] = Query(None),
     record_id: Optional[str] = Query(None),
     changed_by_name: Optional[str] = Query(None),
+    user_id: Optional[uuid.UUID] = Query(None),
     from_date: Optional[datetime] = Query(None),
     to_date: Optional[datetime] = Query(None),
     start_date: Optional[datetime] = Query(None),
@@ -164,6 +174,7 @@ async def export_report(
         effective_from,
         effective_to,
         changed_by_name,
+        user_id,
     ).order_by(AuditLog.changed_at.desc()).limit(_EXPORT_MAX_ROWS)
 
     result = await db.execute(stmt)

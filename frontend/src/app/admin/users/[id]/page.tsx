@@ -27,6 +27,7 @@ import {
   toggleUserActive,
 } from "@/lib/api/admin-users";
 import { useAuthStore } from "@/stores/auth-store";
+import { UserActivityTimeline } from "./activity-timeline";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -62,7 +63,7 @@ const recordTypeBadge: Record<string, string> = {
   discharge_summary: "overdue",
 };
 
-type Tab = "overview" | "prescriptions" | "records";
+type Tab = "overview" | "prescriptions" | "records" | "activity";
 
 export default function AdminUserDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -126,8 +127,12 @@ export default function AdminUserDetailPage() {
         { id: "overview", label: "Overview" },
         { id: "prescriptions", label: `Prescriptions (${user.prescriptions_count})` },
         { id: "records", label: `Medical Records (${user.records_count})` },
+        { id: "activity", label: "Activity" },
       ]
-    : [{ id: "overview", label: "Overview" }];
+    : [
+        { id: "overview", label: "Overview" },
+        { id: "activity", label: "Activity" },
+      ];
 
   return (
     <div className="space-y-6">
@@ -219,26 +224,24 @@ export default function AdminUserDetailPage() {
         )}
       </div>
 
-      {/* Tabs (patients only) */}
-      {isPatient && (
-        <div className="border-b border-dreams-border">
-          <nav className="flex gap-1">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === tab.id
-                    ? "border-dreams-blue text-dreams-blue"
-                    : "border-transparent text-dreams-textSecondary hover:text-dreams-textPrimary"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </nav>
-        </div>
-      )}
+      {/* Tabs */}
+      <div className="border-b border-dreams-border">
+        <nav className="flex gap-1">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === tab.id
+                  ? "border-dreams-blue text-dreams-blue"
+                  : "border-transparent text-dreams-textSecondary hover:text-dreams-textPrimary"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </div>
 
       {/* Overview Tab */}
       {activeTab === "overview" && (
@@ -633,6 +636,8 @@ export default function AdminUserDetailPage() {
           )}
         </div>
       )}
+      {/* Activity Tab */}
+      {activeTab === "activity" && <UserActivityTimeline userId={id} />}
     </div>
   );
 }

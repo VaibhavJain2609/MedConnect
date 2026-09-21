@@ -20,6 +20,7 @@ import {
   Pill,
 } from "lucide-react";
 import { getAdminDoctor, verifyDoctor } from "@/lib/api/doctors";
+import { UserActivityTimeline } from "@/app/admin/users/[id]/activity-timeline";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -394,6 +395,9 @@ export default function DoctorDetailPage() {
               feature is implemented.
             </p>
           </div>
+
+          {/* Activity timeline — audit events where this doctor was the actor */}
+          <UserActivityTimeline userId={doctor.user_id} />
         </div>
 
         {/* Right column: Stats + Checklist + Notes */}
