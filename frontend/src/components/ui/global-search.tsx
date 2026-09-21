@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Search, X, User, Stethoscope, Calendar, Pill, Clock, Building2, FileText } from "lucide-react";
+import { Search, X, User, Stethoscope, Calendar, Pill, Clock, Building2, FileText, FlaskConical, ClipboardList } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { globalSearch, type SearchResult } from "@/lib/api/search";
@@ -124,6 +124,10 @@ export const GlobalSearch: React.FC = () => {
         return <Building2 className="h-4 w-4 text-dreams-blue" />;
       case "record":
         return <FileText className="h-4 w-4 text-status-completed" />;
+      case "lab_result":
+        return <FlaskConical className="h-4 w-4 text-status-inProgress" />;
+      case "prescription":
+        return <ClipboardList className="h-4 w-4 text-dreams-blue" />;
       default:
         return <Search className="h-4 w-4 text-dreams-textSecondary" />;
     }
@@ -143,6 +147,10 @@ export const GlobalSearch: React.FC = () => {
         return "Clinic";
       case "record":
         return "Record";
+      case "lab_result":
+        return "Lab Result";
+      case "prescription":
+        return "Prescription";
       default:
         return "";
     }
@@ -172,7 +180,7 @@ export const GlobalSearch: React.FC = () => {
             <input
               ref={inputRef}
               type="text"
-              placeholder="Search patients, doctors, appointments, medicines..."
+              placeholder="Search patients, records, labs, prescriptions, medicines..."
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
@@ -258,7 +266,7 @@ export const GlobalSearch: React.FC = () => {
               <EmptyState
                 icon={Search}
                 title="Start typing to search"
-                description="Search across patients, doctors, appointments, and medicines"
+                description="Search across patients, records, lab results, prescriptions, and medicines"
               />
             )}
           </div>

@@ -7,7 +7,15 @@ import api from "../api";
 
 export interface SearchResult {
   id: string;
-  type: "patient" | "doctor" | "appointment" | "medicine" | "clinic" | "record";
+  type:
+    | "patient"
+    | "doctor"
+    | "appointment"
+    | "medicine"
+    | "clinic"
+    | "record"
+    | "lab_result"
+    | "prescription";
   title: string;
   subtitle?: string;
   description?: string;
@@ -26,6 +34,8 @@ export interface SearchParams {
     | "medicine"
     | "clinic"
     | "record"
+    | "lab_result"
+    | "prescription"
     | "all";
   limit?: number;
   offset?: number;
@@ -90,6 +100,22 @@ export async function searchAppointments(query: string, limit = 10): Promise<Sea
  */
 export async function searchMedicines(query: string, limit = 10): Promise<SearchResult[]> {
   const response = await globalSearch({ q: query, type: "medicine", limit });
+  return response.results;
+}
+
+/**
+ * Search lab results only
+ */
+export async function searchLabResults(query: string, limit = 10): Promise<SearchResult[]> {
+  const response = await globalSearch({ q: query, type: "lab_result", limit });
+  return response.results;
+}
+
+/**
+ * Search prescriptions only
+ */
+export async function searchPrescriptions(query: string, limit = 10): Promise<SearchResult[]> {
+  const response = await globalSearch({ q: query, type: "prescription", limit });
   return response.results;
 }
 

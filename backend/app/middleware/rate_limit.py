@@ -53,10 +53,16 @@ _LIMITS: dict[str, int] = {
 
 # Per-endpoint limits for expensive routes (requests per minute). Each gets a
 # dedicated counter on the caller bucket, independent of the generic
-# read/write/auth categories.
+# read/write/auth categories. For authenticated callers the same limit is
+# ALSO enforced on the per-user bucket so rotating access tokens cannot
+# evade it.
 _ENDPOINT_LIMITS: dict[str, int] = {
     "/api/v1/uploads/presign": 20,
     "/api/v1/interactions/check": 60,
+    # Global search fans out to multiple ILIKE scans across PHI tables —
+    # keep it well below the generic read limit.
+    "/api/v1/search": 30,
+    "/api/v1/search/suggestions": 30,
 }
 
 _redis_client: aioredis.Redis | None = None
@@ -208,6 +214,20 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # decode — see _get_jwt_sub). Skipped entirely without a usable token.
         sub = _get_jwt_sub(request)
         if sub is not None:
+            if endpoint_limit is not None:
+                # Per-user cap on expensive endpoints — minting a fresh token
+                # must not reset the endpoint budget.
+                allowed, retry_after = await _check_limit(
+                    redis,
+                    f"user:{sub}",
+                    f"endpoint:{path}",
+                    endpoint_limit,
+                    key_prefix="rl",
+                )
+                if not allowed:
+                    return _too_many_requests(
+                        endpoint_limit, "endpoint", retry_after, bucket="user"
+                    )
             allowed, retry_after = await _check_limit(
                 redis,
                 f"user:{sub}",
