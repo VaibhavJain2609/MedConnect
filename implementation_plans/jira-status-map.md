@@ -71,22 +71,22 @@
 
 ## NOT DONE — next implementation rounds
 
-- **Unblocked, prioritized:**
-  1. Patient slot-picker booking UI (backend ready)
-  2. access_service centralization (5 divergent copies — root cause of past authz bugs)
-  3. Write-side `log_change` coverage: vitals, billing, queue, appointments, uploads, clinics
-  4. Notification preferences UI page (API exists, zero callers)
-  5. Receptionist backend role-enforcement on clinical endpoints (currently relies on global role)
-  6. Doctor onboarding document upload completion
-  7. Record export endpoint (FHIR bundles already generated)
-  8. SMS/WhatsApp provider adapters (code the interface; no live creds needed)
-  9. Prescription expiry notifications
-  10. Verified badge patient-facing completion
-  11. User activity timeline on admin user detail
-  12. Backend export endpoints (CSV) for medicines/users/audit
-  13. Pre-commit hooks config
-  14. PrometheusRule alert set + Grafana dashboards + RUNBOOK.md
-  15. Download-helper convergence (3 inline copies → `lib/download.ts`)
+- **Round-5 unblocked candidates:**
+  1. DPDP: consent-at-signup checkbox + data-erasure/export endpoint (export exists — add erasure)
+  2. Patient live queue-status page
+  3. Receptionist portal functionality (queue check-in via membership role)
+  4. Doctor dashboard actionable widgets (today's schedule, queue depth, next patient)
+  5. Medication adherence tracking view
+  6. Redis caching for medicine catalog search/autocomplete
+  7. Per-user rate limiting (currently IP-only)
+  8. E2E Playwright scaffolding + CI job
+  9. Seed script for demo data
+  10. Sentry @sentry/nextjs frontend init
+  11. Admin doctor-verification UI: surface license_document_url
+  12. Verified badge in patient-facing doctor search
+  13. Clinic timezone settable via clinic update API
+  14. Backup/restore drill script + doc
+  15. Coverage push toward 80% (authz + critical-path tests)
 - **BLOCKED — ABDM/ABHA: awaiting regulatory approval (user-confirmed)** — do not implement: ABHA creation/linking, NRCeS-conformant FHIR, HIP module (tickets 107–116)
 - **Blocked/external:** SMS/WhatsApp live provider accounts (code adapters anyway), OCR/AI features, load testing env, i18n assets, barcode data source, push VAPID/service
 
