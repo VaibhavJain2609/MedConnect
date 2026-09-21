@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_medicine_db
 from app.dependencies import get_current_user
+from app.services import medicine_cache
 from app.services.salt_service import SaltService
 from app.services.brand_service import BrandService, ManufacturerService
 from app.services.medicine_search_service import MedicineSearchService
@@ -42,7 +43,13 @@ async def search_medicines(
     Unified search across salts and brands.
     Returns both salts and brands matching the query.
     """
+    cache_key = medicine_cache.make_key("search", q.strip().lower(), limit)
+    cached = await medicine_cache.get_cached(cache_key)
+    if cached is not None:
+        return cached
+
     result = await MedicineSearchService.search_all(db, search=q, limit=limit)
+    await medicine_cache.set_cached(cache_key, result)
     return result
 
 
@@ -67,6 +74,11 @@ async def autocomplete_medicines(
     from sqlalchemy.orm import selectinload, joinedload
     from app.models.medicine.commercial import Brand, BrandComposition, Manufacturer
     from app.models.medicine.salts import SaltStrength, Salt
+
+    cache_key = medicine_cache.make_key("autocomplete", q.strip().lower())
+    cached = await medicine_cache.get_cached(cache_key)
+    if cached is not None:
+        return cached
 
     # Query brands with smart ranking:
     # 1. Exact match (highest priority)
@@ -125,7 +137,9 @@ async def autocomplete_medicines(
             "strength": salt_comp,  # Use salt composition as strength display
         })
 
-    return {"results": autocomplete_results, "count": len(autocomplete_results)}
+    response = {"results": autocomplete_results, "count": len(autocomplete_results)}
+    await medicine_cache.set_cached(cache_key, response)
+    return response
 
 
 # ============================================================================
@@ -142,6 +156,18 @@ async def list_salts(
     db: AsyncSession = Depends(get_medicine_db),
 ):
     """List salts (active pharmaceutical ingredients) with filters."""
+    cache_key = medicine_cache.make_key(
+        "salts",
+        (search or "-").strip().lower(),
+        chemical_class_id or "-",
+        therapeutic_class_id or "-",
+        page,
+        limit,
+    )
+    cached = await medicine_cache.get_cached(cache_key)
+    if cached is not None:
+        return cached
+
     offset = (page - 1) * limit
     salts, total = await SaltService.search_salts(
         db,
@@ -181,12 +207,14 @@ async def list_salts(
         for s in salts
     ]
 
-    return SaltListResponse(
+    response = SaltListResponse(
         salts=salt_items,
         total=total,
         page=page,
         pages=pages,
     )
+    await medicine_cache.set_cached(cache_key, response)
+    return response
 
 
 @router.get("/salts/{salt_id}", response_model=SaltResponse)
@@ -195,6 +223,11 @@ async def get_salt(
     db: AsyncSession = Depends(get_medicine_db),
 ):
     """Get salt details by ID, including side effects and contraindications."""
+    cache_key = medicine_cache.make_key("salt", salt_id)
+    cached = await medicine_cache.get_cached(cache_key)
+    if cached is not None:
+        return cached
+
     salt = await SaltService.get_salt_by_id(db, salt_id)
     if not salt:
         raise HTTPException(status_code=404, detail="Salt not found")
@@ -227,7 +260,7 @@ async def get_salt(
         if sc.contraindication is not None
     ]
 
-    return SaltResponse(
+    response = SaltResponse(
         salt_id=salt.salt_id,
         salt_name=salt.salt_name,
         description=salt.description,
@@ -247,6 +280,10 @@ async def get_salt(
         created_at=salt.created_at,
         updated_at=salt.updated_at,
     )
+    await medicine_cache.set_cached(
+        cache_key, response, ttl=medicine_cache.DETAIL_TTL_SECONDS
+    )
+    return response
 
 
 @router.get("/salts/{salt_id}/strengths", response_model=list[SaltStrengthResponse])
@@ -255,8 +292,18 @@ async def get_salt_strengths(
     db: AsyncSession = Depends(get_medicine_db),
 ):
     """Get all available strengths for a salt."""
+    cache_key = medicine_cache.make_key("salt", salt_id, "strengths")
+    cached = await medicine_cache.get_cached(cache_key)
+    if cached is not None:
+        return cached
+
     strengths = await SaltService.get_salt_strengths(db, salt_id)
-    return strengths
+    # Validate to response models so the cached payload is JSON-safe.
+    items = [SaltStrengthResponse.model_validate(s) for s in strengths]
+    await medicine_cache.set_cached(
+        cache_key, items, ttl=medicine_cache.DETAIL_TTL_SECONDS
+    )
+    return items
 
 
 @router.get("/salts/{salt_id}/brands", response_model=list[dict])
@@ -271,12 +318,22 @@ async def get_brands_by_salt(
     Get all brands containing this salt.
     Optionally filter by specific strength.
     """
+    cache_key = medicine_cache.make_key(
+        "salt", salt_id, "brands", strength_value or "-", strength_unit or "-", limit
+    )
+    cached = await medicine_cache.get_cached(cache_key)
+    if cached is not None:
+        return cached
+
     brands = await MedicineSearchService.get_brands_by_salt(
         db,
         salt_id=salt_id,
         strength_value=strength_value,
         strength_unit=strength_unit,
         limit=limit,
+    )
+    await medicine_cache.set_cached(
+        cache_key, brands, ttl=medicine_cache.DETAIL_TTL_SECONDS
     )
     return brands
 
@@ -296,6 +353,19 @@ async def list_brands(
     db: AsyncSession = Depends(get_medicine_db),
 ):
     """List brands (commercial medicines) with filters."""
+    cache_key = medicine_cache.make_key(
+        "brands",
+        (search or "-").strip().lower(),
+        salt_id or "-",
+        manufacturer_id or "-",
+        include_discontinued,
+        page,
+        limit,
+    )
+    cached = await medicine_cache.get_cached(cache_key)
+    if cached is not None:
+        return cached
+
     offset = (page - 1) * limit
     brands, total = await BrandService.search_brands(
         db,
@@ -340,12 +410,14 @@ async def list_brands(
             )
         )
 
-    return BrandListResponse(
+    response = BrandListResponse(
         brands=brand_responses,
         total=total,
         page=page,
         pages=pages,
     )
+    await medicine_cache.set_cached(cache_key, response)
+    return response
 
 
 @router.get("/brands/{brand_id}", response_model=BrandResponse)
@@ -354,6 +426,11 @@ async def get_brand(
     db: AsyncSession = Depends(get_medicine_db),
 ):
     """Get brand details by ID, with side effects aggregated across composition salts."""
+    cache_key = medicine_cache.make_key("brand", brand_id)
+    cached = await medicine_cache.get_cached(cache_key)
+    if cached is not None:
+        return cached
+
     brand = await BrandService.get_brand_by_id(db, brand_id)
     if not brand:
         raise HTTPException(status_code=404, detail="Brand not found")
@@ -386,7 +463,7 @@ async def get_brand(
     ]
     side_effects.sort(key=lambda s: s.side_effect_name.lower())
 
-    return BrandResponse(
+    response = BrandResponse(
         brand_id=brand.brand_id,
         brand_name=brand.brand_name,
         manufacturer=brand.manufacturer,
@@ -400,6 +477,10 @@ async def get_brand(
         created_at=brand.created_at,
         updated_at=brand.updated_at,
     )
+    await medicine_cache.set_cached(
+        cache_key, response, ttl=medicine_cache.DETAIL_TTL_SECONDS
+    )
+    return response
 
 
 @router.get("/brands/{brand_id}/alternatives", response_model=list[BrandResponse])
@@ -408,6 +489,11 @@ async def get_brand_alternatives(
     db: AsyncSession = Depends(get_medicine_db),
 ):
     """Get alternative brands with same salt composition."""
+    cache_key = medicine_cache.make_key("brand", brand_id, "alternatives")
+    cached = await medicine_cache.get_cached(cache_key)
+    if cached is not None:
+        return cached
+
     alternatives = await BrandService.get_brand_alternatives(db, brand_id)
 
     brand_responses = []
@@ -440,6 +526,9 @@ async def get_brand_alternatives(
             )
         )
 
+    await medicine_cache.set_cached(
+        cache_key, brand_responses, ttl=medicine_cache.DETAIL_TTL_SECONDS
+    )
     return brand_responses
 
 
@@ -456,6 +545,17 @@ async def list_manufacturers(
     db: AsyncSession = Depends(get_medicine_db),
 ):
     """List manufacturers."""
+    cache_key = medicine_cache.make_key(
+        "manufacturers",
+        (search or "-").strip().lower(),
+        is_active if is_active is not None else "-",
+        limit,
+        offset,
+    )
+    cached = await medicine_cache.get_cached(cache_key)
+    if cached is not None:
+        return cached
+
     manufacturers, total = await ManufacturerService.search_manufacturers(
         db,
         search=search,
@@ -463,7 +563,10 @@ async def list_manufacturers(
         limit=limit,
         offset=offset,
     )
-    return manufacturers
+    # Validate to response models so the cached payload is JSON-safe.
+    items = [ManufacturerResponse.model_validate(m) for m in manufacturers]
+    await medicine_cache.set_cached(cache_key, items)
+    return items
 
 
 @router.get("/manufacturers/{manufacturer_id}", response_model=ManufacturerResponse)
@@ -472,7 +575,16 @@ async def get_manufacturer(
     db: AsyncSession = Depends(get_medicine_db),
 ):
     """Get manufacturer details by ID."""
+    cache_key = medicine_cache.make_key("manufacturer", manufacturer_id)
+    cached = await medicine_cache.get_cached(cache_key)
+    if cached is not None:
+        return cached
+
     manufacturer = await ManufacturerService.get_manufacturer_by_id(db, manufacturer_id)
     if not manufacturer:
         raise HTTPException(status_code=404, detail="Manufacturer not found")
-    return manufacturer
+    item = ManufacturerResponse.model_validate(manufacturer)
+    await medicine_cache.set_cached(
+        cache_key, item, ttl=medicine_cache.DETAIL_TTL_SECONDS
+    )
+    return item

@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from app.database import get_medicine_db
 from app.dependencies import require_admin
 from app.models.user import User
+from app.services import medicine_cache
 from app.services.brand_service import ManufacturerService
 
 
@@ -75,6 +76,7 @@ async def create_manufacturer(
             is_active=manufacturer_data.is_active,
         )
         await db.commit()
+        await medicine_cache.invalidate_catalog()
         await db.refresh(manufacturer)
 
         return ManufacturerResponse(
@@ -124,6 +126,7 @@ async def update_manufacturer(
             )
 
         await db.commit()
+        await medicine_cache.invalidate_catalog()
         await db.refresh(manufacturer)
 
         return ManufacturerResponse(
@@ -170,4 +173,5 @@ async def delete_manufacturer(
             )
 
     await db.commit()
+    await medicine_cache.invalidate_catalog()
     return None

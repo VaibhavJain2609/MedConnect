@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from app.database import get_medicine_db
 from app.dependencies import require_admin
 from app.models.user import User
+from app.services import medicine_cache
 from app.services.salt_service import SaltService
 
 
@@ -142,6 +143,7 @@ async def create_salt(
             strengths=strengths_data,
         )
         await db.commit()
+        await medicine_cache.invalidate_catalog()
 
         # Reload with strengths
         salt = await SaltService.get_salt_by_id(db, salt.salt_id)
@@ -225,6 +227,7 @@ async def update_salt(
             )
 
         await db.commit()
+        await medicine_cache.invalidate_catalog()
 
         # Reload with strengths
         salt = await SaltService.get_salt_by_id(db, salt_id)
@@ -296,6 +299,7 @@ async def delete_salt(
             )
 
     await db.commit()
+    await medicine_cache.invalidate_catalog()
     return None
 
 
@@ -352,6 +356,7 @@ async def create_salt_strength(
     )
     db.add(strength)
     await db.commit()
+    await medicine_cache.invalidate_catalog()
     await db.refresh(strength)
 
     return SaltStrengthResponse(
@@ -420,6 +425,7 @@ async def update_salt_strength(
     strength.pediatric_approved = strength_data.pediatric_approved
 
     await db.commit()
+    await medicine_cache.invalidate_catalog()
     await db.refresh(strength)
 
     return SaltStrengthResponse(
@@ -479,4 +485,5 @@ async def delete_salt_strength(
 
     await db.delete(strength)
     await db.commit()
+    await medicine_cache.invalidate_catalog()
     return None
