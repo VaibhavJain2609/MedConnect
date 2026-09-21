@@ -11,8 +11,10 @@ import {
   Building2,
   FileText,
   Calendar,
+  ExternalLink,
 } from "lucide-react";
 import { getDoctors, verifyDoctor, Doctor } from "@/lib/api/doctors";
+import { openFileInNewTab } from "@/lib/download";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
 
@@ -263,6 +265,19 @@ export default function DoctorVerificationQueuePage() {
                       <FileText className="h-3.5 w-3.5 flex-shrink-0" />
                       <span>{doctor.license_number ?? "—"}</span>
                     </div>
+                    {doctor.license_document_url && (
+                      <button
+                        onClick={() =>
+                          openFileInNewTab(
+                            `/api/v1/uploads/${doctor.license_document_url}`
+                          )
+                        }
+                        className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-dreams-blue hover:underline"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        View document
+                      </button>
+                    )}
                   </td>
 
                   {/* Facility */}
