@@ -179,6 +179,12 @@ async def get_current_user(
             )
             await db.execute(doc_stmt)
             await db.flush()
+    elif getattr(user, "erased_at", None) is not None:
+        # Erased (DPDP) user — do NOT resurrect name/email from token claims.
+        # Only the role is kept in sync; PII fields stay anonymized.
+        if user.role != role:
+            user.role = role
+            await db.flush()
     else:
         # Sync: update local user from token claims on every request
         changed = False
