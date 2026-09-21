@@ -71,22 +71,32 @@
 
 ## NOT DONE — next implementation rounds
 
-- **Round-5 unblocked candidates:**
-  1. DPDP: consent-at-signup checkbox + data-erasure/export endpoint (export exists — add erasure)
-  2. Patient live queue-status page
-  3. Receptionist portal functionality (queue check-in via membership role)
-  4. Doctor dashboard actionable widgets (today's schedule, queue depth, next patient)
-  5. Medication adherence tracking view
-  6. Redis caching for medicine catalog search/autocomplete
-  7. Per-user rate limiting (currently IP-only)
-  8. E2E Playwright scaffolding + CI job
-  9. Seed script for demo data
-  10. Sentry @sentry/nextjs frontend init
-  11. Admin doctor-verification UI: surface license_document_url
-  12. Verified badge in patient-facing doctor search
-  13. Clinic timezone settable via clinic update API
-  14. Backup/restore drill script + doc
-  15. Coverage push toward 80% (authz + critical-path tests)
+- **Round-5 — ALL LANDED (verified, merged, pushed):**
+  - DPDP: consent capture + `POST /patients/erasure` (soft-delete/anonymize, links revoked, idempotent); claim-sync guarded so erased PII can't resurrect
+  - Patient live queue-status page (`GET /queue/my-position` + `/patient/queue`)
+  - Receptionist portal: `get_clinic_staff` dep — queue check-in/status/delete role-scoped; clinic appointment list; `GET /clinics/{id}/doctors` + booking-modal doctor picker
+  - Doctor dashboard: real today-schedule/queue/quick-actions widgets
+  - Medication adherence view (active vs expired, course progress, 3-day expiry badges)
+  - Redis medicine-catalog cache (`medcat:*`, 300s/3600s TTL, admin-mutation invalidation, graceful fallback)
+  - Per-user rate limiting (JWT-sub bucket, `RATE_LIMIT_USER_PER_MINUTE=240`, presign+interactions endpoint limits, `X-RateLimit-Bucket` header)
+  - Playwright e2e scaffold + `e2e.yml` workflow
+  - `scripts/seed_demo_data.py` (idempotent, `--drop`, `make seed`)
+  - Sentry frontend init (client/server/edge configs, axios 5xx capture, Dockerfile + cd.yml args)
+  - Admin verification UI: license document surfaced (detail + pending list); uploads-ACL admin-bypass ordering fixed
+  - Verified badge in patient doctor search (backend field + UI)
+  - Clinic timezone settable via `ClinicUpdate` (IANA-validated)
+  - 46-test coverage file (exports, receptionist authz, queue ops, encounter access) — caught `GET /encounters` 500 (missing batched name-loader, fixed) + 422-handler flattening of domain codes (fixed)
+- **Round-6 unblocked candidates:**
+  1. Receptionist existing-patient booking + status/reschedule (global-role gates remain — front-desk currently queue-only)
+  2. Backup/restore drill script + doc
+  3. Keycloak-side erasure (ops step — identity record persists after DPDP erasure)
+  4. Push notifications (Web Push / APNs)
+  5. i18n scaffolding
+  6. Load testing (locust/k6) + pg_stat_statements tuning
+  7. OCR/AI record ingestion
+  8. Barcode data source
+  9. OpenAPI → generated TS client (kill contract drift)
+  10. Coverage toward 80% (more authz matrices + worker tests)
 - **BLOCKED — ABDM/ABHA: awaiting regulatory approval (user-confirmed)** — do not implement: ABHA creation/linking, NRCeS-conformant FHIR, HIP module (tickets 107–116)
 - **Blocked/external:** SMS/WhatsApp live provider accounts (code adapters anyway), OCR/AI features, load testing env, i18n assets, barcode data source, push VAPID/service
 
