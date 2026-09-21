@@ -123,7 +123,7 @@ export function TodaySchedule() {
                     <p className="truncate text-sm font-medium text-dreams-textPrimary">
                       {appt.patient_name ?? "Unknown patient"}
                       {appt.is_provisional && (
-                        <span className="ml-1.5 text-xs text-status-pending">
+                        <span className="ml-1.5 text-xs text-amber-700">
                           (walk-in)
                         </span>
                       )}

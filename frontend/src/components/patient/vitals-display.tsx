@@ -62,11 +62,11 @@ export const VitalsDisplay: React.FC<VitalsDisplayProps> = ({
   const getStatusColor = (status: VitalData["status"]) => {
     switch (status) {
       case "normal":
-        return "text-status-completed border-status-completed/20 bg-status-completed/5";
+        return "text-green-800 border-status-completed/20 bg-status-completed/5";
       case "warning":
-        return "text-status-pending border-status-pending/20 bg-status-pending/5";
+        return "text-amber-800 border-status-pending/20 bg-status-pending/5";
       case "critical":
-        return "text-status-overdue border-status-overdue/20 bg-status-overdue/5";
+        return "text-red-800 border-status-overdue/20 bg-status-overdue/5";
       default:
         return "text-dreams-textSecondary border-dreams-border bg-white";
     }
@@ -88,9 +88,9 @@ export const VitalsDisplay: React.FC<VitalsDisplayProps> = ({
   const getTrendColor = (trend?: VitalData["trend"]) => {
     switch (trend) {
       case "up":
-        return "text-status-overdue";
+        return "text-red-700";
       case "down":
-        return "text-status-completed";
+        return "text-green-700";
       case "stable":
         return "text-dreams-textSecondary";
       default:

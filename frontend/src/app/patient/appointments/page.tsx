@@ -830,7 +830,7 @@ export default function PatientAppointmentsPage() {
       )}
 
       {linkError && (
-        <div className="rounded-lg border border-status-overdue/30 bg-status-overdue/10 px-4 py-2 text-sm text-status-overdue">
+        <div className="rounded-lg border border-status-overdue/30 bg-status-overdue/10 px-4 py-2 text-sm text-red-800">
           {linkError}
         </div>
       )}
