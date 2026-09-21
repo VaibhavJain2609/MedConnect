@@ -31,6 +31,10 @@ Thumbs.db
 # Docker
 postgres_data/
 
+# Local DB backups (backend/scripts/backup_db.sh) — pg_dump archives of PHI-
+# shaped data must never be committed
+backups/
+
 # Coverage
 htmlcov/
 .coverage
