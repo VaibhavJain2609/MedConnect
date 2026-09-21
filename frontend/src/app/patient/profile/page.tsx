@@ -3,7 +3,19 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
+import { getPrivacyStatus, requestErasure } from "@/lib/api/patients";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const LANGUAGE_OPTIONS = [
   { value: "en", label: "English" },
@@ -27,6 +39,19 @@ export default function PatientProfilePage() {
     queryFn: async () => {
       const res = await api.get("/api/v1/patients/profile");
       return res.data;
+    },
+  });
+
+  const { data: privacy } = useQuery({
+    queryKey: ["patient-privacy"],
+    queryFn: getPrivacyStatus,
+  });
+
+  const erasureMutation = useMutation({
+    mutationFn: requestErasure,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["patient-privacy"] });
+      queryClient.invalidateQueries({ queryKey: ["patient-profile"] });
     },
   });
 
@@ -197,6 +222,100 @@ export default function PatientProfilePage() {
           )}
         </div>
       </form>
+
+      {/* Privacy (DPDP) */}
+      <div className="bg-white rounded-lg shadow-card p-6 space-y-4 max-w-2xl">
+        <h2 className="text-lg font-semibold text-dreams-textPrimary border-b border-dreams-border pb-3">
+          Privacy
+        </h2>
+
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-dreams-textSecondary">
+            Data Consent
+          </label>
+          {privacy?.consent_at ? (
+            <p className="text-dreams-textPrimary">
+              Consented on{" "}
+              {new Date(privacy.consent_at).toLocaleDateString("en-IN", {
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+              })}
+              {privacy.consent_version
+                ? ` (notice ${privacy.consent_version})`
+                : ""}
+            </p>
+          ) : (
+            <p className="text-dreams-textSecondary">
+              No consent record on file.
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-2 border-t border-dreams-border pt-4">
+          <label className="text-sm font-medium text-dreams-textSecondary">
+            Data Erasure
+          </label>
+          {privacy?.erased_at || privacy?.erasure_requested_at ? (
+            <p className="text-sm text-dreams-textPrimary">
+              Your data erasure request was processed
+              {privacy.erased_at
+                ? ` on ${new Date(privacy.erased_at).toLocaleDateString("en-IN", {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                  })}`
+                : ""}
+              .
+            </p>
+          ) : (
+            <>
+              <p className="text-sm text-dreams-textSecondary">
+                Under the Digital Personal Data Protection Act, you can request
+                erasure of your personal data. This anonymizes your account
+                details and revokes clinic data-sharing consents. Clinical
+                records held by your doctors are retained as required by law.
+              </p>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <button
+                    type="button"
+                    className="h-10 px-4 rounded-lg border border-red-300 text-red-600 text-sm font-medium hover:bg-red-50 transition-colors"
+                  >
+                    Request data erasure
+                  </button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Erase your personal data?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will permanently anonymize your name, email, phone
+                      and emergency contact details, and revoke all clinic
+                      data-sharing consents. This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => erasureMutation.mutate()}
+                      className="bg-red-600 hover:bg-red-700"
+                    >
+                      {erasureMutation.isPending
+                        ? "Processing..."
+                        : "Erase my data"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+              {erasureMutation.isError && (
+                <p className="text-sm text-red-600">
+                  Erasure request failed. Please try again.
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

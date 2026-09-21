@@ -236,3 +236,31 @@ export async function updatePatient(
 export async function deletePatient(id: string): Promise<void> {
   await api.delete(`/api/v1/admin/users/${id}`);
 }
+
+/**
+ * DPDP privacy status for the current patient (consent + erasure state).
+ */
+export interface PrivacyStatus {
+  consent_at: string | null;
+  consent_version: string | null;
+  erasure_requested_at: string | null;
+  erased_at: string | null;
+}
+
+export async function getPrivacyStatus(): Promise<PrivacyStatus> {
+  const response = await api.get("/api/v1/patients/privacy");
+  return response.data;
+}
+
+/**
+ * Request DPDP data erasure for the current patient.
+ * Idempotent — the backend returns "already_processed" on repeat calls.
+ */
+export async function requestErasure(): Promise<{
+  status: "erased" | "already_processed";
+  erasure_requested_at: string | null;
+  erased_at: string | null;
+}> {
+  const response = await api.post("/api/v1/patients/erasure");
+  return response.data;
+}

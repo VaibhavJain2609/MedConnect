@@ -32,6 +32,8 @@ async def get_me(user: User = Depends(get_current_user)):
 class SetRoleRequest(BaseModel):
     role: str
     invite_code: Optional[str] = None
+    # DPDP: optional privacy-notice consent captured at role selection/signup.
+    consent_version: Optional[str] = None
 
 
 async def _get_valid_doctor_invite(db: AsyncSession, code: str) -> ClinicInvite | None:
@@ -64,6 +66,12 @@ async def set_role(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"error": {"code": "INVALID_ROLE", "message": "Role must be 'patient' or 'doctor'"}},
         )
+
+    # DPDP consent capture — stored when the client posts a consent_version
+    # (get_db commits the session after the handler returns).
+    if body.consent_version:
+        user.consent_at = datetime.now(timezone.utc)
+        user.consent_version = body.consent_version
 
     if body.role == "patient":
         # Open self-assignment. Note: roles granted in Keycloak still take

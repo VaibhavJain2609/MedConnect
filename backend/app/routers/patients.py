@@ -15,6 +15,7 @@ from app.models.user import User
 from app.schemas.common import PaginatedResponse, PaginationMeta
 from app.schemas.record import RecordResponse, VALID_RECORD_TYPES, _validate_document_url
 from app.schemas.user import MedicalHistoryUpdate, PatientProfileUpdate
+from app.services.erasure_service import request_patient_erasure
 from app.services.export_service import build_records_export_bundle
 from app.services.prescription_service import get_patient_prescriptions
 from app.services.record_service import create_record, get_patient_timeline, get_record_detail
@@ -328,6 +329,34 @@ async def update_medical_history(
         "height_cm": user.height_cm,
         "weight_kg": user.weight_kg,
     }
+
+
+# ─── DPDP privacy: consent status + right to erasure ───────────────────────
+
+
+@router.get("/privacy")
+async def get_privacy_status(user: User = Depends(require_patient)):
+    """Return the current patient's DPDP consent + erasure status."""
+    return {
+        "consent_at": user.consent_at.isoformat() if user.consent_at else None,
+        "consent_version": user.consent_version,
+        "erasure_requested_at": (
+            user.erasure_requested_at.isoformat() if user.erasure_requested_at else None
+        ),
+        "erased_at": user.erased_at.isoformat() if user.erased_at else None,
+    }
+
+
+@router.post("/erasure")
+async def request_erasure(
+    user: User = Depends(require_patient),
+    db: AsyncSession = Depends(get_db),
+):
+    """DPDP right to erasure — anonymize account PII and revoke clinic consents.
+
+    Idempotent: a second call returns ``{"status": "already_processed"}``.
+    """
+    return await request_patient_erasure(db, user)
 
 
 # Patient self-upload record types (subset — excludes doctor-only types)

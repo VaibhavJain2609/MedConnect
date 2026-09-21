@@ -87,6 +87,8 @@ class ProfileStepRequest(BaseModel):
     full_name: Optional[str] = None
     phone: Optional[str] = None
     specialization: Optional[str] = None
+    # DPDP: optional privacy-notice consent captured during onboarding.
+    consent_version: Optional[str] = None
 
 
 @router.put("/profile")
@@ -104,6 +106,11 @@ async def onboarding_profile(
         user.phone = data.phone
     if data.specialization is not None:
         doctor.specialization = data.specialization
+    if data.consent_version:
+        from datetime import datetime as _dt
+
+        user.consent_at = _dt.now(_tz.utc)
+        user.consent_version = data.consent_version
 
     if doctor.onboarding_step in ("pending", "profile"):
         doctor.onboarding_step = "license"

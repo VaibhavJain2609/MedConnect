@@ -23,6 +23,27 @@ export interface QueueListResponse {
   total: number;
 }
 
+/**
+ * Patient-facing live queue position (GET /api/v1/queue/my-position).
+ * All fields are null/empty when the patient isn't checked in anywhere today.
+ */
+export interface MyQueuePosition {
+  queue_entry_id: string | null;
+  clinic_id: string | null;
+  clinic_name: string | null;
+  doctor_name: string | null;
+  queue_number: number | null;
+  position: number | null;
+  status: QueueEntry["status"] | null;
+  ahead_count: number;
+  estimated_wait_minutes: number | null;
+}
+
+export async function getMyQueuePosition(): Promise<MyQueuePosition> {
+  const res = await api.get("/api/v1/queue/my-position");
+  return res.data;
+}
+
 export async function getQueue(
   clinicId: string,
   params?: { status?: string; doctor_id?: string }
