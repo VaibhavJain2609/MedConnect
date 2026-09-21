@@ -236,12 +236,12 @@ export default function AdminDashboardPage() {
               {stats?.verified_doctors} of {stats?.total_doctors} doctors verified
             </p>
           </div>
-          <a
+          <Link
             href="/admin/doctors/pending"
             className="text-xs font-medium text-amber-700 hover:text-amber-900 underline"
           >
             Review
-          </a>
+          </Link>
         </div>
       )}
 

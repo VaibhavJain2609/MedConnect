@@ -20,17 +20,15 @@ function cspOrigin(url) {
 const nextConfig = {
   output: "standalone",
   poweredByHeader: false,
-  experimental: {
-    // Loads src/instrumentation.ts (Sentry server/edge init). Required on
-    // Next 14 — the hook is stable without the flag on Next 15+.
-    // NOTE: we intentionally do NOT wrap this config in Sentry's
-    // withSentryConfig — its webpack plugin exists mainly for sourcemap
-    // upload (needs SENTRY_AUTH_TOKEN, which CI doesn't have) and it also
-    // auto-instruments route handlers/server functions. Manual init via
-    // instrumentation.ts + the sentry.*.config.ts files is the less
-    // fragile path for this codebase.
-    instrumentationHook: true,
-  },
+  // src/instrumentation.ts (Sentry server/edge init) is loaded automatically —
+  // the experimental.instrumentationHook flag was removed once the hook went
+  // stable (Next 15+).
+  // NOTE: we intentionally do NOT wrap this config in Sentry's
+  // withSentryConfig — its webpack plugin exists mainly for sourcemap
+  // upload (needs SENTRY_AUTH_TOKEN, which CI doesn't have) and it also
+  // auto-instruments route handlers/server functions. Manual init via
+  // instrumentation.ts + the sentry.*.config.ts files is the less
+  // fragile path for this codebase.
   async rewrites() {
     // k8s exposes the backend service on port 80 — allow override via env
     const apiInternalUrl = process.env.API_INTERNAL_URL || 'http://backend:8000';

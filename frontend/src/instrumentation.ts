@@ -1,6 +1,6 @@
 // Next.js instrumentation hook — runs once per runtime on server startup.
-// Enabled via `experimental.instrumentationHook` in next.config.js
-// (required on Next 14; stable without the flag on Next 15+).
+// Stable since Next 15 (no config flag needed on 15+; the old
+// experimental.instrumentationHook flag was removed on upgrade to Next 16).
 // Loads the Sentry init files manually since we don't use withSentryConfig.
 export async function register() {
   // Skip entirely when Sentry isn't configured — keeps local dev clean.
