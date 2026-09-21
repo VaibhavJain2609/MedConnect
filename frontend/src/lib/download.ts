@@ -42,8 +42,9 @@ export async function downloadFile(url: string, filename?: string): Promise<void
 /** Fetch `url` with auth and open the resulting blob in a new tab (e.g. PDF preview). */
 export async function openFileInNewTab(url: string): Promise<void> {
   const response = await api.get(url, { responseType: "blob" });
+  const rawContentType = response.headers?.["content-type"];
   const contentType =
-    response.headers?.["content-type"] || "application/octet-stream";
+    typeof rawContentType === "string" ? rawContentType : "application/octet-stream";
   const blob =
     response.data instanceof Blob && response.data.type === contentType
       ? response.data
