@@ -5,8 +5,15 @@ import { useRouter, useSearchParams } from "next/navigation";
 import api from "@/lib/api";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import MedicineAutocomplete from "@/components/medicine/MedicineAutocomplete";
-import { AlertTriangle, X, ChevronDown, BookOpen, Save } from "lucide-react";
+import DrugInteractionWarning from "@/components/medicine/DrugInteractionWarning";
+import PatientAllergyBanner from "@/components/prescriptions/PatientAllergyBanner";
+import { X, BookOpen, Save, History } from "lucide-react";
 import { getMyClinics, getClinicBranches, type ClinicBranch } from "@/lib/api/clinics";
+import {
+  checkDrugInteractions,
+  type DrugInteraction,
+} from "@/lib/api/medicines-emr";
+import { getDoctorPatientProfile } from "@/lib/api/prescriptions";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -34,16 +41,6 @@ interface PatientSuggestion {
   full_name: string;
   phone: string | null;
   last_visit_at: string | null;
-}
-
-interface DrugInteraction {
-  interaction_id: string;
-  salt_1: { id: string; name: string };
-  salt_2: { id: string; name: string };
-  severity: string;
-  effect: string;
-  mechanism: string | null;
-  management: string | null;
 }
 
 interface PrescriptionTemplate {
@@ -93,6 +90,52 @@ const ROUTE_OPTIONS = [
   { value: "inhaled", label: "Inhaled" },
   { value: "sublingual", label: "Sublingual" },
 ];
+
+// ---------------------------------------------------------------------------
+// Draft auto-save (localStorage)
+// ---------------------------------------------------------------------------
+
+const DRAFT_STORAGE_KEY = "rx-draft";
+
+interface RxDraft {
+  version: 1;
+  saved_at: string;
+  patient: PatientSuggestion | null;
+  medicines: Medicine[];
+  diagnosis: string;
+  notes: string;
+  valid_until: string;
+  clinic_id: string;
+  branch_id: string;
+}
+
+/** User.allergies / chronic_conditions are JSONB — strings or small objects. */
+function extractTerms(list: unknown): string[] {
+  if (!Array.isArray(list)) return [];
+  const out: string[] = [];
+  for (const item of list) {
+    if (typeof item === "string" && item.trim()) {
+      out.push(item.trim());
+    } else if (item && typeof item === "object") {
+      const rec = item as Record<string, unknown>;
+      for (const key of ["name", "substance", "allergen", "drug", "condition", "value"]) {
+        const v = rec[key];
+        if (typeof v === "string" && v.trim()) {
+          out.push(v.trim());
+          break;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+const INTERACTION_SEVERITY_ORDER: Record<string, number> = {
+  contraindicated: 4,
+  major: 3,
+  moderate: 2,
+  minor: 1,
+};
 
 // ---------------------------------------------------------------------------
 // Patient Search Typeahead
@@ -190,81 +233,6 @@ function PatientSearch({
           No patients found.
         </div>
       )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Drug Interaction Banner
-// ---------------------------------------------------------------------------
-
-function InteractionBanner({
-  interactions,
-}: {
-  interactions: DrugInteraction[];
-}) {
-  if (interactions.length === 0) return null;
-
-  const severityOrder: Record<string, number> = {
-    contraindicated: 4,
-    major: 3,
-    moderate: 2,
-    minor: 1,
-  };
-
-  const sorted = [...interactions].sort(
-    (a, b) =>
-      (severityOrder[b.severity] ?? 0) - (severityOrder[a.severity] ?? 0)
-  );
-
-  const highest = sorted[0].severity;
-
-  let classes =
-    "rounded-lg border p-4 mb-4 flex items-start gap-3";
-  if (highest === "contraindicated" || highest === "major") {
-    classes += " bg-red-50 border-red-200";
-  } else if (highest === "moderate") {
-    classes += " bg-yellow-50 border-yellow-200";
-  } else {
-    classes += " bg-gray-50 border-gray-200";
-  }
-
-  const iconColor =
-    highest === "contraindicated" || highest === "major"
-      ? "text-red-500"
-      : highest === "moderate"
-      ? "text-yellow-500"
-      : "text-gray-400";
-
-  return (
-    <div className={classes}>
-      <AlertTriangle className={`h-5 w-5 mt-0.5 flex-shrink-0 ${iconColor}`} />
-      <div className="flex-1">
-        <p className="text-sm font-semibold text-dreams-textPrimary mb-1">
-          Drug Interaction Warning ({sorted.length} interaction
-          {sorted.length !== 1 ? "s" : ""} detected)
-        </p>
-        <ul className="space-y-1">
-          {sorted.map((ix) => (
-            <li key={ix.interaction_id} className="text-xs text-dreams-textPrimary">
-              <span className="font-medium capitalize">[{ix.severity}]</span>{" "}
-              <span className="font-semibold">
-                {ix.salt_1.name} + {ix.salt_2.name}:
-              </span>{" "}
-              {ix.effect}
-              {ix.management && (
-                <span className="text-dreams-textSecondary">
-                  {" "}
-                  — {ix.management}
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
-        <p className="mt-2 text-xs text-dreams-textSecondary">
-          You can still submit this prescription. Use clinical judgment.
-        </p>
-      </div>
     </div>
   );
 }
@@ -451,18 +419,67 @@ export default function NewPrescriptionPage() {
   // Form fields
   const [diagnosis, setDiagnosis] = useState("");
   const [notes, setNotes] = useState("");
+  const [validUntil, setValidUntil] = useState("");
   const [medicines, setMedicines] = useState<Medicine[]>([newEmptyMedicine()]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
 
+  // Patient safety info (allergies / chronic conditions from profile)
+  const [patientAllergies, setPatientAllergies] = useState<string[]>([]);
+  const [patientChronic, setPatientChronic] = useState<string[]>([]);
+
   // Drug interactions
   const [interactions, setInteractions] = useState<DrugInteraction[]>([]);
+
+  // Draft auto-save
+  const [draftRestored, setDraftRestored] = useState(false);
+  const draftReadyRef = useRef(false);
+  const pendingBranchRef = useRef<string | null>(null);
 
   // Templates
   const [templates, setTemplates] = useState<PrescriptionTemplate[]>([]);
   const [showLoadModal, setShowLoadModal] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
+
+  // Restore a saved draft from localStorage (runs once, before prefill).
+  // Skipped when the draft names a different patient than the one the URL
+  // pre-fills — restoring another patient's draft would be unsafe.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+      if (raw) {
+        const draft = JSON.parse(raw) as RxDraft;
+        const wrongPatient = !!(
+          prefillPatientId &&
+          draft?.patient?.id &&
+          draft.patient.id !== prefillPatientId
+        );
+        if (draft?.version === 1 && !wrongPatient) {
+          if (draft.patient) setSelectedPatient(draft.patient);
+          if (Array.isArray(draft.medicines) && draft.medicines.length > 0) {
+            setMedicines(
+              draft.medicines.map((m) => ({
+                ...newEmptyMedicine(),
+                ...m,
+                _uid: m._uid || Math.random().toString(36).slice(2),
+              }))
+            );
+          }
+          setDiagnosis(draft.diagnosis || "");
+          setNotes(draft.notes || "");
+          setValidUntil(draft.valid_until || "");
+          setSelectedClinicId(draft.clinic_id || "");
+          pendingBranchRef.current = draft.branch_id || null;
+          setDraftRestored(true);
+        }
+      }
+    } catch {
+      // Corrupt or unreadable draft — ignore and start fresh.
+    }
+    draftReadyRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Load templates and clinics on mount; pre-fill patient if appointment_id provided
   useEffect(() => {
@@ -474,36 +491,116 @@ export default function NewPrescriptionPage() {
       .then((res) => setClinics(res.data || []))
       .catch(() => {});
 
-    // Pre-fill patient when navigating from appointments page
+    // Pre-fill patient when navigating from appointments page — unless a
+    // restored draft already set a patient.
     if (prefillPatientId) {
-      api
-        .get(`/api/v1/doctors/patients/${prefillPatientId}/profile`)
-        .then((res) => {
-          const p = res.data;
+      getDoctorPatientProfile(prefillPatientId)
+        .then((p) => {
           if (p?.id) {
-            setSelectedPatient({
-              id: p.id,
-              full_name: p.full_name || "Unknown",
-              phone: p.phone || null,
-              last_visit_at: p.last_visit_at || null,
-            });
+            setSelectedPatient((prev) =>
+              prev ?? {
+                id: p.id,
+                full_name: p.full_name || "Unknown",
+                phone: p.phone || null,
+                last_visit_at: null,
+              }
+            );
           }
         })
         .catch(() => {});
     }
   }, [prefillPatientId]);
 
-  // Fetch branches when a clinic is selected
+  // Auto-save the form as a draft (debounced ~500ms). An "empty" form removes
+  // the key instead of persisting a blank draft.
   useEffect(() => {
+    if (!draftReadyRef.current) return;
+
+    const timer = setTimeout(() => {
+      const meaningful =
+        !!selectedPatient ||
+        medicines.some((m) => m.brand_name) ||
+        diagnosis.trim() !== "" ||
+        notes.trim() !== "" ||
+        validUntil !== "";
+
+      try {
+        if (!meaningful) {
+          localStorage.removeItem(DRAFT_STORAGE_KEY);
+          return;
+        }
+        const draft: RxDraft = {
+          version: 1,
+          saved_at: new Date().toISOString(),
+          patient: selectedPatient,
+          medicines,
+          diagnosis,
+          notes,
+          valid_until: validUntil,
+          clinic_id: selectedClinicId,
+          branch_id: selectedBranchId,
+        };
+        localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+      } catch {
+        // localStorage unavailable or full — drafts are best-effort.
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [
+    selectedPatient,
+    medicines,
+    diagnosis,
+    notes,
+    validUntil,
+    selectedClinicId,
+    selectedBranchId,
+  ]);
+
+  // Fetch branches when a clinic is selected. Re-applies a branch restored
+  // from a draft once the branch list arrives.
+  useEffect(() => {
+    const pendingBranch = pendingBranchRef.current;
+    pendingBranchRef.current = null;
     setSelectedBranchId("");
     setBranches([]);
     if (!selectedClinicId) return;
     setBranchesLoading(true);
     getClinicBranches(selectedClinicId)
-      .then((data) => setBranches(data))
+      .then((data) => {
+        setBranches(data);
+        if (pendingBranch && data.some((b) => b.id === pendingBranch)) {
+          setSelectedBranchId(pendingBranch);
+        }
+      })
       .catch(() => setBranches([]))
       .finally(() => setBranchesLoading(false));
   }, [selectedClinicId]);
+
+  // Fetch the selected patient's allergies / chronic conditions for the
+  // safety banner. Fails silently when the doctor has no profile access.
+  useEffect(() => {
+    if (!selectedPatient) {
+      setPatientAllergies([]);
+      setPatientChronic([]);
+      return;
+    }
+    let cancelled = false;
+    getDoctorPatientProfile(selectedPatient.id)
+      .then((profile) => {
+        if (cancelled) return;
+        setPatientAllergies(extractTerms(profile?.allergies));
+        setPatientChronic(extractTerms(profile?.chronic_conditions));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPatientAllergies([]);
+        setPatientChronic([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPatient?.id]);
 
   // Drug interaction check whenever medicines change (2+ with salt_id)
   useEffect(() => {
@@ -517,9 +614,16 @@ export default function NewPrescriptionPage() {
     }
 
     const timer = setTimeout(() => {
-      api
-        .post("/api/v1/interactions/check", { salt_ids: saltIds })
-        .then((res) => setInteractions(res.data || []))
+      checkDrugInteractions(saltIds)
+        .then((list) =>
+          setInteractions(
+            [...list].sort(
+              (a, b) =>
+                (INTERACTION_SEVERITY_ORDER[b.severity] ?? 0) -
+                (INTERACTION_SEVERITY_ORDER[a.severity] ?? 0)
+            )
+          )
+        )
         .catch(() => setInteractions([]));
     }, 600);
 
@@ -607,6 +711,23 @@ export default function NewPrescriptionPage() {
     }
   };
 
+  const handleDiscardDraft = () => {
+    try {
+      localStorage.removeItem(DRAFT_STORAGE_KEY);
+    } catch {
+      // best-effort
+    }
+    setSelectedPatient(null);
+    setMedicines([newEmptyMedicine()]);
+    setDiagnosis("");
+    setNotes("");
+    setValidUntil("");
+    setSelectedClinicId("");
+    setSelectedBranchId("");
+    setInteractions([]);
+    setDraftRestored(false);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -645,12 +766,18 @@ export default function NewPrescriptionPage() {
           medicines: medicinesFormatted,
           diagnosis: diagnosis || undefined,
           notes: notes || undefined,
+          valid_until: validUntil || undefined,
           clinic_id: selectedClinicId || undefined,
           branch_id: selectedBranchId || undefined,
           appointment_id: appointmentId || undefined,
         },
         selectedClinicId ? { headers: { "X-Clinic-Id": selectedClinicId } } : undefined
       );
+      try {
+        localStorage.removeItem(DRAFT_STORAGE_KEY);
+      } catch {
+        // best-effort
+      }
       setSuccess(true);
       setTimeout(() => router.push("/doctor/prescriptions"), 1500);
     } catch (err: any) {
@@ -717,6 +844,31 @@ export default function NewPrescriptionPage() {
       {appointmentId && (
         <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
           Linked to appointment — prescription will be associated with this appointment on save.
+        </div>
+      )}
+
+      {draftRestored && (
+        <div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          <History className="h-4 w-4 flex-shrink-0" />
+          <span className="flex-1">
+            Draft restored — your unsaved prescription was recovered from this
+            browser.
+          </span>
+          <button
+            type="button"
+            onClick={handleDiscardDraft}
+            className="text-xs font-medium text-blue-700 hover:underline whitespace-nowrap"
+          >
+            Discard draft
+          </button>
+          <button
+            type="button"
+            onClick={() => setDraftRestored(false)}
+            aria-label="Dismiss draft notice"
+            className="text-blue-500 hover:text-blue-700 transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
 
@@ -796,6 +948,15 @@ export default function NewPrescriptionPage() {
             )}
           </div>
 
+          {/* Patient allergy / chronic-condition safety banner */}
+          {selectedPatient && (
+            <PatientAllergyBanner
+              allergies={patientAllergies}
+              chronicConditions={patientChronic}
+              className="mb-4"
+            />
+          )}
+
           {/* Clinic selector */}
           {clinics.length > 0 && (
             <div className="mb-4">
@@ -861,6 +1022,20 @@ export default function NewPrescriptionPage() {
             />
           </div>
 
+          <div className="mb-4">
+            <label htmlFor="rx-valid-until" className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+              Valid until (optional)
+            </label>
+            <input
+              id="rx-valid-until"
+              type="date"
+              value={validUntil}
+              min={new Date().toISOString().slice(0, 10)}
+              onChange={(e) => setValidUntil(e.target.value)}
+              className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+            />
+          </div>
+
           <div>
             <label htmlFor="rx-notes" className="mb-1 block text-sm font-medium text-dreams-textPrimary">
               Notes
@@ -891,8 +1066,8 @@ export default function NewPrescriptionPage() {
             </button>
           </div>
 
-          {/* Drug interaction banner */}
-          <InteractionBanner interactions={interactions} />
+          {/* Drug interaction warnings */}
+          <DrugInteractionWarning interactions={interactions} className="mb-4" />
 
           {medicines.map((med, idx) => (
             <div key={med._uid} className="mb-4 bg-white rounded-lg shadow-card p-6">

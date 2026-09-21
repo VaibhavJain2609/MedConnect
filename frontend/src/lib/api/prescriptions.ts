@@ -282,6 +282,37 @@ export function computePrescriptionAdherence(args: {
   };
 }
 
+// ─── Doctor-facing patient profile (prescription safety info) ───────────────
+
+/**
+ * Shape returned by GET /api/v1/doctors/patients/{id}/profile.
+ * `allergies` / `chronic_conditions` are JSONB — lists of strings or small
+ * objects; normalize with a term extractor before display.
+ */
+export interface DoctorPatientProfile {
+  id: string;
+  full_name: string;
+  phone: string | null;
+  email: string | null;
+  blood_group: string | null;
+  allergies: unknown[];
+  chronic_conditions: unknown[];
+  height_cm: number | null;
+  weight_kg: number | null;
+  access_status?: string;
+  revoked_at?: string | null;
+}
+
+/**
+ * Doctor-facing patient profile — includes allergies and chronic conditions
+ * used by the new-prescription safety banner.
+ */
+export async function getDoctorPatientProfile(
+  patientId: string
+): Promise<DoctorPatientProfile> {
+  return (await api.get(`/api/v1/doctors/patients/${patientId}/profile`)).data;
+}
+
 // ─── Patient prescriptions (cursor-exhausting fetch) ─────────────────────────
 
 /** Re-exported so adherence UI can type items without importing the portal module. */
