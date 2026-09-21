@@ -13,11 +13,18 @@ import { getDoctorSlots, type AvailabilitySlot } from "@/lib/api/availability";
 import { SlotPicker, slotDurationMinutes } from "@/components/appointments/slot-picker";
 import { useAuthStore } from "@/stores/auth-store";
 import api from "@/lib/api";
+import { useFormatter, useTranslations } from "next-intl";
 
-const TYPE_LABELS: Record<string, string> = {
-  "in-person": "In Person",
-  "teleconsult": "Teleconsult",
-  "follow-up": "Follow-up",
+// Values double as message keys under appointments.types / appointments.status
+// — keep them in sync with messages/en.json + hi.json (see docs/i18n.md).
+type EnMessages = typeof import("../../../../messages/en.json");
+type AppointmentTypeKey = keyof EnMessages["appointments"]["types"];
+type AppointmentStatusKey = keyof EnMessages["appointments"]["status"];
+
+const TYPE_KEYS: Record<string, AppointmentTypeKey> = {
+  "in-person": "in-person",
+  "teleconsult": "teleconsult",
+  "follow-up": "follow-up",
 };
 
 type BadgeVariant = "upcoming" | "inProgress" | "completed" | "overdue" | "pending";
@@ -31,22 +38,14 @@ const STATUS_VARIANT_MAP: Record<string, BadgeVariant> = {
   "no-show": "pending",
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  scheduled: "Scheduled",
-  arrived: "Arrived",
-  "in-progress": "In Progress",
-  completed: "Completed",
-  cancelled: "Cancelled",
-  "no-show": "No Show",
+const STATUS_KEYS: Record<string, AppointmentStatusKey> = {
+  scheduled: "scheduled",
+  arrived: "arrived",
+  "in-progress": "in-progress",
+  completed: "completed",
+  cancelled: "cancelled",
+  "no-show": "no-show",
 };
-
-function formatDateTime(iso: string) {
-  const d = new Date(iso);
-  return {
-    date: d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" }),
-    time: d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }),
-  };
-}
 
 /** Local date formatted as YYYY-MM-DD (toISOString is UTC and rolls back a day in IST). */
 function formatDateInput(d: Date) {
@@ -111,6 +110,7 @@ function DoctorSearchInput({
   onSelect: (d: DoctorSuggestion) => void;
   id?: string;
 }) {
+  const t = useTranslations("appointments");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<DoctorSuggestion[]>([]);
   const [open, setOpen] = useState(false);
@@ -155,7 +155,7 @@ function DoctorSearchInput({
         type="text"
         value={query}
         onChange={handleChange}
-        placeholder="Search doctor by name or specialization..."
+        placeholder={t("booking.doctorSearchPlaceholder")}
         className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
         onFocus={() => results.length > 0 && setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
@@ -181,7 +181,7 @@ function DoctorSearchInput({
               <div className="flex-1">
                 <p className="flex items-center gap-1.5 text-sm font-medium text-dreams-textPrimary">
                   {d.full_name}
-                  {d.verified && <BadgeCheck className="h-4 w-4 text-dreams-blue" aria-label="Verified doctor" />}
+                  {d.verified && <BadgeCheck className="h-4 w-4 text-dreams-blue" aria-label={t("booking.verifiedDoctor")} />}
                 </p>
                 {d.specialization && (
                   <p className="text-xs text-dreams-textSecondary">{d.specialization}</p>
@@ -196,7 +196,7 @@ function DoctorSearchInput({
       )}
       {open && results.length === 0 && !loading && query.length >= 2 && (
         <div className="absolute z-50 mt-1 w-full rounded-lg border border-dreams-border bg-white px-4 py-3 text-sm text-dreams-textSecondary shadow-lg">
-          No doctors found.
+          {t("booking.noDoctorsFound")}
         </div>
       )}
     </div>
@@ -214,6 +214,7 @@ interface BookAppointmentModalProps {
 }
 
 function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointmentModalProps) {
+  const t = useTranslations("appointments");
   const [selectedClinicId, setSelectedClinicId] = useState("");
   const [selectedDoctor, setSelectedDoctor] = useState<DoctorSuggestion | null>(null);
   const [date, setDate] = useState(formatDateInput(new Date()));
@@ -300,11 +301,11 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
     e.preventDefault();
     setError("");
     if (!selectedDoctor) {
-      setError("Please select a doctor");
+      setError(t("booking.errorSelectDoctor"));
       return;
     }
     if (requireSlot && !selectedSlot) {
-      setError("Please pick an available time slot");
+      setError(t("booking.errorSelectSlot"));
       return;
     }
     setSubmitting(true);
@@ -335,7 +336,7 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
       const msg =
         err.response?.data?.detail?.error?.message ||
         err.response?.data?.detail ||
-        "Failed to book appointment";
+        t("booking.errorFailed");
       setError(typeof msg === "string" ? msg : JSON.stringify(msg));
     } finally {
       setSubmitting(false);
@@ -350,17 +351,17 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Book appointment"
+        aria-label={t("booking.ariaLabel")}
         className="w-[calc(100%-2rem)] sm:w-full sm:max-w-lg rounded-xl bg-white shadow-xl max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-dreams-border px-6 py-4">
-          <h2 className="text-lg font-semibold text-dreams-textPrimary">Book Appointment</h2>
+          <h2 className="text-lg font-semibold text-dreams-textPrimary">{t("booking.title")}</h2>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t("booking.close")}
             className="text-dreams-textSecondary hover:text-dreams-textPrimary"
           >
             <X className="h-5 w-5" />
@@ -379,11 +380,13 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
             <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
               <Link2 className="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-600" />
               <p className="text-sm text-blue-800">
-                You haven&apos;t linked any clinics yet.{" "}
-                <Link href="/patient/clinics" className="font-medium underline" onClick={onClose}>
-                  Link a clinic first
-                </Link>{" "}
-                to pick from its doctors — or search for a doctor by name below.
+                {t.rich("booking.noLinkedClinics", {
+                  link: (chunks) => (
+                    <Link href="/patient/clinics" className="font-medium underline" onClick={onClose}>
+                      {chunks}
+                    </Link>
+                  ),
+                })}
               </p>
             </div>
           )}
@@ -393,7 +396,7 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
                 htmlFor="booking-clinic"
                 className="mb-1 block text-sm font-medium text-dreams-textPrimary"
               >
-                Clinic
+                {t("booking.clinic")}
               </label>
               <select
                 id="booking-clinic"
@@ -401,7 +404,7 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
                 onChange={(e) => handleClinicChange(e.target.value)}
                 className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20 bg-white"
               >
-                <option value="">Any clinic / search by name</option>
+                <option value="">{t("booking.anyClinic")}</option>
                 {approvedClinics.map((c) => (
                   <option key={c.clinic_id} value={c.clinic_id}>
                     {c.clinic_name}
@@ -417,12 +420,12 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
               htmlFor="booking-doctor"
               className="mb-1 block text-sm font-medium text-dreams-textPrimary"
             >
-              Doctor *
+              {t("booking.doctor")}
             </label>
             {selectedClinicId ? (
               // Clinic selected → show dropdown of that clinic's doctors
               clinicDoctors.length === 0 ? (
-                <p className="text-sm text-dreams-textSecondary py-2">No verified doctors at this clinic yet.</p>
+                <p className="text-sm text-dreams-textSecondary py-2">{t("booking.noClinicDoctors")}</p>
               ) : (
                 <select
                   id="booking-doctor"
@@ -433,7 +436,7 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
                   }}
                   className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20 bg-white"
                 >
-                  <option value="">Select doctor…</option>
+                  <option value="">{t("booking.selectDoctor")}</option>
                   {clinicDoctors.map((d) => (
                     <option key={d.id} value={d.id}>
                       {d.full_name}{d.specialization ? ` — ${d.specialization}` : ""}
@@ -446,7 +449,7 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
                 <div className="flex-1">
                   <p className="flex items-center gap-1.5 text-sm font-semibold text-dreams-textPrimary">
                     {selectedDoctor.full_name}
-                    {selectedDoctor.verified && <BadgeCheck className="h-4 w-4 text-dreams-blue" aria-label="Verified doctor" />}
+                    {selectedDoctor.verified && <BadgeCheck className="h-4 w-4 text-dreams-blue" aria-label={t("booking.verifiedDoctor")} />}
                   </p>
                   {selectedDoctor.specialization && (
                     <p className="text-xs text-dreams-textSecondary">{selectedDoctor.specialization}</p>
@@ -458,7 +461,7 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
                 <button
                   type="button"
                   onClick={() => handleDoctorChange(null)}
-                  aria-label="Clear selected doctor"
+                  aria-label={t("booking.clearDoctor")}
                   className="text-dreams-textSecondary hover:text-red-500 transition-colors"
                 >
                   <X className="h-4 w-4" />
@@ -471,7 +474,7 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
 
           {/* Date */}
           <div>
-            <label htmlFor="booking-date" className="mb-1 block text-sm font-medium text-dreams-textPrimary">Date *</label>
+            <label htmlFor="booking-date" className="mb-1 block text-sm font-medium text-dreams-textPrimary">{t("booking.date")}</label>
             <input
               id="booking-date"
               type="date"
@@ -506,7 +509,7 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
           {showManualTime && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label htmlFor="booking-time" className="mb-1 block text-sm font-medium text-dreams-textPrimary">Time *</label>
+                <label htmlFor="booking-time" className="mb-1 block text-sm font-medium text-dreams-textPrimary">{t("booking.time")}</label>
                 <input
                   id="booking-time"
                   type="time"
@@ -517,17 +520,18 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
                 />
               </div>
               <div>
-                <label htmlFor="booking-duration" className="mb-1 block text-sm font-medium text-dreams-textPrimary">Duration</label>
+                <label htmlFor="booking-duration" className="mb-1 block text-sm font-medium text-dreams-textPrimary">{t("booking.duration")}</label>
                 <select
                   id="booking-duration"
                   value={duration}
                   onChange={(e) => setDuration(Number(e.target.value))}
                   className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
                 >
-                  <option value={15}>15 min</option>
-                  <option value={30}>30 min</option>
-                  <option value={45}>45 min</option>
-                  <option value={60}>60 min</option>
+                  {[15, 30, 45, 60].map((mins) => (
+                    <option key={mins} value={mins}>
+                      {t("booking.durationOption", { count: mins })}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -535,30 +539,32 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
 
           {/* Type */}
           <div>
-            <label htmlFor="booking-type" className="mb-1 block text-sm font-medium text-dreams-textPrimary">Type *</label>
+            <label htmlFor="booking-type" className="mb-1 block text-sm font-medium text-dreams-textPrimary">{t("booking.type")}</label>
             <select
               id="booking-type"
               value={type}
               onChange={(e) => setType(e.target.value as typeof type)}
               className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
             >
-              <option value="in-person">In Person</option>
-              <option value="teleconsult">Teleconsult</option>
-              <option value="follow-up">Follow-up</option>
+              {(Object.keys(TYPE_KEYS) as AppointmentTypeKey[]).map((key) => (
+                <option key={key} value={key}>
+                  {t(`types.${key}`)}
+                </option>
+              ))}
             </select>
           </div>
 
           {/* Chief Complaint */}
           <div>
             <label htmlFor="booking-complaint" className="mb-1 block text-sm font-medium text-dreams-textPrimary">
-              Chief Complaint
+              {t("booking.chiefComplaint")}
             </label>
             <input
               id="booking-complaint"
               type="text"
               value={chiefComplaint}
               onChange={(e) => setChiefComplaint(e.target.value)}
-              placeholder="e.g., Fever, headache for 2 days"
+              placeholder={t("booking.chiefComplaintPlaceholder")}
               className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
             />
           </div>
@@ -570,14 +576,14 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
               disabled={submitting || !selectedDoctor}
               className="flex-1 rounded-lg bg-dreams-blue px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
-              {submitting ? "Booking..." : "Book Appointment"}
+              {submitting ? t("booking.submitting") : t("booking.submit")}
             </button>
             <button
               type="button"
               onClick={onClose}
               className="rounded-lg border border-dreams-border px-4 py-2.5 text-sm font-medium text-dreams-textPrimary hover:bg-dreams-lightBg transition-colors"
             >
-              Cancel
+              {t("booking.cancel")}
             </button>
           </div>
         </form>
@@ -603,7 +609,22 @@ function AppointmentCard({
   onGenerateLink: (id: string) => void;
   isGeneratingLink: boolean;
 }) {
-  const { date, time } = formatDateTime(appt.scheduled_at);
+  const t = useTranslations("appointments");
+  const format = useFormatter();
+  const scheduledAt = new Date(appt.scheduled_at);
+  const date = format.dateTime(scheduledAt, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+  const time = format.dateTime(scheduledAt, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+  const typeKey = TYPE_KEYS[appt.type];
+  const statusKey = STATUS_KEYS[appt.status];
   const canCancel = appt.status === "scheduled";
   const isTeleconsult = appt.type === "teleconsult" && ACTIVE_STATUSES.includes(appt.status);
   // Tick every 30s so the Join button unlocks when the window opens
@@ -627,7 +648,9 @@ function AppointmentCard({
               <Clock className="h-3.5 w-3.5" />
               {time}
             </p>
-            <p className="text-xs text-dreams-textSecondary mt-0.5">{appt.duration_minutes}min</p>
+            <p className="text-xs text-dreams-textSecondary mt-0.5">
+              {t("durationMinutes", { count: appt.duration_minutes })}
+            </p>
           </div>
 
           {/* Details */}
@@ -648,7 +671,7 @@ function AppointmentCard({
 
             <div className="mt-1.5 flex items-center gap-2">
               <Badge variant="upcoming" className="text-xs">
-                {TYPE_LABELS[appt.type] ?? appt.type}
+                {typeKey ? t(`types.${typeKey}`) : appt.type}
               </Badge>
             </div>
 
@@ -669,15 +692,15 @@ function AppointmentCard({
                     className="mt-2 inline-flex items-center gap-1 rounded-md bg-dreams-blue px-2.5 py-1 text-xs font-medium text-white hover:opacity-90 transition-opacity"
                   >
                     <Video className="h-3.5 w-3.5" />
-                    Join Call
+                    {t("joinCall")}
                   </a>
                 ) : (
                   <span
                     className="mt-2 inline-flex items-center gap-1 rounded-md bg-gray-100 px-2.5 py-1 text-xs font-medium text-dreams-textSecondary cursor-not-allowed"
-                    title="The call link opens 10 minutes before the scheduled time"
+                    title={t("joinCallLockedHint")}
                   >
                     <Video className="h-3.5 w-3.5" />
-                    Join Call (opens 10 min before)
+                    {t("joinCallLocked")}
                   </span>
                 )
               ) : (
@@ -687,7 +710,7 @@ function AppointmentCard({
                   className="mt-2 flex items-center gap-1 rounded-md border border-dreams-blue px-2.5 py-1 text-xs font-medium text-dreams-blue hover:bg-dreams-blue/10 disabled:opacity-50 transition-colors"
                 >
                   <Video className="h-3.5 w-3.5" />
-                  {isGeneratingLink ? "Generating…" : "Get Call Link"}
+                  {isGeneratingLink ? t("generatingLink") : t("getCallLink")}
                 </button>
               ))}
 
@@ -699,7 +722,7 @@ function AppointmentCard({
                 className="mt-2 flex items-center gap-1 rounded-md bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 transition-colors"
               >
                 <XCircle className="h-3.5 w-3.5" />
-                Cancel Appointment
+                {t("cancelAppointment")}
               </button>
             )}
           </div>
@@ -708,7 +731,7 @@ function AppointmentCard({
         {/* Status badge */}
         <div className="flex-shrink-0">
           <Badge variant={STATUS_VARIANT_MAP[appt.status] ?? "pending"}>
-            {STATUS_LABELS[appt.status] ?? appt.status}
+            {statusKey ? t(`status.${statusKey}`) : appt.status}
           </Badge>
         </div>
       </div>
@@ -723,6 +746,8 @@ function AppointmentCard({
 const PAGE_SIZE = 10;
 
 export default function PatientAppointmentsPage() {
+  const t = useTranslations("appointments");
+  const tNav = useTranslations("nav");
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
   const [page, setPage] = useState(1);
   const [showBooking, setShowBooking] = useState(false);
@@ -755,7 +780,7 @@ export default function PatientAppointmentsPage() {
         (err as { userMessage?: string })?.userMessage ??
         (err as { response?: { data?: { detail?: { error?: { message?: string } } } } })
           ?.response?.data?.detail?.error?.message ??
-        "Could not generate the meeting link";
+        t("meetingLinkError");
       setLinkError(msg);
     },
   });
@@ -801,27 +826,27 @@ export default function PatientAppointmentsPage() {
 
       <Breadcrumb
         items={[
-          { label: "Health Timeline", href: "/patient/timeline" },
-          { label: "Appointments" },
+          { label: tNav("healthTimeline"), href: "/patient/timeline" },
+          { label: tNav("appointments") },
         ]}
       />
 
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-dreams-textPrimary">My Appointments</h1>
+        <h1 className="text-2xl font-bold text-dreams-textPrimary">{t("title")}</h1>
         <button
           onClick={() => setShowBooking(true)}
           className="flex items-center gap-2 rounded-lg bg-dreams-blue px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
         >
           <Plus className="h-4 w-4" />
-          Book Appointment
+          {t("bookAppointment")}
         </button>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 rounded-lg border border-dreams-border bg-gray-100 p-1 w-fit">
         {[
-          { key: "upcoming", label: `Upcoming (${upcomingAppointments.length})` },
-          { key: "past", label: `Past (${pastAppointments.length})` },
+          { key: "upcoming", label: t("tabs.upcoming", { count: upcomingAppointments.length }) },
+          { key: "past", label: t("tabs.past", { count: pastAppointments.length }) },
         ].map(({ key, label }) => (
           <button
             key={key}
@@ -852,12 +877,10 @@ export default function PatientAppointmentsPage() {
         <div className="rounded-xl border border-dreams-border bg-white p-12 text-center shadow-card">
           <Calendar className="mx-auto h-10 w-10 text-dreams-textSecondary opacity-50" />
           <p className="mt-3 font-medium text-dreams-textPrimary">
-            {tab === "upcoming" ? "No upcoming appointments" : "No past appointments"}
+            {tab === "upcoming" ? t("empty.upcomingTitle") : t("empty.pastTitle")}
           </p>
           <p className="mt-1 text-sm text-dreams-textSecondary">
-            {tab === "upcoming"
-              ? "You have no scheduled appointments. Use 'Book Appointment' to schedule one."
-              : "Your completed and cancelled appointments will appear here."}
+            {tab === "upcoming" ? t("empty.upcomingHint") : t("empty.pastHint")}
           </p>
         </div>
       )}
@@ -899,15 +922,15 @@ export default function PatientAppointmentsPage() {
           <div
             role="dialog"
             aria-modal="true"
-            aria-label="Cancel appointment"
+            aria-label={t("cancelDialog.ariaLabel")}
             className="w-full max-w-sm rounded-xl bg-white shadow-xl p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg font-semibold text-dreams-textPrimary">
-              Cancel this appointment?
+              {t("cancelDialog.title")}
             </h2>
             <p className="mt-2 text-sm text-dreams-textSecondary">
-              This cannot be undone. The clinic will be notified of the cancellation.
+              {t("cancelDialog.body")}
             </p>
             <div className="mt-6 flex gap-3">
               <button
@@ -915,7 +938,7 @@ export default function PatientAppointmentsPage() {
                 onClick={() => setCancelTarget(null)}
                 className="flex-1 rounded-lg border border-dreams-border px-4 py-2 text-sm font-medium text-dreams-textPrimary hover:bg-dreams-lightBg transition-colors"
               >
-                Keep Appointment
+                {t("cancelDialog.keep")}
               </button>
               <button
                 type="button"
@@ -923,7 +946,7 @@ export default function PatientAppointmentsPage() {
                 onClick={() => cancelMutation.mutate(cancelTarget)}
                 className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
               >
-                {cancelMutation.isPending ? "Cancelling…" : "Yes, Cancel"}
+                {cancelMutation.isPending ? t("cancelDialog.cancelling") : t("cancelDialog.confirm")}
               </button>
             </div>
           </div>

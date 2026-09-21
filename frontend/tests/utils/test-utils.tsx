@@ -8,9 +8,11 @@ import { render, RenderOptions } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouterProvider } from 'next-router-mock/MemoryRouterProvider'
 import mockRouter from 'next-router-mock'
+import { NextIntlClientProvider } from 'next-intl'
 
 import { useAuthStore } from '@/stores/auth-store'
 import type { User } from '@/lib/auth'
+import enMessages from '../../messages/en.json'
 
 // ---------------------------------------------------------------------------
 // Auth fixtures — match the `User` shape in src/lib/auth.ts
@@ -86,11 +88,15 @@ function AllTheProviders({ children }: AllTheProvidersProps) {
   const testQueryClient = createTestQueryClient()
 
   return (
-    <QueryClientProvider client={testQueryClient}>
-      {/* Provides router context for components using next-router-mock
-          (both next/router and next/navigation are mapped to it in setup). */}
-      <MemoryRouterProvider>{children}</MemoryRouterProvider>
-    </QueryClientProvider>
+    // Components under test call useTranslations/useFormatter — provide the
+    // en bundle so assertions match real English output.
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <QueryClientProvider client={testQueryClient}>
+        {/* Provides router context for components using next-router-mock
+            (both next/router and next/navigation are mapped to it in setup). */}
+        <MemoryRouterProvider>{children}</MemoryRouterProvider>
+      </QueryClientProvider>
+    </NextIntlClientProvider>
   )
 }
 
