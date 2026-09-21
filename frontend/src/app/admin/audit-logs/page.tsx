@@ -4,7 +4,8 @@ import { Fragment, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ShieldCheck, Download, ChevronDown, ChevronRight } from "lucide-react";
 import api from "@/lib/api";
-import { exportReport, downloadReport } from "@/lib/api/stats";
+import { exportAuditLogsCsv } from "@/lib/api/admin-audit";
+import { toast } from "@/hooks/use-toast";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
 
@@ -148,54 +149,25 @@ export default function AuditLogsPage() {
   );
   const totalPages = data?.totalPages ?? 1;
 
-  // Client-side CSV fallback for the rows currently loaded
-  const exportLocalCsv = () => {
-    const escape = (v: unknown) => {
-      const s = v === null || v === undefined ? "" : String(v);
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
-    const header = [
-      "changed_at",
-      "action",
-      "table_name",
-      "record_id",
-      "changed_by_name",
-      "changes_summary",
-    ];
-    const lines = [
-      header.join(","),
-      ...logs.map((log) =>
-        [
-          log.changed_at,
-          log.action,
-          log.table_name,
-          log.record_id,
-          log.changed_by_name ?? "System",
-          log.changes_summary ?? "",
-        ]
-          .map(escape)
-          .join(",")
-      ),
-    ];
-    downloadReport(
-      new Blob([lines.join("\n")], { type: "text/csv" }),
-      `audit-logs-${new Date().toISOString().slice(0, 10)}.csv`
-    );
-  };
-
+  // Server-side export — honors the same filters as the list and downloads
+  // audit-logs-<date>.csv via the authenticated download helper.
   const handleExport = async () => {
     setExporting(true);
     try {
-      const blob = await exportReport("csv", {
-        start_date: fromDate || undefined,
-        end_date: toDate || undefined,
+      await exportAuditLogsCsv({
+        table_name: tableFilter !== "all" ? tableFilter : undefined,
+        from_date: fromDate ? new Date(fromDate).toISOString() : undefined,
+        to_date: toDate ? new Date(toDate).toISOString() : undefined,
+        changed_by_name: userSearch || undefined,
+        record_id: recordSearch || undefined,
       });
-      downloadReport(blob, `audit-report-${new Date().toISOString().slice(0, 10)}.csv`);
     } catch (err) {
-      // reports/export endpoint may not exist yet — fall back to a
-      // client-side CSV of the currently loaded audit rows.
-      console.warn("Report export endpoint unavailable, using local CSV:", err);
-      exportLocalCsv();
+      console.error("Audit log export failed:", err);
+      toast({
+        title: "Export failed",
+        description: "Could not download the audit log CSV. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setExporting(false);
     }
@@ -231,14 +203,6 @@ export default function AuditLogsPage() {
             </p>
           </div>
         </div>
-        <button
-          onClick={handleExport}
-          disabled={exporting}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg border border-dreams-border bg-white text-sm font-medium text-dreams-textPrimary hover:bg-dreams-lightBg transition-colors disabled:opacity-50"
-        >
-          <Download className="h-4 w-4" />
-          {exporting ? "Exporting..." : "Export CSV"}
-        </button>
       </div>
 
       {/* Filters */}
@@ -321,6 +285,15 @@ export default function AuditLogsPage() {
             Clear filters
           </button>
         )}
+
+        <button
+          onClick={handleExport}
+          disabled={exporting}
+          className="flex items-center gap-2 h-10 px-4 rounded-lg border border-dreams-border bg-white text-sm font-medium text-dreams-textPrimary hover:bg-dreams-lightBg transition-colors disabled:opacity-50 ml-auto"
+        >
+          <Download className="h-4 w-4" />
+          {exporting ? "Exporting..." : "Export CSV"}
+        </button>
       </div>
 
       {/* Table */}

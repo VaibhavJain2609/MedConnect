@@ -1,5 +1,6 @@
 import csv
 import io
+import json
 import math
 import uuid
 from datetime import datetime, timezone
@@ -14,6 +15,7 @@ from app.database import get_db
 from app.dependencies import require_admin
 from app.models.audit import AuditLog
 from app.models.user import User
+from app.services.audit_service import NIL_ENTITY_ID, log_change
 
 router = APIRouter(
     prefix="/api/v1/admin/audit",
@@ -29,8 +31,19 @@ reports_router = APIRouter(
     dependencies=[Depends(require_admin)],
 )
 
+# Dedicated router for GET /api/v1/admin/audit-logs/export — the download
+# endpoint the audit-logs page's "Export CSV" button calls.
+audit_logs_router = APIRouter(
+    prefix="/api/v1/admin/audit-logs",
+    tags=["admin-audit"],
+    dependencies=[Depends(require_admin)],
+)
+
 # Safety cap for CSV exports.
 _EXPORT_MAX_ROWS = 50_000
+
+# Max length of a serialized old_values/new_values CSV cell.
+_JSON_CELL_MAX = 500
 
 
 def _audit_filters(
@@ -222,10 +235,110 @@ async def export_report(
 
 
 def _json_cell(value) -> str:
+    """Serialize old/new values to a compact JSON cell, truncated at ~500 chars."""
     if value is None:
         return ""
-    import json
     try:
-        return json.dumps(value, default=str)
+        s = json.dumps(value, separators=(",", ":"), default=str)
     except (TypeError, ValueError):
-        return str(value)
+        s = str(value)
+    if len(s) > _JSON_CELL_MAX:
+        return s[:_JSON_CELL_MAX] + "…"
+    return s
+
+
+_AUDIT_EXPORT_HEADER = [
+    "timestamp",
+    "actor_id",
+    "actor_name",
+    "action",
+    "table_name",
+    "record_id",
+    "old_values",
+    "new_values",
+]
+
+
+@audit_logs_router.get("/export")
+async def export_audit_logs(
+    table_name: Optional[str] = Query(None),
+    record_id: Optional[str] = Query(None),
+    from_date: Optional[datetime] = Query(None),
+    to_date: Optional[datetime] = Query(None),
+    changed_by_name: Optional[str] = Query(None),
+    user_id: Optional[uuid.UUID] = Query(
+        None, description="Filter to changes made by this user (audit_logs.changed_by)"
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    """Export audit logs as CSV (text/csv attachment).
+
+    Honors the same filters as GET /api/v1/admin/audit — table_name,
+    record_id, from_date, to_date, changed_by_name, user_id — via the
+    shared _audit_filters query builder. Newest first, capped at
+    _EXPORT_MAX_ROWS (50k). The AuditLog model stores no ip/request_id
+    columns, so they are not exported (request metadata lives inside
+    new_values for READ/EXPORT rows and is exported with it).
+    """
+    stmt = _audit_filters(
+        _audit_base_query(),
+        table_name,
+        record_id,
+        from_date,
+        to_date,
+        changed_by_name,
+        user_id,
+    ).order_by(AuditLog.changed_at.desc()).limit(_EXPORT_MAX_ROWS)
+
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    # 50k rows buffered is fine — no need to stream per-row.
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(_AUDIT_EXPORT_HEADER)
+    for row in rows:
+        log: AuditLog = row[0]
+        changer_name: str | None = row[1]
+        writer.writerow([
+            log.changed_at.isoformat() if log.changed_at else "",
+            str(log.changed_by) if log.changed_by else "",
+            changer_name or "System",
+            log.action,
+            log.table_name,
+            str(log.record_id),
+            _json_cell(log.old_values),
+            _json_cell(log.new_values),
+        ])
+
+    # Record the download itself (same convention as routers/admin/exports.py).
+    await log_change(
+        db=db,
+        table_name="audit_logs",
+        record_id=NIL_ENTITY_ID,
+        action="EXPORT",
+        old_values=None,
+        new_values={
+            "filters": {
+                k: str(v)
+                for k, v in {
+                    "table_name": table_name,
+                    "record_id": record_id,
+                    "from_date": from_date,
+                    "to_date": to_date,
+                    "changed_by_name": changed_by_name,
+                    "user_id": user_id,
+                }.items()
+                if v is not None
+            },
+            "row_count": len(rows),
+        },
+    )
+    await db.commit()
+
+    filename = f"audit-logs-{datetime.now(timezone.utc).date().isoformat()}.csv"
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
