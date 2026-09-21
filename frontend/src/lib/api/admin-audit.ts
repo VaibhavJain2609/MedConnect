@@ -4,6 +4,7 @@
  */
 
 import api from "@/lib/api";
+import { downloadFile } from "@/lib/download";
 
 export interface AdminAuditLogEntry {
   id: string;
@@ -44,4 +45,27 @@ export async function getAdminAuditLogs(
 ): Promise<AdminAuditLogsResponse> {
   const response = await api.get("/api/v1/admin/audit", { params });
   return response.data;
+}
+
+export type AdminAuditLogsExportParams = Omit<
+  AdminAuditLogsParams,
+  "page" | "limit"
+>;
+
+/**
+ * Download the audit-log CSV export.
+ *
+ * Hits GET /api/v1/admin/audit-logs/export with the same filters as the
+ * list endpoint. The filename (audit-logs-<date>.csv) is resolved from
+ * the response's Content-Disposition header by downloadFile().
+ */
+export async function exportAuditLogsCsv(
+  params: AdminAuditLogsExportParams = {}
+): Promise<void> {
+  const qs = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value) qs.set(key, value);
+  }
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  await downloadFile(`/api/v1/admin/audit-logs/export${suffix}`);
 }
