@@ -23,8 +23,17 @@ import {
   SlidersHorizontal,
   Users,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/auth";
+import { LanguageSwitcher } from "@/components/layout/language-switcher";
+
+// Keys validated against messages/en.json — the source of truth for the
+// "nav" namespace. Adding a label: add the key to en.json + hi.json, then
+// reference it here (see docs/i18n.md).
+type EnMessages = typeof import("../../../messages/en.json");
+type NavLabelKey = Exclude<keyof EnMessages["nav"], "sections">;
+type NavSectionKey = keyof EnMessages["nav"]["sections"];
 
 interface PatientSidebarProps {
   isOpen: boolean;
@@ -35,48 +44,48 @@ interface PatientSidebarProps {
 
 interface NavItem {
   href: string;
-  label: string;
+  labelKey: NavLabelKey;
   icon: any;
 }
 
 interface NavSection {
-  label: string;
+  labelKey: NavSectionKey;
   items: NavItem[];
 }
 
 const navSections: NavSection[] = [
   {
-    label: "MAIN",
+    labelKey: "main",
     items: [
-      { href: "/patient/timeline", label: "Health Timeline", icon: Activity },
-      { href: "/patient/appointments", label: "Appointments", icon: Calendar },
-      { href: "/patient/notifications", label: "Notifications", icon: Bell },
+      { href: "/patient/timeline", labelKey: "healthTimeline", icon: Activity },
+      { href: "/patient/appointments", labelKey: "appointments", icon: Calendar },
+      { href: "/patient/notifications", labelKey: "notifications", icon: Bell },
     ],
   },
   {
-    label: "HEALTH",
+    labelKey: "health",
     items: [
-      { href: "/patient/records", label: "My Records", icon: FileText },
-      { href: "/patient/lab-results", label: "Lab Results", icon: FlaskConical },
-      { href: "/patient/medications", label: "Medications", icon: Pill },
-      { href: "/patient/vitals", label: "Vitals", icon: HeartPulse },
-      { href: "/patient/medical-history", label: "Medical History", icon: ClipboardList },
+      { href: "/patient/records", labelKey: "myRecords", icon: FileText },
+      { href: "/patient/lab-results", labelKey: "labResults", icon: FlaskConical },
+      { href: "/patient/medications", labelKey: "medications", icon: Pill },
+      { href: "/patient/vitals", labelKey: "vitals", icon: HeartPulse },
+      { href: "/patient/medical-history", labelKey: "medicalHistory", icon: ClipboardList },
     ],
   },
   {
-    label: "CLINICS",
+    labelKey: "clinics",
     items: [
-      { href: "/patient/clinics", label: "My Clinics", icon: Building2 },
-      { href: "/patient/queue", label: "Queue Status", icon: Users },
-      { href: "/invite", label: "Join a Clinic", icon: Ticket },
+      { href: "/patient/clinics", labelKey: "myClinics", icon: Building2 },
+      { href: "/patient/queue", labelKey: "queueStatus", icon: Users },
+      { href: "/invite", labelKey: "joinAClinic", icon: Ticket },
     ],
   },
   {
-    label: "ACCOUNT",
+    labelKey: "account",
     items: [
-      { href: "/patient/billing", label: "Billing", icon: Receipt },
-      { href: "/patient/preferences", label: "Preferences", icon: SlidersHorizontal },
-      { href: "/patient/profile", label: "My Profile", icon: User },
+      { href: "/patient/billing", labelKey: "billing", icon: Receipt },
+      { href: "/patient/preferences", labelKey: "preferences", icon: SlidersHorizontal },
+      { href: "/patient/profile", labelKey: "myProfile", icon: User },
     ],
   },
 ];
@@ -92,8 +101,10 @@ function SidebarNavItem({
   pathname: string;
   onMobileClose?: () => void;
 }) {
+  const t = useTranslations("nav");
   const Icon = item.icon;
   const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+  const label = t(item.labelKey);
 
   return (
     <Link
@@ -105,11 +116,11 @@ function SidebarNavItem({
           : "text-gray-300 hover:bg-white/10",
         !isOpen && "justify-center"
       )}
-      title={!isOpen ? item.label : undefined}
+      title={!isOpen ? label : undefined}
       onClick={onMobileClose}
     >
       <Icon className="h-5 w-5 flex-shrink-0" />
-      {isOpen && <span>{item.label}</span>}
+      {isOpen && <span>{label}</span>}
     </Link>
   );
 }
@@ -121,6 +132,7 @@ export function PatientSidebar({
   onMobileClose,
 }: PatientSidebarProps) {
   const pathname = usePathname();
+  const t = useTranslations("nav");
 
   const SidebarContent = ({ mobile = false }: { mobile?: boolean }) => (
     <>
@@ -140,7 +152,7 @@ export function PatientSidebar({
             variant="ghost"
             size="icon"
             onClick={onToggle}
-            aria-label={isOpen ? "Collapse sidebar" : "Expand sidebar"}
+            aria-label={isOpen ? t("collapseSidebar") : t("expandSidebar")}
             className={cn(
               "text-gray-400 hover:text-white hover:bg-white/10",
               !isOpen && "mx-auto"
@@ -160,7 +172,7 @@ export function PatientSidebar({
             size="icon"
             onClick={onMobileClose}
             className="text-gray-400 hover:text-white hover:bg-white/10 min-h-[44px] min-w-[44px]"
-            aria-label="Close menu"
+            aria-label={t("closeMenu")}
           >
             <X className="h-5 w-5" />
           </Button>
@@ -170,10 +182,10 @@ export function PatientSidebar({
       {/* Navigation */}
       <nav className="flex-1 space-y-6 p-4 overflow-y-auto">
         {navSections.map((section) => (
-          <div key={section.label}>
+          <div key={section.labelKey}>
             {(isOpen || mobile) && (
               <h3 className="mb-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                {section.label}
+                {t(`sections.${section.labelKey}`)}
               </h3>
             )}
             <div className="space-y-1">
@@ -191,8 +203,11 @@ export function PatientSidebar({
         ))}
       </nav>
 
-      {/* Logout */}
-      <div className="p-4 border-t border-gray-800">
+      {/* Language + Logout */}
+      <div className="p-4 border-t border-gray-800 space-y-2">
+        {(isOpen || mobile) && (
+          <LanguageSwitcher className="px-1 pb-1" />
+        )}
         <Button
           variant="ghost"
           className={cn(
@@ -202,7 +217,7 @@ export function PatientSidebar({
           onClick={logout}
         >
           <LogOut className="h-5 w-5" />
-          {(isOpen || mobile) && <span>Logout</span>}
+          {(isOpen || mobile) && <span>{t("logout")}</span>}
         </Button>
       </div>
     </>

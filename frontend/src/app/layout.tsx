@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale } from "next-intl/server";
 import { Providers } from "@/components/layout/providers";
 import { PWARegister } from "@/components/pwa-register";
 import { SentryInit } from "@/components/sentry-init";
@@ -19,13 +21,15 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // NEXT_LOCALE cookie → resolved by src/i18n/request.ts (no locale routing).
+  const locale = await getLocale();
   return (
-    <html lang="en">
+    <html lang={locale}>
       <head>
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#4169E1" />
@@ -35,7 +39,10 @@ export default function RootLayout({
       <body className="min-h-screen bg-gray-50 text-gray-900 antialiased">
         <PWARegister />
         <SentryInit />
-        <Providers>{children}</Providers>
+        {/* Inherits locale + messages from getRequestConfig (request.ts) */}
+        <NextIntlClientProvider>
+          <Providers>{children}</Providers>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

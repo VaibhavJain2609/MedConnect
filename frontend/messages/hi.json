@@ -1,0 +1,57 @@
+{
+  "nav": {
+    "sections": {
+      "main": "मुख्य",
+      "health": "स्वास्थ्य",
+      "clinics": "क्लीनिक",
+      "account": "खाता"
+    },
+    "healthTimeline": "स्वास्थ्य टाइमलाइन",
+    "appointments": "अपॉइंटमेंट",
+    "notifications": "सूचनाएं",
+    "myRecords": "मेरे रिकॉर्ड",
+    "labResults": "लैब रिपोर्ट",
+    "medications": "दवाएं",
+    "vitals": "वाइटल्स",
+    "medicalHistory": "चिकित्सा इतिहास",
+    "myClinics": "मेरे क्लीनिक",
+    "queueStatus": "कतार की स्थिति",
+    "joinAClinic": "क्लीनिक से जुड़ें",
+    "billing": "बिलिंग",
+    "preferences": "प्राथमिकताएं",
+    "myProfile": "मेरी प्रोफ़ाइल",
+    "logout": "लॉग आउट",
+    "collapseSidebar": "साइडबार छोटा करें",
+    "expandSidebar": "साइडबार बड़ा करें",
+    "closeMenu": "मेनू बंद करें"
+  },
+  "timeline": {
+    "breadcrumb": "स्वास्थ्य टाइमलाइन",
+    "title": "स्वास्थ्य टाइमलाइन",
+    "subtitle": "आपके संपूर्ण स्वास्थ्य रिकॉर्ड का इतिहास",
+    "uploadRecord": "रिकॉर्ड अपलोड करें",
+    "searchPlaceholder": "रिकॉर्ड खोजें...",
+    "filters": {
+      "allTypes": "सभी प्रकार",
+      "prescription": "प्रिस्क्रिप्शन",
+      "opd_note": "ओपीडी नोट्स",
+      "lab_report": "लैब रिपोर्ट",
+      "diagnostic_report": "डायग्नोस्टिक रिपोर्ट",
+      "discharge_summary": "डिस्चार्ज सारांश",
+      "imaging": "इमेजिंग",
+      "immunization": "टीकाकरण"
+    },
+    "emptyTitle": "कोई रिकॉर्ड नहीं मिला।",
+    "emptyHint": "जब कोई डॉक्टर आपके लिए रिकॉर्ड बनाएगा या आप स्वयं अपलोड करेंगे, तब आपके स्वास्थ्य रिकॉर्ड यहां दिखाई देंगे।",
+    "selfUploaded": "स्वयं अपलोड किया",
+    "amended": "संशोधित",
+    "documentAttached": "दस्तावेज़ संलग्न",
+    "byDoctor": "{name} द्वारा",
+    "loadMore": "और लोड करें",
+    "loading": "लोड हो रहा है..."
+  },
+  "languageSwitcher": {
+    "label": "भाषा",
+    "switchTo": "{language} पर जाएं"
+  }
+}
