@@ -17,49 +17,11 @@ export interface UserProfile {
   updated_at?: string;
 }
 
-export interface UpdateProfileData {
-  full_name?: string;
-  phone?: string;
-  language_pref?: string;
-}
-
 /**
  * Get current user profile
  */
 export async function getMe(): Promise<UserProfile> {
   const response = await api.get("/api/v1/auth/me");
-  return response.data;
-}
-
-/**
- * Update current user profile
- */
-export async function updateProfile(
-  data: UpdateProfileData
-): Promise<UserProfile> {
-  const response = await api.put("/api/v1/users/me", data);
-  return response.data;
-}
-
-/**
- * Upload user photo
- * @param file - Image file to upload
- * @returns Updated user profile with new photo URL
- */
-export async function uploadPhoto(file: File): Promise<UserProfile> {
-  const formData = new FormData();
-  formData.append("photo", file);
-
-  const response = await api.post("/api/v1/users/photo", formData);
-
-  return response.data;
-}
-
-/**
- * Delete user photo
- */
-export async function deletePhoto(): Promise<UserProfile> {
-  const response = await api.delete("/api/v1/users/photo");
   return response.data;
 }
 

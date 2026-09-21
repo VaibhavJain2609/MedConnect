@@ -1,0 +1,31 @@
+# Pre-commit hooks — mirrors the CI lint steps in .github/workflows/ci.yml:
+#   backend:  `ruff check .` (ruff==0.8.4, pinned in the ci.yml install step)
+#   frontend: formatting via prettier (CI gates on `npm run lint` / next lint,
+#             which can't run per-file under pre-commit)
+# Install: pip install pre-commit && pre-commit install
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+      - id: detect-private-key
+
+  # Backend lint — same tool + version CI pins in .github/workflows/ci.yml
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4 # keep in sync with `ruff==0.8.4` in ci.yml
+    hooks:
+      - id: ruff
+        files: ^backend/
+
+  # Frontend formatting — scoped to frontend/ so backend files are untouched
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.1.0
+    hooks:
+      - id: prettier
+        files: ^frontend/
+        # package-lock churn + generated types shouldn't be reformatted
+        exclude: ^frontend/(package-lock\.json|next-env\.d\.ts)$

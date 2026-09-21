@@ -15,6 +15,19 @@ function filenameFromDisposition(header?: string): string | undefined {
   return match ? decodeURIComponent(match[1].trim()) : undefined;
 }
 
+/** Save an already-in-memory `blob` as a file via a temporary anchor click. */
+export function saveBlob(blob: Blob, filename: string): void {
+  const blobUrl = window.URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = blobUrl;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  // Defer revocation so the browser has time to start the download
+  setTimeout(() => window.URL.revokeObjectURL(blobUrl), 10_000);
+}
+
 /** Fetch `url` with auth and save it as a file. */
 export async function downloadFile(url: string, filename?: string): Promise<void> {
   const response = await api.get(url, { responseType: "blob" });
@@ -23,15 +36,7 @@ export async function downloadFile(url: string, filename?: string): Promise<void
     filenameFromDisposition(response.headers?.["content-disposition"]) ??
     "download";
 
-  const blobUrl = window.URL.createObjectURL(response.data);
-  const anchor = document.createElement("a");
-  anchor.href = blobUrl;
-  anchor.download = resolvedName;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  // Defer revocation so the browser has time to start the download
-  setTimeout(() => window.URL.revokeObjectURL(blobUrl), 10_000);
+  saveBlob(response.data, resolvedName);
 }
 
 /** Fetch `url` with auth and open the resulting blob in a new tab (e.g. PDF preview). */

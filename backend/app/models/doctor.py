@@ -20,6 +20,7 @@ class Doctor(Base):
     verified: Mapped[bool] = mapped_column(Boolean, default=False)
     license_council: Mapped[str | None] = mapped_column(String(255), nullable=True)
     license_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    license_document_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     nhr_verification_status: Mapped[str] = mapped_column(String(20), default="not_checked")
     verification_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     onboarding_step: Mapped[str] = mapped_column(String(20), default="pending")
