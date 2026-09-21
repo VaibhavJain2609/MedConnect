@@ -31,17 +31,21 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({
   className,
 }) => {
   return (
-    <nav className={cn("flex items-center space-x-2 text-sm", className)}>
+    <nav
+      aria-label="Breadcrumb"
+      className={cn("flex items-center space-x-2 text-sm", className)}
+    >
       <Link
         href="/"
+        aria-label="Home"
         className="text-dreams-textSecondary hover:text-dreams-blue transition-colors"
       >
-        <Home className="h-4 w-4" />
+        <Home className="h-4 w-4" aria-hidden="true" />
       </Link>
 
       {items.map((item, index) => (
         <React.Fragment key={index}>
-          <ChevronRight className="h-4 w-4 text-gray-400" />
+          <ChevronRight className="h-4 w-4 text-gray-400" aria-hidden="true" />
           {item.href ? (
             <Link
               href={item.href}

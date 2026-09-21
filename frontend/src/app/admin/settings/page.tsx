@@ -59,16 +59,19 @@ function Toggle({
   checked,
   onChange,
   disabled,
+  label,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
   disabled?: boolean;
+  label: string;
 }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
+      aria-label={label}
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${
@@ -176,9 +179,9 @@ function SettingCard({
     <div className="bg-white rounded-xl border border-dreams-border shadow-card p-5 space-y-3">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-base font-semibold text-dreams-textPrimary">
+          <h2 className="text-base font-semibold text-dreams-textPrimary">
             {formatKey(setting.key)}
-          </h3>
+          </h2>
           <p className="text-xs font-mono text-dreams-textSecondary">
             {setting.key}
           </p>
@@ -204,6 +207,7 @@ function SettingCard({
             checked={draft === true}
             onChange={setDraft}
             disabled={saving}
+            label={formatKey(setting.key)}
           />
           <span className="text-sm text-dreams-textPrimary">
             {draft === true ? "Enabled" : "Disabled"}
@@ -227,6 +231,7 @@ function SettingCard({
           type="number"
           min={1}
           max={50}
+          aria-label={formatKey(setting.key)}
           value={typeof draft === "number" ? draft : ""}
           onChange={(e) =>
             setDraft(e.target.value === "" ? null : Number(e.target.value))
@@ -259,6 +264,7 @@ function SettingCard({
       {!isTyped && (
         <div>
           <textarea
+            aria-label={`${formatKey(setting.key)} value (JSON)`}
             value={jsonText}
             onChange={(e) => {
               setJsonText(e.target.value);

@@ -10,7 +10,12 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center">
-      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
+      <div
+        role="status"
+        className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600"
+      >
+        <span className="sr-only">Redirecting to sign in…</span>
+      </div>
     </div>
   );
 }
