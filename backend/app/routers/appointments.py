@@ -3,7 +3,7 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import cast, func, select, update
 from sqlalchemy.dialects.postgresql import INTERVAL
@@ -256,6 +256,29 @@ async def _doctor_patient_relationship_exists(
     )
 
 
+async def _staff_clinic_context(
+    db: AsyncSession,
+    user: User,
+    x_clinic_id: str | None,
+) -> UUID | None:
+    """Front-desk clinic context for write endpoints that also serve staff.
+
+    Returns the X-Clinic-Id clinic when the header is present AND the caller
+    holds an active ClinicMembership there (any role — owner | admin | doctor |
+    receptionist). Returns None when the header is absent, malformed, or the
+    caller is not a member — callers then fall back to their normal role gate.
+    """
+    if not x_clinic_id:
+        return None
+    try:
+        clinic_id = uuid.UUID(x_clinic_id)
+    except ValueError:
+        return None
+    if await access_service.get_membership_role(db, user.id, clinic_id) is None:
+        return None
+    return clinic_id
+
+
 async def _validate_clinic_and_branch(
     db: AsyncSession,
     user: User,
@@ -429,9 +452,12 @@ async def _check_patient_clinic_conflict(
 async def create_appointment(
     req: AppointmentCreate,
     current_user: User = Depends(get_current_user),
+    x_clinic_id: str | None = Header(None, alias="X-Clinic-Id"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Create a new appointment. Patient books for themselves; doctor books for a patient."""
+    """Create a new appointment. Patient books for themselves; doctor books for
+    a patient; front-desk clinic staff (any active membership under the
+    X-Clinic-Id context, incl. receptionist) book linked patients."""
     if req.type not in VALID_TYPES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -473,12 +499,38 @@ async def create_appointment(
             detail={"error": {"code": "NOT_FOUND", "message": "Patient not found"}},
         )
 
-    # Authorization: patients can only book for themselves
+    # Authorization: patients can only book for themselves — unless they act as
+    # front-desk staff: an active clinic membership (any role, incl.
+    # receptionist) under the X-Clinic-Id context lets them book for a patient
+    # who has an approved link with that clinic, with a doctor-member of it.
+    staff_clinic_id: UUID | None = None
     if current_user.role == "patient" and req.patient_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"error": {"code": "FORBIDDEN", "message": "Patients can only book appointments for themselves"}},
-        )
+        staff_clinic_id = await _staff_clinic_context(db, current_user, x_clinic_id)
+        if staff_clinic_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "FORBIDDEN", "message": "Patients can only book appointments for themselves"}},
+            )
+        if req.clinic_id is not None and req.clinic_id != staff_clinic_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": {"code": "INVALID_CLINIC", "message": "clinic_id must match the X-Clinic-Id clinic context"}},
+            )
+        # The booked doctor must be an active member of this clinic
+        doctor_user_id = (
+            await db.execute(
+                select(Doctor.user_id).where(Doctor.id == doctor_id, Doctor.deleted_at.is_(None))
+            )
+        ).scalar_one_or_none()
+        if doctor_user_id is None or await access_service.get_membership_role(
+            db, doctor_user_id, staff_clinic_id
+        ) is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "DOCTOR_NOT_IN_CLINIC", "message": "Doctor is not a member of this clinic"}},
+            )
+        # Approved PatientClinicLink required — missing/pending/revoked → 403
+        await access_service.check_patient_consent(db, req.patient_id, staff_clinic_id)
 
     # Authorization: doctors can only schedule under their own profile, and only
     # for patients they have an existing relationship with (a record they authored
@@ -501,9 +553,13 @@ async def create_appointment(
                 detail={"error": {"code": "PATIENT_ACCESS_DENIED", "message": "No relationship with this patient"}},
             )
 
-    # Tenant validation: clinic_id/branch_id from the body require membership
+    # Tenant validation: clinic_id/branch_id from the body require membership.
+    # A staff booking that omits clinic_id lands on the X-Clinic-Id clinic.
     effective_clinic_id = await _validate_clinic_and_branch(
-        db, current_user, req.clinic_id, req.branch_id
+        db,
+        current_user,
+        req.clinic_id if req.clinic_id is not None else staff_clinic_id,
+        req.branch_id,
     )
 
     # Check doctor availability
@@ -751,8 +807,18 @@ async def update_appointment(
             detail={"error": {"code": "INVALID_STATUS", "message": "Only scheduled appointments can be modified"}},
         )
 
-    # Access control
-    if current_user.role == "patient":
+    # Access control.
+    # Clinic staff: any active membership (incl. receptionist) at the
+    # appointment's clinic grants front-desk management of that appointment —
+    # same membership gate as the X-Clinic-Id endpoints, keyed off the
+    # appointment's clinic. Admin keeps the unrestricted path.
+    staff_role: str | None = None
+    if current_user.role != "admin" and appt.clinic_id is not None:
+        staff_role = await access_service.get_membership_role(
+            db, current_user.id, appt.clinic_id
+        )
+
+    if current_user.role == "patient" and staff_role is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"error": {"code": "FORBIDDEN", "message": "Patients cannot modify appointments; use cancel instead"}},
@@ -763,15 +829,38 @@ async def update_appointment(
             select(Doctor).where(Doctor.user_id == current_user.id, Doctor.deleted_at.is_(None))
         )
         doctor = doc_res.scalar_one_or_none()
-        if not doctor or appt.doctor_id != doctor.id:
+        is_owning_doctor = doctor is not None and appt.doctor_id == doctor.id
+        if not is_owning_doctor and staff_role is None:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={"error": {"code": "FORBIDDEN", "message": "Access denied"}},
             )
-        if req.doctor_id is not None and req.doctor_id != doctor.id:
+        if is_owning_doctor and req.doctor_id is not None and req.doctor_id != doctor.id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={"error": {"code": "FORBIDDEN", "message": "Doctors cannot reassign appointments to other doctors"}},
+            )
+
+    # Front-desk staff may reassign the appointment only to a doctor who is
+    # an active member of the same clinic (a missing doctor still 404s below).
+    if (
+        staff_role is not None
+        and req.doctor_id is not None
+        and req.doctor_id != appt.doctor_id
+    ):
+        new_doc_user_id = (
+            await db.execute(
+                select(Doctor.user_id).where(
+                    Doctor.id == req.doctor_id, Doctor.deleted_at.is_(None)
+                )
+            )
+        ).scalar_one_or_none()
+        if new_doc_user_id is not None and await access_service.get_membership_role(
+            db, new_doc_user_id, appt.clinic_id
+        ) is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "DOCTOR_NOT_IN_CLINIC", "message": "Doctor is not a member of this clinic"}},
             )
 
     # Resolve effective values for conflict checking
@@ -885,18 +974,33 @@ async def update_appointment_status(
             detail={"error": {"code": "NOT_FOUND", "message": "Appointment not found"}},
         )
 
-    # Access control: doctor must own the appointment; patient can only cancel their own
+    # Access control: doctor must own the appointment; patient can only cancel
+    # their own; clinic staff (any active membership at the appointment's
+    # clinic — incl. receptionist) run the front-desk transitions; admin any.
+    is_owning_doctor = False
     if current_user.role == "doctor":
         doc_res = await db.execute(
             select(Doctor).where(Doctor.user_id == current_user.id, Doctor.deleted_at.is_(None))
         )
         doctor = doc_res.scalar_one_or_none()
-        if not doctor or appt.doctor_id != doctor.id:
+        is_owning_doctor = doctor is not None and appt.doctor_id == doctor.id
+
+    is_clinic_staff = (
+        current_user.role != "admin"
+        and appt.clinic_id is not None
+        and await access_service.get_membership_role(
+            db, current_user.id, appt.clinic_id
+        )
+        is not None
+    )
+
+    if current_user.role == "doctor":
+        if not is_owning_doctor and not is_clinic_staff:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={"error": {"code": "FORBIDDEN", "message": "Access denied"}},
             )
-    elif current_user.role == "patient":
+    elif current_user.role == "patient" and not is_clinic_staff:
         if appt.patient_id != current_user.id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -910,8 +1014,12 @@ async def update_appointment_status(
             )
     # Admin can update any status
 
-    # Validate transition
+    # Validate transition. Front-desk staff use the doctor transition table
+    # minus 'completed' — finishing a consult stays a clinical action for the
+    # owning doctor or an admin.
     allowed = STATUS_TRANSITIONS.get(appt.status, set())
+    if is_clinic_staff and not is_owning_doctor:
+        allowed = allowed - {"completed"}
     if req.status not in allowed:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
