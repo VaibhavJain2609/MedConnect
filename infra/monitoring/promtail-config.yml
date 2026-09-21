@@ -1,0 +1,51 @@
+# Promtail config for LOCAL Docker Compose only
+# (docker-compose.yml `observability` profile).
+#
+# Tails every container managed by a compose project via the Docker daemon
+# API (docker_sd_configs over /var/run/docker.sock — portable to Docker
+# Desktop, unlike a /var/lib/docker bind mount). Backend stdout is already
+# structlog JSON (backend/app/main.py), so no reformatting happens here —
+# lines are shipped as-is and `level` is lifted into a low-cardinality
+# stream label. request_id/path/etc. stay in the line and are queried with
+# `| json` at read time (see docs/logging.md).
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: warn
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: compose-containers
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 10s
+    relabel_configs:
+      # Keep only compose-managed containers — every service in this repo's
+      # stack (incl. loki/promtail/grafana themselves) carries the
+      # com.docker.compose.* labels; random non-compose containers don't.
+      - action: keep
+        source_labels: [__meta_docker_container_label_com_docker_compose_service]
+        regex: .+
+      - source_labels: [__meta_docker_container_label_com_docker_compose_service]
+        target_label: service
+      - source_labels: [__meta_docker_container_label_com_docker_compose_project]
+        target_label: project
+      - source_labels: [__meta_docker_container_name]
+        regex: /?(.*)
+        target_label: container
+    pipeline_stages:
+      # Extract `level` from structlog JSON into a stream label so
+      # `{service="backend", level="error"}` works. Non-JSON lines
+      # (e.g. shell/uvicorn noise) fail the parse and pass through
+      # unlabeled — they are still searchable by text.
+      - json:
+          expressions:
+            level: level
+      - labels:
+          level:
