@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { cn } from "@/lib/utils";
+import { useFormatter, useTranslations } from "next-intl";
 import {
   getNotifications,
   markAsRead,
@@ -21,13 +22,18 @@ import { actOnRecordAccessRequest } from "@/lib/api/record-access";
 
 const PAGE_SIZE = 20;
 
-const TYPE_OPTIONS = [
-  { value: "", label: "All" },
-  { value: "appointment", label: "Appointments" },
-  { value: "prescription", label: "Prescriptions" },
-  { value: "lab_result", label: "Lab Results" },
-  { value: "system", label: "System" },
-  { value: "message", label: "Messages" },
+// labelKey values double as message keys under notifications.types —
+// keep them in sync with messages/en.json + hi.json (see docs/i18n.md).
+type EnMessages = typeof import("../../../../messages/en.json");
+type NotificationTypeKey = keyof EnMessages["notifications"]["types"];
+
+const TYPE_OPTIONS: { value: string; labelKey: NotificationTypeKey }[] = [
+  { value: "", labelKey: "all" },
+  { value: "appointment", labelKey: "appointment" },
+  { value: "prescription", labelKey: "prescription" },
+  { value: "lab_result", labelKey: "lab_result" },
+  { value: "system", labelKey: "system" },
+  { value: "message", labelKey: "message" },
 ];
 
 function getIcon(type: Notification["type"]) {
@@ -40,14 +46,19 @@ function getIcon(type: Notification["type"]) {
   }
 }
 
-function formatTimestamp(ts: string) {
+type NotificationsT = ReturnType<typeof useTranslations<"notifications">>;
+type Formatter = ReturnType<typeof useFormatter>;
+
+// Module-level: Date.now() must not run inside the component body
+// (react-hooks/purity).
+function formatTimestamp(ts: string, t: NotificationsT, format: Formatter) {
   const date = new Date(ts);
   const diff = Math.floor((Date.now() - date.getTime()) / 1000);
-  if (diff < 60) return "Just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
-  return date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  if (diff < 60) return t("justNow");
+  if (diff < 3600) return t("minutesAgo", { count: Math.floor(diff / 60) });
+  if (diff < 86400) return t("hoursAgo", { count: Math.floor(diff / 3600) });
+  if (diff < 604800) return t("daysAgo", { count: Math.floor(diff / 86400) });
+  return format.dateTime(date, { day: "numeric", month: "short", year: "numeric" });
 }
 
 // Only allow same-origin relative paths — blocks javascript:, data:,
@@ -58,6 +69,9 @@ function safeActionUrl(url?: string): string | undefined {
 }
 
 export default function PatientNotificationsPage() {
+  const t = useTranslations("notifications");
+  const tPage = useTranslations("pagination");
+  const format = useFormatter();
   const queryClient = useQueryClient();
   const router = useRouter();
   const [unreadOnly, setUnreadOnly] = useState(false);
@@ -132,14 +146,16 @@ export default function PatientNotificationsPage() {
 
   return (
     <div className="space-y-6">
-      <Breadcrumb items={[{ label: "Notifications" }]} />
+      <Breadcrumb items={[{ label: t("title") }]} />
 
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-dreams-textPrimary">Notifications</h1>
+          <h1 className="text-2xl font-bold text-dreams-textPrimary">{t("title")}</h1>
           {unreadCount > 0 && (
-            <p className="text-sm text-dreams-textSecondary mt-0.5">{unreadCount} unread</p>
+            <p className="text-sm text-dreams-textSecondary mt-0.5">
+              {t("unreadCount", { count: unreadCount })}
+            </p>
           )}
         </div>
         <div className="flex gap-2">
@@ -150,7 +166,7 @@ export default function PatientNotificationsPage() {
               className="flex items-center gap-1.5 rounded-lg border border-dreams-border bg-white px-3 py-2 text-sm font-medium text-dreams-textPrimary hover:bg-dreams-lightBg disabled:opacity-50"
             >
               <CheckCircle className="h-4 w-4" />
-              Mark all read
+              {t("markAllRead")}
             </button>
           )}
           <button
@@ -159,7 +175,7 @@ export default function PatientNotificationsPage() {
             className="flex items-center gap-1.5 rounded-lg border border-dreams-border bg-white px-3 py-2 text-sm font-medium text-dreams-textPrimary hover:bg-dreams-lightBg disabled:opacity-50"
           >
             <Trash2 className="h-4 w-4" />
-            Clear read
+            {t("clearRead")}
           </button>
         </div>
       </div>
@@ -168,7 +184,7 @@ export default function PatientNotificationsPage() {
       <div className="flex flex-wrap gap-3 items-center">
         <div className="flex items-center gap-1.5 text-sm text-dreams-textSecondary">
           <Filter className="h-4 w-4" />
-          <span>Filter:</span>
+          <span>{t("filterLabel")}</span>
         </div>
         <button
           onClick={() => handleFilter("unread", !unreadOnly)}
@@ -179,7 +195,7 @@ export default function PatientNotificationsPage() {
               : "bg-white text-dreams-textPrimary border-dreams-border hover:bg-dreams-lightBg"
           )}
         >
-          Unread only
+          {t("unreadOnly")}
         </button>
         {TYPE_OPTIONS.map((opt) => (
           <button
@@ -192,7 +208,7 @@ export default function PatientNotificationsPage() {
                 : "bg-white text-dreams-textPrimary border-dreams-border hover:bg-dreams-lightBg"
             )}
           >
-            {opt.label}
+            {t(`types.${opt.labelKey}`)}
           </button>
         ))}
       </div>
@@ -200,11 +216,11 @@ export default function PatientNotificationsPage() {
       {/* List */}
       <div className="bg-white rounded-xl border border-dreams-border shadow-card overflow-hidden">
         {isLoading ? (
-          <div className="p-12 text-center text-dreams-textSecondary">Loading...</div>
+          <div className="p-12 text-center text-dreams-textSecondary">{t("loading")}</div>
         ) : notifications.length === 0 ? (
           <div className="p-12 flex flex-col items-center justify-center text-center">
             <Bell className="h-10 w-10 text-dreams-textSecondary opacity-40 mb-3" />
-            <p className="text-dreams-textSecondary">No notifications</p>
+            <p className="text-dreams-textSecondary">{t("empty")}</p>
           </div>
         ) : (
           <ul className="divide-y divide-dreams-border">
@@ -231,7 +247,7 @@ export default function PatientNotificationsPage() {
                         <span className="h-2 w-2 rounded-full bg-dreams-blue" />
                       )}
                       <span className="text-xs text-dreams-textSecondary whitespace-nowrap">
-                        {formatTimestamp(n.created_at)}
+                        {formatTimestamp(n.created_at, t, format)}
                       </span>
                     </div>
                   </div>
@@ -248,7 +264,7 @@ export default function PatientNotificationsPage() {
                         className="flex items-center gap-1 rounded-lg bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 hover:bg-green-100 disabled:opacity-50"
                       >
                         <CheckCircle className="h-3 w-3" />
-                        Approve
+                        {t("approve")}
                       </button>
                       <button
                         disabled={consentMutation.isPending}
@@ -258,7 +274,7 @@ export default function PatientNotificationsPage() {
                         className="flex items-center gap-1 rounded-lg bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
                       >
                         <XCircle className="h-3 w-3" />
-                        Reject
+                        {t("reject")}
                       </button>
                     </div>
                   )}
@@ -272,7 +288,7 @@ export default function PatientNotificationsPage() {
                         if (!n.read) markReadMutation.mutate(n.id);
                       }}
                     >
-                      View details
+                      {t("viewDetails")}
                     </a>
                   )}
                 </div>
@@ -287,7 +303,7 @@ export default function PatientNotificationsPage() {
                       }}
                       disabled={markReadMutation.isPending}
                       className="p-1.5 rounded hover:bg-dreams-lightBg text-dreams-textSecondary"
-                      title="Mark as read"
+                      title={t("markAsRead")}
                     >
                       <Check className="h-3.5 w-3.5" />
                     </button>
@@ -299,7 +315,7 @@ export default function PatientNotificationsPage() {
                     }}
                     disabled={deleteMutation.isPending}
                     className="p-1.5 rounded hover:bg-red-50 text-dreams-textSecondary hover:text-red-500"
-                    title="Delete"
+                    title={t("delete")}
                   >
                     <XCircle className="h-3.5 w-3.5" />
                   </button>
@@ -314,7 +330,11 @@ export default function PatientNotificationsPage() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-sm text-dreams-textSecondary">
           <span>
-            Showing {offset + 1}–{Math.min(offset + PAGE_SIZE, total)} of {total}
+            {tPage("showingRange", {
+              start: offset + 1,
+              end: Math.min(offset + PAGE_SIZE, total),
+              total,
+            })}
           </span>
           <div className="flex gap-2">
             <button
@@ -322,14 +342,14 @@ export default function PatientNotificationsPage() {
               disabled={currentPage === 1}
               className="rounded-lg border border-dreams-border bg-white px-3 py-1.5 hover:bg-dreams-lightBg disabled:opacity-40"
             >
-              Previous
+              {tPage("previous")}
             </button>
             <button
               onClick={() => setOffset((p) => p + PAGE_SIZE)}
               disabled={currentPage === totalPages}
               className="rounded-lg border border-dreams-border bg-white px-3 py-1.5 hover:bg-dreams-lightBg disabled:opacity-40"
             >
-              Next
+              {tPage("next")}
             </button>
           </div>
         </div>

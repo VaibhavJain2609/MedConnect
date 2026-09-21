@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { getPrivacyStatus, requestErasure } from "@/lib/api/patients";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
+import { useFormatter, useTranslations } from "next-intl";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,6 +32,8 @@ const LANGUAGE_OPTIONS = [
 ];
 
 export default function PatientProfilePage() {
+  const t = useTranslations("profile");
+  const format = useFormatter();
   const queryClient = useQueryClient();
   const [saved, setSaved] = useState(false);
 
@@ -110,54 +113,54 @@ export default function PatientProfilePage() {
 
   return (
     <div className="space-y-6">
-      <Breadcrumb items={[{ label: "My Profile" }]} />
+      <Breadcrumb items={[{ label: t("title") }]} />
 
       <div>
-        <h1 className="text-3xl font-bold text-dreams-textPrimary">My Profile</h1>
-        <p className="text-dreams-textSecondary mt-1">Manage your personal and contact information</p>
+        <h1 className="text-3xl font-bold text-dreams-textPrimary">{t("title")}</h1>
+        <p className="text-dreams-textSecondary mt-1">{t("subtitle")}</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl">
         {/* Read-only info */}
         <div className="bg-white rounded-lg shadow-card p-6 space-y-4">
           <h2 className="text-lg font-semibold text-dreams-textPrimary border-b border-dreams-border pb-3">
-            Account Information
+            {t("accountInfo")}
           </h2>
           <div className="space-y-1">
-            <label className="text-sm font-medium text-dreams-textSecondary">Full Name</label>
+            <label className="text-sm font-medium text-dreams-textSecondary">{t("fullName")}</label>
             <p className="text-dreams-textPrimary">{profile?.full_name}</p>
-            <p className="text-xs text-dreams-textSecondary/60">Managed by your account provider</p>
+            <p className="text-xs text-dreams-textSecondary/60">{t("managedByProvider")}</p>
           </div>
           <div className="space-y-1">
-            <label className="text-sm font-medium text-dreams-textSecondary">Email</label>
+            <label className="text-sm font-medium text-dreams-textSecondary">{t("email")}</label>
             <p className="text-dreams-textPrimary">{profile?.email ?? "—"}</p>
-            <p className="text-xs text-dreams-textSecondary/60">Managed by your account provider</p>
+            <p className="text-xs text-dreams-textSecondary/60">{t("managedByProvider")}</p>
           </div>
         </div>
 
         {/* Editable fields */}
         <div className="bg-white rounded-lg shadow-card p-6 space-y-4">
           <h2 className="text-lg font-semibold text-dreams-textPrimary border-b border-dreams-border pb-3">
-            Contact Details
+            {t("contactDetails")}
           </h2>
 
           <div className="space-y-2">
             <label className="text-sm font-medium text-dreams-textPrimary" htmlFor="phone">
-              Phone Number
+              {t("phoneNumber")}
             </label>
             <input
               id="phone"
               type="tel"
               value={form.phone}
               onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-              placeholder="+91 98765 43210"
+              placeholder={t("phonePlaceholder")}
               className="w-full h-10 rounded-lg border border-dreams-border px-3 py-2 text-sm bg-white focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
             />
           </div>
 
           <div className="space-y-2">
             <label className="text-sm font-medium text-dreams-textPrimary" htmlFor="language_pref">
-              Preferred Language
+              {t("preferredLanguage")}
             </label>
             <select
               id="language_pref"
@@ -176,33 +179,33 @@ export default function PatientProfilePage() {
 
         <div className="bg-white rounded-lg shadow-card p-6 space-y-4">
           <h2 className="text-lg font-semibold text-dreams-textPrimary border-b border-dreams-border pb-3">
-            Emergency Contact
+            {t("emergencyContact")}
           </h2>
 
           <div className="space-y-2">
             <label className="text-sm font-medium text-dreams-textPrimary" htmlFor="ec_name">
-              Contact Name
+              {t("contactName")}
             </label>
             <input
               id="ec_name"
               type="text"
               value={form.emergency_contact_name}
               onChange={(e) => setForm((f) => ({ ...f, emergency_contact_name: e.target.value }))}
-              placeholder="e.g. Priya Sharma"
+              placeholder={t("contactNamePlaceholder")}
               className="w-full h-10 rounded-lg border border-dreams-border px-3 py-2 text-sm bg-white focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
             />
           </div>
 
           <div className="space-y-2">
             <label className="text-sm font-medium text-dreams-textPrimary" htmlFor="ec_phone">
-              Contact Phone
+              {t("contactPhone")}
             </label>
             <input
               id="ec_phone"
               type="tel"
               value={form.emergency_contact_phone}
               onChange={(e) => setForm((f) => ({ ...f, emergency_contact_phone: e.target.value }))}
-              placeholder="+91 98765 43210"
+              placeholder={t("phonePlaceholder")}
               className="w-full h-10 rounded-lg border border-dreams-border px-3 py-2 text-sm bg-white focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
             />
           </div>
@@ -214,13 +217,13 @@ export default function PatientProfilePage() {
             disabled={mutation.isPending}
             className="h-10 px-6 rounded-lg bg-dreams-blue text-white text-sm font-medium hover:bg-dreams-blue/90 disabled:opacity-60 transition-colors"
           >
-            {mutation.isPending ? "Saving..." : "Save Changes"}
+            {mutation.isPending ? t("saving") : t("saveChanges")}
           </button>
           {saved && (
-            <p className="text-sm text-green-600 font-medium">Profile updated successfully.</p>
+            <p className="text-sm text-green-600 font-medium">{t("saved")}</p>
           )}
           {mutation.isError && (
-            <p className="text-sm text-red-600">Failed to save. Please try again.</p>
+            <p className="text-sm text-red-600">{t("saveFailed")}</p>
           )}
         </div>
       </form>
@@ -228,55 +231,53 @@ export default function PatientProfilePage() {
       {/* Privacy (DPDP) */}
       <div className="bg-white rounded-lg shadow-card p-6 space-y-4 max-w-2xl">
         <h2 className="text-lg font-semibold text-dreams-textPrimary border-b border-dreams-border pb-3">
-          Privacy
+          {t("privacy")}
         </h2>
 
         <div className="space-y-1">
           <label className="text-sm font-medium text-dreams-textSecondary">
-            Data Consent
+            {t("dataConsent")}
           </label>
           {privacy?.consent_at ? (
             <p className="text-dreams-textPrimary">
-              Consented on{" "}
-              {new Date(privacy.consent_at).toLocaleDateString("en-IN", {
-                day: "numeric",
-                month: "long",
-                year: "numeric",
+              {t("consentedOn", {
+                date: format.dateTime(new Date(privacy.consent_at), {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                }),
               })}
               {privacy.consent_version
-                ? ` (notice ${privacy.consent_version})`
+                ? ` ${t("consentNotice", { version: privacy.consent_version })}`
                 : ""}
             </p>
           ) : (
             <p className="text-dreams-textSecondary">
-              No consent record on file.
+              {t("noConsent")}
             </p>
           )}
         </div>
 
         <div className="space-y-2 border-t border-dreams-border pt-4">
           <label className="text-sm font-medium text-dreams-textSecondary">
-            Data Erasure
+            {t("dataErasure")}
           </label>
           {privacy?.erased_at || privacy?.erasure_requested_at ? (
             <p className="text-sm text-dreams-textPrimary">
-              Your data erasure request was processed
               {privacy.erased_at
-                ? ` on ${new Date(privacy.erased_at).toLocaleDateString("en-IN", {
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                  })}`
-                : ""}
-              .
+                ? t("erasureProcessed", {
+                    date: format.dateTime(new Date(privacy.erased_at), {
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                    }),
+                  })
+                : t("erasureProcessedNoDate")}
             </p>
           ) : (
             <>
               <p className="text-sm text-dreams-textSecondary">
-                Under the Digital Personal Data Protection Act, you can request
-                erasure of your personal data. This anonymizes your account
-                details and revokes clinic data-sharing consents. Clinical
-                records held by your doctors are retained as required by law.
+                {t("erasureExplanation")}
               </p>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
@@ -284,34 +285,32 @@ export default function PatientProfilePage() {
                     type="button"
                     className="h-10 px-4 rounded-lg border border-red-300 text-red-600 text-sm font-medium hover:bg-red-50 transition-colors"
                   >
-                    Request data erasure
+                    {t("requestErasure")}
                   </button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Erase your personal data?</AlertDialogTitle>
+                    <AlertDialogTitle>{t("eraseDialogTitle")}</AlertDialogTitle>
                     <AlertDialogDescription>
-                      This will permanently anonymize your name, email, phone
-                      and emergency contact details, and revoke all clinic
-                      data-sharing consents. This action cannot be undone.
+                      {t("eraseDialogBody")}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
                     <AlertDialogAction
                       onClick={() => erasureMutation.mutate()}
                       className="bg-red-600 hover:bg-red-700"
                     >
                       {erasureMutation.isPending
-                        ? "Processing..."
-                        : "Erase my data"}
+                        ? t("processing")
+                        : t("eraseMyData")}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
               {erasureMutation.isError && (
                 <p className="text-sm text-red-600">
-                  Erasure request failed. Please try again.
+                  {t("erasureFailed")}
                 </p>
               )}
             </>

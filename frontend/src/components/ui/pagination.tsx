@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
 
@@ -24,33 +25,34 @@ export function Pagination({
   onPageChange,
   className,
 }: PaginationProps) {
+  const t = useTranslations("pagination");
   if (totalPages <= 1) return null;
 
   return (
     <div className={cn("flex items-center justify-between", className)}>
       <p className="text-sm text-dreams-textSecondary">
-        Page {page} of {totalPages}
-        {typeof total === "number" ? ` · ${total} total` : ""}
+        {t("pageOf", { page, totalPages })}
+        {typeof total === "number" ? ` ${t("totalSuffix", { count: total })}` : ""}
       </p>
       <div className="flex gap-2">
         <button
           type="button"
           disabled={page <= 1}
           onClick={() => onPageChange(page - 1)}
-          aria-label="Previous page"
+          aria-label={t("previousPage")}
           className="flex items-center gap-1 px-4 py-2 text-sm rounded-lg border border-dreams-border bg-white text-dreams-textPrimary disabled:opacity-40 hover:bg-dreams-lightBg transition-colors"
         >
           <ChevronLeft className="h-4 w-4" />
-          Previous
+          {t("previous")}
         </button>
         <button
           type="button"
           disabled={page >= totalPages}
           onClick={() => onPageChange(page + 1)}
-          aria-label="Next page"
+          aria-label={t("nextPage")}
           className="flex items-center gap-1 px-4 py-2 text-sm rounded-lg border border-dreams-border bg-white text-dreams-textPrimary disabled:opacity-40 hover:bg-dreams-lightBg transition-colors"
         >
-          Next
+          {t("next")}
           <ChevronRight className="h-4 w-4" />
         </button>
       </div>
@@ -82,13 +84,14 @@ export function LoadMoreButton({
   loadedCount,
   className,
 }: LoadMoreButtonProps) {
+  const t = useTranslations("pagination");
   if (!hasMore) return null;
 
   return (
     <div className={cn("space-y-1 text-center", className)}>
       {typeof loadedCount === "number" && (
         <p className="text-xs text-dreams-textSecondary">
-          {loadedCount} loaded
+          {t("loaded", { count: loadedCount })}
         </p>
       )}
       <button
@@ -98,7 +101,7 @@ export function LoadMoreButton({
         className="inline-flex items-center gap-2 text-sm text-dreams-blue hover:underline disabled:opacity-50"
       >
         {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-        {loading ? "Loading…" : "Load more"}
+        {loading ? t("loading") : t("loadMore")}
       </button>
     </div>
   );

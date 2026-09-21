@@ -17,6 +17,9 @@ const customJestConfig = {
   },
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
+    // next-intl ships ESM that next/jest's hardcoded transformIgnorePatterns
+    // exclude from transformation — use a mock that resolves messages/en.json.
+    '^next-intl$': '<rootDir>/tests/mocks/next-intl.tsx',
   },
   collectCoverageFrom: [
     'src/**/*.{js,jsx,ts,tsx}',

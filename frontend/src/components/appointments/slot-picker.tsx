@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertCircle, CalendarX, RefreshCw } from "lucide-react";
+import { useFormatter, useTranslations } from "next-intl";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { AvailabilitySlot } from "@/lib/api/availability";
 
@@ -50,17 +51,20 @@ export function SlotPicker({
   onPickCustomTime,
   onShowSlots,
 }: SlotPickerProps) {
+  const t = useTranslations("appointments.slotPicker");
+  const format = useFormatter();
+
   // User chose manual entry while slots are available — offer a way back.
   if (customTime && slots && slots.length > 0) {
     return (
       <div className="flex items-center justify-between rounded-lg border border-dreams-border bg-dreams-lightBg px-4 py-2.5">
-        <p className="text-sm text-dreams-textSecondary">Entering a custom time</p>
+        <p className="text-sm text-dreams-textSecondary">{t("enteringCustomTime")}</p>
         <button
           type="button"
           onClick={onShowSlots}
           className="text-xs font-medium text-dreams-blue hover:underline"
         >
-          Show available times
+          {t("showAvailableTimes")}
         </button>
       </div>
     );
@@ -68,9 +72,9 @@ export function SlotPicker({
 
   if (isLoading) {
     return (
-      <div aria-busy="true" aria-label="Loading available times">
+      <div aria-busy="true" aria-label={t("loadingTimes")}>
         <span className="mb-1 block text-sm font-medium text-dreams-textPrimary">
-          Available times
+          {t("availableTimes")}
         </span>
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
@@ -87,8 +91,7 @@ export function SlotPicker({
         <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
         <div className="flex-1">
           <p className="text-sm text-amber-800">
-            Couldn&apos;t load this doctor&apos;s availability — pick a custom
-            time below, or try again.
+            {t("loadError")}
           </p>
           <button
             type="button"
@@ -97,7 +100,7 @@ export function SlotPicker({
             className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-amber-800 underline hover:text-amber-900 disabled:opacity-50"
           >
             <RefreshCw className={`h-3 w-3 ${isRetrying ? "animate-spin" : ""}`} />
-            {isRetrying ? "Retrying…" : "Retry"}
+            {isRetrying ? t("retrying") : t("retry")}
           </button>
         </div>
       </div>
@@ -109,7 +112,7 @@ export function SlotPicker({
       <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
         <CalendarX className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-600" />
         <p className="text-sm text-blue-800">
-          No published availability — pick a custom time.
+          {t("noAvailability")}
         </p>
       </div>
     );
@@ -118,11 +121,11 @@ export function SlotPicker({
   return (
     <div>
       <span className="mb-1 block text-sm font-medium text-dreams-textPrimary">
-        Available times *
+        {t("availableTimesRequired")}
       </span>
       <div
         role="group"
-        aria-label="Available time slots"
+        aria-label={t("availableTimesGroup")}
         className="grid grid-cols-3 gap-2 sm:grid-cols-4"
       >
         {slots.map((slot) => {
@@ -139,7 +142,10 @@ export function SlotPicker({
                   : "border-dreams-border bg-white text-dreams-textPrimary hover:border-dreams-blue hover:bg-dreams-blue/5"
               }`}
             >
-              {formatSlotLabel(slot.start_time)}
+              {format.dateTime(new Date(slot.start), {
+                hour: "numeric",
+                minute: "2-digit",
+              })}
             </button>
           );
         })}
@@ -149,7 +155,7 @@ export function SlotPicker({
         onClick={onPickCustomTime}
         className="mt-1.5 text-xs text-dreams-textSecondary underline hover:text-dreams-textPrimary"
       >
-        Need a different time? Enter a custom time
+        {t("customTimeLink")}
       </button>
     </div>
   );
