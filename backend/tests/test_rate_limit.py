@@ -538,3 +538,86 @@ class TestPerEndpointLimits:
             resp = await self._call(app, "/api/v1/interactions/check")
         assert resp.status_code == 429
         assert "60" in resp.json()["error"]["message"]
+
+
+@pytest.mark.asyncio
+class TestSearchEndpointLimits:
+    """Global search has a dedicated 30/min limit on BOTH the caller bucket
+    and the per-user bucket (token rotation must not reset the budget)."""
+
+    def _make_app(self):
+        from fastapi import FastAPI
+        from app.middleware.rate_limit import RateLimitMiddleware
+
+        mini_app = FastAPI()
+
+        @mini_app.get("/api/v1/search")
+        async def search():
+            return {"ok": True}
+
+        @mini_app.get("/api/v1/search/suggestions")
+        async def suggestions():
+            return {"ok": True}
+
+        mini_app.add_middleware(RateLimitMiddleware)
+        return mini_app
+
+    async def _call(self, app, path, headers=None):
+        from httpx import ASGITransport, AsyncClient
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            return await c.get(path, headers=headers or {})
+
+    async def test_search_blocked_over_30_on_caller_bucket(self):
+        app = self._make_app()
+        mock_redis, pipes = _mock_redis(31)
+
+        with patch("app.middleware.rate_limit._get_redis", return_value=mock_redis):
+            resp = await self._call(app, "/api/v1/search")
+        assert resp.status_code == 429
+        assert "30" in resp.json()["error"]["message"]
+        assert "endpoint:/api/v1/search" in pipes[0].incr.call_args[0][0]
+
+    async def test_search_suggestions_blocked_over_30(self):
+        app = self._make_app()
+        mock_redis, _ = _mock_redis(31)
+
+        with patch("app.middleware.rate_limit._get_redis", return_value=mock_redis):
+            resp = await self._call(app, "/api/v1/search/suggestions")
+        assert resp.status_code == 429
+        assert "30" in resp.json()["error"]["message"]
+
+    async def test_search_endpoint_limit_also_enforced_per_user(self):
+        """Caller bucket passes (fresh token) but the per-user endpoint bucket
+        is exhausted — bucket header must be 'user'."""
+        app = self._make_app()
+        # pipes: caller endpoint check (1 ≤ 30 → allow), user endpoint check
+        # (31 > 30 → deny). The flat user "all" bucket is never reached.
+        mock_redis, pipes = _mock_redis(1, 31)
+
+        with patch("app.middleware.rate_limit._get_redis", return_value=mock_redis):
+            resp = await self._call(
+                app,
+                "/api/v1/search",
+                headers={"Authorization": f"Bearer {_make_token()}"},
+            )
+        assert resp.status_code == 429
+        assert resp.headers["x-ratelimit-bucket"] == "user"
+        assert "30" in resp.json()["error"]["message"]
+        user_key = pipes[1].incr.call_args[0][0]
+        assert user_key.startswith("rl:user:user-abc-123:endpoint:/api/v1/search:")
+
+    async def test_search_under_limit_checks_all_three_buckets(self):
+        app = self._make_app()
+        mock_redis, pipes = _mock_redis(1, 1, 1)
+
+        with patch("app.middleware.rate_limit._get_redis", return_value=mock_redis):
+            resp = await self._call(
+                app,
+                "/api/v1/search",
+                headers={"Authorization": f"Bearer {_make_token()}"},
+            )
+        assert resp.status_code == 200
+        # caller endpoint bucket + user endpoint bucket + flat user bucket
+        assert mock_redis.pipeline.call_count == 3
+        assert pipes[2].incr.call_args[0][0].startswith("rl:user:user-abc-123:all:")
