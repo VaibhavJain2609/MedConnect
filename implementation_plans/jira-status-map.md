@@ -87,8 +87,15 @@
   - Clinic timezone settable via `ClinicUpdate` (IANA-validated)
   - 46-test coverage file (exports, receptionist authz, queue ops, encounter access) — caught `GET /encounters` 500 (missing batched name-loader, fixed) + 422-handler flattening of domain codes (fixed)
 - **Round-6 — LANDED:** announcement broadcast (audience/type/recipient preview, audit-backed list), admin settings wired to platform flags (maintenance confirm, upload cap, reminder channels) + settings now audit-logged, admin system-health page (`GET /admin/system/status` — deps latency, ARQ depth, counts, uptime), backup/restore drill scripts + docs
-- **Round-6 in flight:** receptionist booking/status/reschedule, per-clinic metrics, Rx draft autosave + interaction-gate ack, OpenAPI→TS contract gen, pgbouncer+uvicorn workers, patient onboarding checklist, Loki/Promtail logs
-- **Round-6+ queue:** Keycloak-side erasure (ops creds), Web Push, i18n, load testing, OCR/AI ingest, barcode source, coverage→80%
+- **Round-6 — ALL LANDED (verified, merged, pushed):**
+  - Receptionist front-desk full flow: book linked patients (staff clinic context via membership), status transitions (no completed), reschedule — 12 tests
+  - Per-clinic admin metrics endpoint + 6 stat cards on clinic detail
+  - Rx page: draft autosave (localStorage, cross-patient guard), allergy banner + allergy×medicine conflict check, submit-time interaction gate w/ ack checkbox, 409 SAFETY_OVERRIDE_REQUIRED → reason + resubmit flow (was dead end)
+  - OpenAPI→TS contract gen (`scripts/export_openapi.py` + `gen:api-types` + CI contract job + schema.d.ts) — caught duplicate route collision (fixed: clinic-doctors dual-role handler + admin/visits dedup)
+  - pgbouncer (transaction mode, SCRAM, statement_cache_size=0 flag) + UVICORN_WORKERS env
+  - Patient onboarding checklist (5 real-data items, dismissible)
+  - Loki+Promtail+Grafana under `observability` compose profile + docs/logging.md + RUNBOOK §8
+- **Round-7 queue:** structured allergy→salt mapping (fuzzy matching caveat), response_model= coverage for OpenAPI gen, Web Push, i18n, load testing, OCR/AI ingest, barcode source, coverage→80%, Keycloak-side erasure (needs admin creds)
 - **BLOCKED — ABDM/ABHA: awaiting regulatory approval (user-confirmed)** — do not implement: ABHA creation/linking, NRCeS-conformant FHIR, HIP module (tickets 107–116)
 - **Blocked/external:** SMS/WhatsApp live provider accounts (code adapters anyway), OCR/AI features, load testing env, i18n assets, barcode data source, push VAPID/service
 
