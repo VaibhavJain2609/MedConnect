@@ -8,6 +8,7 @@ import { downloadFile } from "@/lib/download";
 import { formatDate, recordTypeLabel, recordTypeColor } from "@/lib/utils";
 import { ArrowLeft, Download } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
+import { RecordVersionHistory } from "@/components/records/record-version-history";
 
 export default function RecordDetailPage() {
   const params = useParams();
@@ -63,6 +64,7 @@ export default function RecordDetailPage() {
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
         </div>
       ) : record ? (
+        <>
         <div className="bg-white rounded-lg shadow-card p-6 max-w-3xl">
           <div className="mb-4 flex items-center gap-2">
             <span
@@ -112,6 +114,8 @@ export default function RecordDetailPage() {
             <p>Last updated: {formatDate(record.updated_at)}</p>
           </div>
         </div>
+        <RecordVersionHistory recordId={record.id} />
+        </>
       ) : (
         <div className="bg-white rounded-lg shadow-card p-12 text-center">
           <p className="text-dreams-textSecondary">Record not found.</p>

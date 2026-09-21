@@ -11,6 +11,7 @@ from app.database import get_db
 from app.dependencies import require_patient
 from app.models.doctor import Doctor
 from app.models.lab_result import LabResult
+from app.models.medical_record import MedicalRecord
 from app.models.user import User
 from app.schemas.common import PaginatedResponse, PaginationMeta
 from app.schemas.record import RecordResponse, VALID_RECORD_TYPES, _validate_document_url
@@ -100,6 +101,79 @@ async def get_record(
             detail={"error": {"code": "NOT_FOUND", "message": "Record not found"}},
         )
     return record
+
+
+@router.get("/records/{record_id}/versions")
+async def get_record_versions(
+    record_id: UUID,
+    user: User = Depends(require_patient),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the full version chain (original + amendments) for one of the
+    caller's records, oldest first. Version 1 is the original record; each
+    amendment is a separate MedicalRecord row linked via amended_from_id
+    (chained amendments are disallowed, so the chain is flat).
+
+    record_id may be the original or any amendment — the chain always
+    resolves to the original. Same authz as GET /records/{record_id}.
+    """
+    record = await get_record_detail(db=db, record_id=record_id, user_id=user.id, user_role="patient")
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "NOT_FOUND", "message": "Record not found"}},
+        )
+
+    root_id = record.amended_from_id or record.id
+    stmt = (
+        select(MedicalRecord)
+        .where(
+            MedicalRecord.deleted_at.is_(None),
+            or_(
+                MedicalRecord.id == root_id,
+                MedicalRecord.amended_from_id == root_id,
+            ),
+        )
+        .order_by(MedicalRecord.created_at.asc())
+    )
+    result = await db.execute(stmt)
+    versions = list(result.scalars().all())
+
+    # Batch-load amender names (MedicalRecord.doctor_id -> Doctor -> User)
+    doctor_ids = list({v.doctor_id for v in versions if v.doctor_id})
+    doctor_names: dict[UUID, str] = {}
+    if doctor_ids:
+        dr = await db.execute(
+            select(Doctor.id, User.full_name)
+            .join(User, Doctor.user_id == User.id)
+            .where(Doctor.id.in_(doctor_ids))
+        )
+        doctor_names = {row.id: row.full_name for row in dr.all()}
+
+    last_idx = len(versions) - 1
+    return {
+        "data": [
+            {
+                "id": str(v.id),
+                "version": idx + 1,
+                "is_latest": idx == last_idx,
+                "record_type": v.record_type,
+                "title": v.title,
+                "description": v.description,
+                "fhir_bundle": v.fhir_bundle,
+                "document_url": v.document_url,
+                "source": v.source,
+                "amended_from_id": str(v.amended_from_id) if v.amended_from_id else None,
+                "doctor_id": str(v.doctor_id) if v.doctor_id else None,
+                "doctor_name": doctor_names.get(v.doctor_id),
+                "created_at": v.created_at.isoformat(),
+                "updated_at": v.updated_at.isoformat(),
+            }
+            for idx, v in enumerate(versions)
+        ],
+        "total": len(versions),
+        "root_record_id": str(root_id),
+    }
 
 
 @router.get("/prescriptions")
