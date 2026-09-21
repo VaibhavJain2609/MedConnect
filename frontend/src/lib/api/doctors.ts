@@ -157,10 +157,12 @@ export interface DoctorPatientsResponse {
 export async function getDoctorPatients(params: {
   search?: string;
   limit?: number;
+  cursor?: string;
 } = {}): Promise<DoctorPatientsResponse> {
   const queryParams = new URLSearchParams();
   if (params.search) queryParams.append("search", params.search);
   if (params.limit) queryParams.append("limit", params.limit.toString());
+  if (params.cursor) queryParams.append("cursor", params.cursor);
   const response = await api.get(`/api/v1/doctors/patients?${queryParams}`);
   return response.data;
 }

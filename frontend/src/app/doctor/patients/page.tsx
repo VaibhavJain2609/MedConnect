@@ -6,11 +6,17 @@ import { useQuery } from "@tanstack/react-query";
 import { Search, Users, ChevronRight } from "lucide-react";
 import { getDoctorPatients, DoctorPatient } from "@/lib/api/doctors";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
+import { LoadMoreButton } from "@/components/ui/pagination";
 import { Avatar } from "@/components/ui/avatar";
+
+const PAGE_SIZE = 20;
 
 export default function DoctorPatientsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [cursors, setCursors] = useState<Record<number, string | null>>({ 1: null });
+  const [allPatients, setAllPatients] = useState<DoctorPatient[]>([]);
 
   // Debounce search input so we don't fire a request per keystroke
   useEffect(() => {
@@ -18,13 +24,36 @@ export default function DoctorPatientsPage() {
     return () => clearTimeout(t);
   }, [searchQuery]);
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["doctor-patients-list", debouncedQuery],
-    queryFn: () =>
-      getDoctorPatients({ search: debouncedQuery || undefined, limit: 100 }),
+  // Reset to the first page when the search changes (the endpoint paginates
+  // by cursor, so each page's cursor is recorded as it is fetched).
+  useEffect(() => {
+    setPage(1);
+    setCursors({ 1: null });
+    setAllPatients([]);
+  }, [debouncedQuery]);
+
+  const { data, isLoading, isFetching, error } = useQuery({
+    queryKey: ["doctor-patients-list", debouncedQuery, page],
+    queryFn: async () => {
+      const res = await getDoctorPatients({
+        search: debouncedQuery || undefined,
+        limit: PAGE_SIZE,
+        cursor: cursors[page] ?? undefined,
+      });
+      const nextCursor = res.pagination?.next_cursor ?? null;
+      if (nextCursor) {
+        setCursors((prev) => ({ ...prev, [page + 1]: nextCursor }));
+      }
+      if (page === 1) {
+        setAllPatients(res.data || []);
+      } else {
+        setAllPatients((prev) => [...prev, ...(res.data || [])]);
+      }
+      return res;
+    },
   });
 
-  const patients = data?.data ?? [];
+  const patients = allPatients;
 
   return (
     <div className="space-y-6">
@@ -50,7 +79,7 @@ export default function DoctorPatientsPage() {
       </div>
 
       {/* Content */}
-      {isLoading ? (
+      {isLoading && patients.length === 0 ? (
         <div className="flex justify-center py-12">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
         </div>
@@ -103,6 +132,13 @@ export default function DoctorPatientsPage() {
               </li>
             ))}
           </ul>
+          <LoadMoreButton
+            hasMore={!!data?.pagination?.has_more}
+            loading={isFetching}
+            loadedCount={patients.length}
+            onClick={() => setPage((p) => p + 1)}
+            className="border-t border-dreams-border py-4"
+          />
         </div>
       )}
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   FlaskConical,
@@ -11,6 +11,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
+import { LoadMoreButton } from "@/components/ui/pagination";
 import { getMyLabResults, type PatientLabResult } from "@/lib/api/patient-portal";
 import { cn } from "@/lib/utils";
 
@@ -188,16 +189,44 @@ function LabResultRow({ lr }: { lr: PatientLabResult }) {
   );
 }
 
+const PAGE_SIZE = 50;
+
 export default function PatientLabResultsPage() {
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const [cursors, setCursors] = useState<Record<number, string | null>>({ 1: null });
+  const [allResults, setAllResults] = useState<PatientLabResult[]>([]);
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["patient-lab-results", categoryFilter],
-    queryFn: () =>
-      getMyLabResults({ limit: 100, category: categoryFilter || undefined }),
+  // Reset to the first page when the category filter changes (the endpoint
+  // paginates by cursor, so each page's cursor is recorded as it is fetched).
+  useEffect(() => {
+    setPage(1);
+    setCursors({ 1: null });
+    setAllResults([]);
+  }, [categoryFilter]);
+
+  const { data, isLoading, isError, isFetching } = useQuery({
+    queryKey: ["patient-lab-results", categoryFilter, page],
+    queryFn: async () => {
+      const res = await getMyLabResults({
+        limit: PAGE_SIZE,
+        category: categoryFilter || undefined,
+        cursor: cursors[page] ?? undefined,
+      });
+      const nextCursor = res.pagination?.next_cursor ?? null;
+      if (nextCursor) {
+        setCursors((prev) => ({ ...prev, [page + 1]: nextCursor }));
+      }
+      if (page === 1) {
+        setAllResults(res.data || []);
+      } else {
+        setAllResults((prev) => [...prev, ...(res.data || [])]);
+      }
+      return res;
+    },
   });
 
-  const results = useMemo(() => data?.data ?? [], [data]);
+  const results = useMemo(() => allResults, [allResults]);
 
   // Category options come from an UNFILTERED query — deriving them from the
   // filtered result would collapse the dropdown to the current selection.
@@ -252,7 +281,7 @@ export default function PatientLabResultsPage() {
         )}
       </div>
 
-      {isLoading ? (
+      {isLoading && results.length === 0 ? (
         <div className="flex justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-dreams-blue" />
         </div>
@@ -289,6 +318,12 @@ export default function PatientLabResultsPage() {
               </div>
             </section>
           ))}
+          <LoadMoreButton
+            hasMore={!!data?.pagination?.has_more}
+            loading={isFetching}
+            loadedCount={results.length}
+            onClick={() => setPage((p) => p + 1)}
+          />
         </div>
       )}
     </div>

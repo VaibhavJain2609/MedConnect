@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { downloadFile } from "@/lib/download";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
+import { LoadMoreButton } from "@/components/ui/pagination";
 import { formatDate, recordTypeLabel, recordTypeColor } from "@/lib/utils";
 import { FileText, Search, FilePlus, Download } from "lucide-react";
 
@@ -21,12 +22,17 @@ const RECORD_TYPES = [
   { value: "other", label: "Other" },
 ];
 
+const PAGE_SIZE = 20;
+
 export default function PatientRecordsPage() {
   const [typeFilter, setTypeFilter] = useState("");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
+  const [page, setPage] = useState(1);
+  const [cursors, setCursors] = useState<Record<number, string | null>>({ 1: null });
+  const [allRecords, setAllRecords] = useState<any[]>([]);
 
   // Debounce search input so we don't fire a request per keystroke
   useEffect(() => {
@@ -34,19 +40,38 @@ export default function PatientRecordsPage() {
     return () => clearTimeout(t);
   }, [search]);
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["patient-records", typeFilter, debouncedSearch],
+  // Reset to the first page when filters change (the endpoint paginates by
+  // cursor, so each page's cursor is recorded as it is fetched).
+  useEffect(() => {
+    setPage(1);
+    setCursors({ 1: null });
+    setAllRecords([]);
+  }, [typeFilter, debouncedSearch]);
+
+  const { data, isLoading, isError, isFetching } = useQuery({
+    queryKey: ["patient-records", typeFilter, debouncedSearch, page],
     queryFn: async () => {
       const params = new URLSearchParams();
-      params.set("limit", "50");
+      params.set("limit", String(PAGE_SIZE));
       if (typeFilter) params.set("type", typeFilter);
       if (debouncedSearch) params.set("q", debouncedSearch);
+      const cursor = cursors[page] ?? null;
+      if (cursor) params.set("cursor", cursor);
       const res = await api.get(`/api/v1/patients/records?${params}`);
+      const nextCursor = res.data.pagination?.next_cursor ?? null;
+      if (nextCursor) {
+        setCursors((prev) => ({ ...prev, [page + 1]: nextCursor }));
+      }
+      if (page === 1) {
+        setAllRecords(res.data.data || []);
+      } else {
+        setAllRecords((prev) => [...prev, ...(res.data.data || [])]);
+      }
       return res.data;
     },
   });
 
-  const records: any[] = data?.data ?? [];
+  const records: any[] = allRecords;
 
   // Authenticated blob download — the Authorization header is only
   // attached by the axios interceptor, so a plain <a href> would 401.
@@ -120,7 +145,7 @@ export default function PatientRecordsPage() {
       </div>
 
       {/* Content */}
-      {isLoading ? (
+      {isLoading && records.length === 0 ? (
         <div className="flex justify-center py-12">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
         </div>
@@ -169,14 +194,12 @@ export default function PatientRecordsPage() {
             </Link>
           ))}
 
-          {data?.pagination?.has_more && (
-            <p className="text-center text-sm text-dreams-textSecondary py-2">
-              Showing first 50 records.{" "}
-              <Link href="/patient/timeline" className="text-dreams-blue hover:underline">
-                Use the timeline for full history →
-              </Link>
-            </p>
-          )}
+          <LoadMoreButton
+            hasMore={!!data?.pagination?.has_more}
+            loading={isFetching}
+            loadedCount={records.length}
+            onClick={() => setPage((p) => p + 1)}
+          />
         </div>
       )}
     </div>
