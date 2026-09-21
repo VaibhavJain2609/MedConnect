@@ -2,46 +2,26 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Pill, CheckCircle2, Circle, Loader2 } from "lucide-react";
+import { Archive, ChevronDown, Pill } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
-  getMyPrescriptions,
+  MedicationCard,
+  type MedicationEntry,
+} from "@/components/medications/medication-card";
+import {
+  computePrescriptionAdherence,
+  getAllMyPrescriptions,
   type PatientPrescription,
   type PrescriptionMedicine,
-} from "@/lib/api/patient-portal";
+} from "@/lib/api/prescriptions";
 import { cn } from "@/lib/utils";
 
-interface MedicationEntry {
-  key: string;
-  name: string;
-  dose: string;
-  frequency: string;
-  duration: string;
-  route?: string;
-  instructions?: string;
-  prescriber: string | null;
-  diagnosis: string | null;
-  prescribed_on: string;
-  valid_until: string | null;
-  expired: boolean;
-}
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function isExpired(validUntil: string | null): boolean {
-  if (!validUntil) return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return new Date(validUntil) < today;
-}
-
-function flattenMedications(prescriptions: PatientPrescription[]): MedicationEntry[] {
+function flattenMedications(
+  prescriptions: PatientPrescription[]
+): MedicationEntry[] {
   const entries: MedicationEntry[] = [];
   for (const p of prescriptions) {
     (p.medicines ?? []).forEach((m: PrescriptionMedicine, idx: number) => {
@@ -55,9 +35,13 @@ function flattenMedications(prescriptions: PatientPrescription[]): MedicationEnt
         instructions: m.instructions ?? m.notes ?? m.timing,
         prescriber: p.doctor_name ?? null,
         diagnosis: p.diagnosis,
-        prescribed_on: p.created_at,
-        valid_until: p.valid_until,
-        expired: isExpired(p.valid_until),
+        prescribedOn: p.created_at,
+        validUntil: p.valid_until,
+        adherence: computePrescriptionAdherence({
+          createdAt: p.created_at,
+          validUntil: p.valid_until,
+          duration: m.duration,
+        }),
       });
     });
   }
@@ -99,23 +83,62 @@ function useTakenToday() {
   return { taken, toggle };
 }
 
+function sortActive(a: MedicationEntry, b: MedicationEntry): number {
+  // Most urgent first: expiring -> soonest end date -> ongoing last.
+  const rank = (e: MedicationEntry) =>
+    e.adherence.status === "expiring" ? 0 : e.adherence.endDate ? 1 : 2;
+  const r = rank(a) - rank(b);
+  if (r !== 0) return r;
+  const aEnd = a.adherence.endDate?.getTime() ?? Number.POSITIVE_INFINITY;
+  const bEnd = b.adherence.endDate?.getTime() ?? Number.POSITIVE_INFINITY;
+  if (aEnd !== bEnd) return aEnd - bEnd;
+  return a.name.localeCompare(b.name);
+}
+
+function sortPast(a: MedicationEntry, b: MedicationEntry): number {
+  // Most recently finished first.
+  const aEnd = a.adherence.endDate?.getTime() ?? 0;
+  const bEnd = b.adherence.endDate?.getTime() ?? 0;
+  return bEnd - aEnd;
+}
+
+function SectionHeader({
+  title,
+  count,
+}: {
+  title: string;
+  count: number;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <h2 className="text-lg font-semibold text-dreams-textPrimary">{title}</h2>
+      <span className="rounded-full bg-dreams-lightBg px-2 py-0.5 text-xs font-medium text-dreams-textSecondary">
+        {count}
+      </span>
+    </div>
+  );
+}
+
 export default function PatientMedicationsPage() {
-  const [showExpired, setShowExpired] = useState(false);
+  const [showPast, setShowPast] = useState(false);
   const { taken, toggle } = useTakenToday();
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ["patient-medications"],
-    queryFn: () => getMyPrescriptions({ limit: 100 }),
+    queryFn: () => getAllMyPrescriptions(),
+    staleTime: 60_000,
   });
 
-  const medications = useMemo(
-    () => flattenMedications(data?.data ?? []),
-    [data]
-  );
+  const medications = useMemo(() => flattenMedications(data ?? []), [data]);
 
-  const active = medications.filter((m) => !m.expired);
-  const expired = medications.filter((m) => m.expired);
-  const visible = showExpired ? medications : active;
+  const active = useMemo(
+    () => medications.filter((m) => m.adherence.status !== "expired").sort(sortActive),
+    [medications]
+  );
+  const past = useMemo(
+    () => medications.filter((m) => m.adherence.status === "expired").sort(sortPast),
+    [medications]
+  );
 
   return (
     <div className="space-y-6">
@@ -127,132 +150,115 @@ export default function PatientMedicationsPage() {
             Medications
           </h1>
           <p className="text-dreams-textSecondary mt-1">
-            Medicines from your prescriptions
+            Track your prescriptions and how far along each course you are
           </p>
         </div>
-        {expired.length > 0 && (
-          <label className="flex items-center gap-2 text-sm text-dreams-textSecondary cursor-pointer">
-            <input
-              type="checkbox"
-              checked={showExpired}
-              onChange={(e) => setShowExpired(e.target.checked)}
-              className="rounded border-dreams-border"
-            />
-            Show expired ({expired.length})
-          </label>
-        )}
       </div>
 
       {isLoading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-dreams-blue" />
+        <div className="space-y-3" aria-busy="true" aria-label="Loading medications">
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              className="bg-white rounded-lg shadow-card border border-dreams-border p-4 flex items-start gap-3"
+            >
+              <Skeleton className="h-8 w-8 rounded-lg flex-shrink-0" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-3 w-56" />
+                <Skeleton className="h-1.5 w-full rounded-full" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : isError ? (
-        <div className="bg-white rounded-lg shadow-card p-12 text-center">
-          <p className="text-red-500 font-medium">Failed to load medications.</p>
-          <p className="mt-1 text-sm text-dreams-textSecondary">
-            Please refresh the page or try again later.
-          </p>
+        <div className="bg-white rounded-lg shadow-card">
+          <EmptyState
+            icon={Pill}
+            title="Failed to load medications"
+            description="Please check your connection and try again."
+            action={
+              <Button onClick={() => refetch()} disabled={isFetching}>
+                {isFetching ? "Retrying…" : "Try again"}
+              </Button>
+            }
+          />
         </div>
-      ) : visible.length === 0 ? (
-        <div className="bg-white rounded-lg shadow-card p-12 text-center">
-          <Pill className="h-12 w-12 text-dreams-textSecondary mx-auto mb-4" />
-          <p className="text-dreams-textSecondary font-medium">
-            {medications.length === 0
-              ? "No medications found."
-              : "No active medications."}
-          </p>
-          <p className="mt-1 text-sm text-dreams-textSecondary/70">
-            {medications.length === 0
-              ? "Medicines from your prescriptions will appear here."
-              : "Enable “Show expired” to view past medications."}
-          </p>
+      ) : medications.length === 0 ? (
+        <div className="bg-white rounded-lg shadow-card">
+          <EmptyState
+            icon={Pill}
+            title="No medications found"
+            description="Medicines from your prescriptions will appear here."
+          />
         </div>
       ) : (
-        <div className="space-y-3">
-          {visible.map((med) => {
-            const isTaken = taken.has(med.key);
-            return (
-              <div
-                key={med.key}
-                className={cn(
-                  "bg-white rounded-lg shadow-card border p-4 flex items-start gap-3",
-                  med.expired
-                    ? "border-dreams-border opacity-70"
-                    : "border-dreams-border"
-                )}
-              >
-                <div
-                  className={cn(
-                    "p-2 rounded-lg flex-shrink-0 mt-0.5",
-                    med.expired ? "bg-gray-100" : "bg-dreams-lightBg"
-                  )}
-                >
-                  <Pill
-                    className={cn(
-                      "h-4 w-4",
-                      med.expired ? "text-gray-400" : "text-dreams-blue"
-                    )}
-                  />
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-semibold text-dreams-textPrimary">
-                      {med.name}
-                    </p>
-                    {med.expired && (
-                      <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
-                        Expired
-                      </span>
-                    )}
-                    {med.route && (
-                      <span className="rounded-full bg-dreams-lightBg px-2.5 py-0.5 text-xs text-dreams-textSecondary capitalize">
-                        {med.route}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-dreams-textSecondary mt-0.5">
-                    {med.dose} · {med.frequency} · {med.duration}
-                  </p>
-                  <p className="text-xs text-dreams-textSecondary/80 mt-1">
-                    {med.prescriber ? `Dr. ${med.prescriber}` : "Prescriber unknown"}
-                    {" · "}Prescribed {formatDate(med.prescribed_on)}
-                    {med.valid_until
-                      ? ` · Valid until ${formatDate(med.valid_until)}`
-                      : ""}
-                    {med.diagnosis ? ` · ${med.diagnosis}` : ""}
-                  </p>
-                  {med.instructions && (
-                    <p className="text-xs text-dreams-textSecondary mt-1 italic">
-                      {med.instructions}
-                    </p>
-                  )}
-                </div>
-
-                {!med.expired && (
-                  <button
-                    type="button"
-                    onClick={() => toggle(med.key)}
-                    className={cn(
-                      "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex-shrink-0",
-                      isTaken
-                        ? "bg-green-100 text-green-700"
-                        : "bg-dreams-lightBg text-dreams-textSecondary hover:text-dreams-textPrimary"
-                    )}
-                    title="Client-side only — resets daily and is not shared with your doctor"
-                  >
-                    {isTaken ? (
-                      <CheckCircle2 className="h-4 w-4" />
-                    ) : (
-                      <Circle className="h-4 w-4" />
-                    )}
-                    {isTaken ? "Taken today" : "Mark taken"}
-                  </button>
-                )}
+        <div className="space-y-6">
+          {/* ─── Active now ─────────────────────────────────────────── */}
+          <section className="space-y-3">
+            <SectionHeader title="Active now" count={active.length} />
+            {active.length === 0 ? (
+              <div className="bg-white rounded-lg shadow-card">
+                <EmptyState
+                  icon={Pill}
+                  title="No active medications"
+                  description={
+                    past.length > 0
+                      ? "All your courses have finished — see past medications below."
+                      : "Medicines from your prescriptions will appear here."
+                  }
+                />
               </div>
-            );
-          })}
+            ) : (
+              <div className="space-y-3">
+                {active.map((med) => (
+                  <MedicationCard
+                    key={med.key}
+                    entry={med}
+                    takenToday={taken.has(med.key)}
+                    onToggleTaken={toggle}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* ─── Expired / finished ─────────────────────────────────── */}
+          {past.length > 0 && (
+            <section className="space-y-3">
+              <button
+                type="button"
+                onClick={() => setShowPast((v) => !v)}
+                className="flex items-center gap-2 text-left group"
+                aria-expanded={showPast}
+              >
+                <Archive className="h-4 w-4 text-dreams-textSecondary" />
+                <h2 className="text-lg font-semibold text-dreams-textPrimary group-hover:text-dreams-blue transition-colors">
+                  Expired / finished
+                </h2>
+                <span className="rounded-full bg-dreams-lightBg px-2 py-0.5 text-xs font-medium text-dreams-textSecondary">
+                  {past.length}
+                </span>
+                <ChevronDown
+                  className={cn(
+                    "h-4 w-4 text-dreams-textSecondary transition-transform",
+                    showPast && "rotate-180"
+                  )}
+                />
+              </button>
+              {showPast && (
+                <div className="space-y-3">
+                  {past.map((med) => (
+                    <MedicationCard
+                      key={med.key}
+                      entry={med}
+                      takenToday={false}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
         </div>
       )}
     </div>
