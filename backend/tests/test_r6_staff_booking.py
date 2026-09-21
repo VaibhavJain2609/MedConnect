@@ -415,3 +415,68 @@ class TestStaffReschedule:
             headers=make_auth_header(patient_user),
         )
         assert resp.status_code == 403
+
+
+class TestClinicDoctorsDualRole:
+    """GET /clinics/{id}/doctors — members get staff list, linked patients
+    get verified-only list, everyone else 403s (route-consolidation coverage)."""
+
+    async def test_member_gets_staff_list(
+        self, client, db, clinic, doctor_user, doctor_profile,
+        doctor_membership, receptionist_user, receptionist_membership,
+    ):
+        resp = await client.get(
+            f"/api/v1/clinics/{clinic.id}/doctors",
+            headers=_staff_headers(receptionist_user),
+        )
+        assert resp.status_code == 200, resp.text
+        names = [d["full_name"] for d in resp.json()["data"]]
+        assert doctor_user.full_name in names
+
+    async def test_linked_patient_gets_verified_only(
+        self, client, db, clinic, doctor_user, doctor_profile,
+        doctor_membership, patient_user, approved_link,
+    ):
+        # An UNVERIFIED doctor-member should be hidden from patients.
+        other = User(
+            keycloak_sub=f"unverified-{uuid.uuid4()}",
+            email="unv@test.com", full_name="Unverified Doc", role="doctor",
+        )
+        db.add(other)
+        await db.flush()
+        unv = Doctor(
+            id=uuid.uuid4(), user_id=other.id,
+            verified=False, onboarding_step="completed",
+        )
+        db.add(unv)
+        await db.commit()
+        await _membership(db, clinic.id, other.id, "doctor")
+
+        resp = await client.get(
+            f"/api/v1/clinics/{clinic.id}/doctors",
+            headers=make_auth_header(patient_user),
+        )
+        assert resp.status_code == 200, resp.text
+        names = [d["full_name"] for d in resp.json()["data"]]
+        assert doctor_user.full_name in names
+        assert "Unverified Doc" not in names
+
+    async def test_unlinked_patient_403(
+        self, client, db, clinic, doctor_user, doctor_membership,
+    ):
+        stranger, stranger_headers = await _make_patient(
+            db, email="stranger@test.com"
+        )
+        resp = await client.get(
+            f"/api/v1/clinics/{clinic.id}/doctors",
+            headers=stranger_headers,
+        )
+        assert resp.status_code == 403
+
+    async def test_malformed_clinic_id_422(self, client, receptionist_user):
+        resp = await client.get(
+            "/api/v1/clinics/not-a-uuid/doctors",
+            headers=_staff_headers(receptionist_user),
+        )
+        assert resp.status_code == 422
+        assert resp.json()["error"]["code"] == "INVALID_ID"

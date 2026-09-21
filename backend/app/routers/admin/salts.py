@@ -122,7 +122,7 @@ async def create_salt(
         # Convert strengths to dict format
         strengths_data = None
         if salt_data.strengths:
-            strengths_data = [s.dict() for s in salt_data.strengths]
+            strengths_data = [s.model_dump() for s in salt_data.strengths]
 
         salt = await SaltService.create_salt(
             db,
