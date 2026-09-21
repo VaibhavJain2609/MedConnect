@@ -8,6 +8,7 @@ import { exportAuditLogsCsv } from "@/lib/api/admin-audit";
 import { toast } from "@/hooks/use-toast";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
+import { AuditDiff } from "@/components/admin/audit-diff";
 
 const TABLE_OPTIONS = [
   { value: "all", label: "All Tables" },
@@ -59,58 +60,6 @@ interface AuditLogsResponse {
   page: number;
   limit: number;
   totalPages: number;
-}
-
-function ValuesDiff({
-  oldValues,
-  newValues,
-}: {
-  oldValues: Record<string, any> | null;
-  newValues: Record<string, any> | null;
-}) {
-  const keys = Array.from(
-    new Set([...Object.keys(oldValues ?? {}), ...Object.keys(newValues ?? {})])
-  );
-  if (keys.length === 0) {
-    return <p className="text-xs text-dreams-textSecondary">No field-level values recorded.</p>;
-  }
-  const fmt = (v: any) =>
-    v === null || v === undefined
-      ? "—"
-      : typeof v === "object"
-        ? JSON.stringify(v)
-        : String(v);
-  return (
-    <div className="rounded-lg border border-dreams-border overflow-hidden">
-      <table className="w-full text-xs">
-        <thead className="bg-dreams-lightBg">
-          <tr>
-            <th className="px-3 py-2 text-left font-semibold text-dreams-textSecondary w-1/4">Field</th>
-            <th className="px-3 py-2 text-left font-semibold text-dreams-textSecondary">Old Value</th>
-            <th className="px-3 py-2 text-left font-semibold text-dreams-textSecondary">New Value</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-dreams-border">
-          {keys.map((k) => {
-            const oldV = oldValues?.[k];
-            const newV = newValues?.[k];
-            const changed = fmt(oldV) !== fmt(newV);
-            return (
-              <tr key={k} className={changed ? "bg-amber-50/40" : ""}>
-                <td className="px-3 py-1.5 font-mono text-dreams-textPrimary">{k}</td>
-                <td className="px-3 py-1.5 text-dreams-textSecondary break-all max-w-md">
-                  {fmt(oldV)}
-                </td>
-                <td className="px-3 py-1.5 text-dreams-textPrimary break-all max-w-md">
-                  {fmt(newV)}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
 }
 
 export default function AuditLogsPage() {
@@ -340,23 +289,20 @@ export default function AuditLogsPage() {
               ) : (
                 logs.map((log) => {
                   const isExpanded = expandedId === log.id;
-                  const hasDiff = !!(log.old_values || log.new_values);
                   return (
                     <Fragment key={log.id}>
                       <tr
                         className="hover:bg-dreams-lightBg transition-colors cursor-pointer"
                         onClick={() =>
-                          hasDiff && setExpandedId(isExpanded ? null : log.id)
+                          setExpandedId(isExpanded ? null : log.id)
                         }
                       >
                         <td className="px-2 py-3 text-dreams-textSecondary">
-                          {hasDiff ? (
-                            isExpanded ? (
-                              <ChevronDown className="h-4 w-4" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4" />
-                            )
-                          ) : null}
+                          {isExpanded ? (
+                            <ChevronDown className="h-4 w-4" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4" />
+                          )}
                         </td>
                         <td className="px-5 py-3 text-dreams-textSecondary whitespace-nowrap">
                           {formatRelativeTime(log.changed_at)}
@@ -384,10 +330,10 @@ export default function AuditLogsPage() {
                           {log.changes_summary ?? "—"}
                         </td>
                       </tr>
-                      {isExpanded && hasDiff && (
+                      {isExpanded && (
                         <tr className="bg-dreams-lightBg/40">
                           <td colSpan={7} className="px-5 py-4">
-                            <ValuesDiff
+                            <AuditDiff
                               oldValues={log.old_values}
                               newValues={log.new_values}
                             />
