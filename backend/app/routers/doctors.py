@@ -530,7 +530,13 @@ async def create_medical_record(
         )
     _, doctor = doctor_info
     clinic_id = clinic_context[0] if clinic_context else None
+    membership_role = clinic_context[1] if clinic_context else None
     if clinic_id:
+        if membership_role == "receptionist":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "RECEPTIONIST_NO_CLINICAL_ACCESS", "message": "Receptionists cannot create medical records"}},
+            )
         await access_service.check_patient_consent(
             db, req.patient_id, clinic_id,
             message="Patient has revoked clinic access. Cannot create new records.",
@@ -695,6 +701,12 @@ async def amend_record(
             )
 
     if clinic_id:
+        membership_role = clinic_context[1] if clinic_context else None
+        if membership_role == "receptionist":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "RECEPTIONIST_NO_CLINICAL_ACCESS", "message": "Receptionists cannot amend medical records"}},
+            )
         await access_service.check_patient_consent(
             db, original.patient_id, clinic_id,
             message="Patient has revoked clinic access. Cannot amend records.",

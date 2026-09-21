@@ -1,6 +1,7 @@
 import uuid
 from datetime import date, datetime, time, timedelta, timezone
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import cast, func, select
@@ -15,7 +16,7 @@ from app.dependencies import (
     require_active_clinic,
 )
 from app.models.appointment import Appointment
-from app.models.clinic import ClinicBranch, ClinicMembership
+from app.models.clinic import Clinic, ClinicBranch, ClinicMembership
 from app.models.doctor import Doctor
 from app.models.doctor_availability import DoctorAvailability, DoctorLeave
 from app.models.user import User
@@ -393,12 +394,10 @@ async def get_doctor_slots(
     Readable by any authenticated user (patients booking, clinic members
     scheduling).
 
-    TIMEZONE ASSUMPTION: window times are naive clinic-local wall-clock times
-    (see models/doctor_availability.py). They are interpreted as UTC when
-    overlapping with timestamptz Appointment.scheduled_at and when computing
-    the day boundary — consistent with the UTC-day convention used by
-    routers/appointments.py and with clients submitting naive local ISO
-    datetimes. Revisit once Clinic carries an explicit timezone.
+    Window times are naive clinic-local wall-clock times (see
+    models/doctor_availability.py); each window is interpreted in its
+    clinic's `timezone` (default Asia/Kolkata) and converted to UTC for
+    overlap checks against timestamptz Appointment.scheduled_at.
     """
     try:
         target_date = date.fromisoformat(date_param)
@@ -443,10 +442,31 @@ async def get_doctor_slots(
     if not windows:
         return empty
 
-    # Appointments occupying time that day (UTC day bounds — same convention
-    # as list_appointments in routers/appointments.py).
-    day_start = datetime(target_date.year, target_date.month, target_date.day, 0, 0, 0, tzinfo=timezone.utc)
-    day_end = day_start + timedelta(days=1)
+    # Resolve each window's clinic timezone — naive window wall-times are
+    # interpreted in the clinic's zone, not UTC.
+    clinic_tz: dict[UUID | None, ZoneInfo] = {}
+    clinic_ids = {w.clinic_id for w in windows if w.clinic_id is not None}
+    if clinic_ids:
+        clinic_res = await db.execute(
+            select(Clinic.id, Clinic.timezone).where(Clinic.id.in_(clinic_ids))
+        )
+        for cid, tzname in clinic_res.all():
+            try:
+                clinic_tz[cid] = ZoneInfo(tzname or "Asia/Kolkata")
+            except Exception:
+                clinic_tz[cid] = ZoneInfo("Asia/Kolkata")
+    default_tz = ZoneInfo("Asia/Kolkata")
+
+    def _tz_for(window) -> ZoneInfo:
+        return clinic_tz.get(window.clinic_id, default_tz)
+
+    # Appointments occupying time that day. Day bounds are clinic-local —
+    # cover the union of local midnights across involved zones.
+    local_starts = [
+        datetime.combine(target_date, time(0, 0), tzinfo=_tz_for(w)) for w in windows
+    ]
+    day_start = min(local_starts).astimezone(timezone.utc)
+    day_end = max(local_starts).astimezone(timezone.utc) + timedelta(days=1)
     # Half-open interval overlap — also catches appointments that started the
     # previous day but still occupy time today (e.g. 23:30 + 60min).
     appt_end = Appointment.scheduled_at + cast(
@@ -471,8 +491,9 @@ async def get_doctor_slots(
     seen: set[tuple[datetime, datetime]] = set()
     for window in windows:
         duration = timedelta(minutes=window.slot_duration_minutes)
-        cursor = datetime.combine(target_date, window.start_time, tzinfo=timezone.utc)
-        window_end = datetime.combine(target_date, window.end_time, tzinfo=timezone.utc)
+        wtz = _tz_for(window)
+        cursor = datetime.combine(target_date, window.start_time, tzinfo=wtz)
+        window_end = datetime.combine(target_date, window.end_time, tzinfo=wtz)
         while cursor + duration <= window_end:
             slot_end = cursor + duration
             overlaps = any(cursor < b_end and slot_end > b_start for b_start, b_end in booked)

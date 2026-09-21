@@ -119,7 +119,10 @@ class TestMeetingUrlEntropy:
         body = res.json()
         assert body["meeting_url"]
         assert body["id"] not in body["meeting_url"]  # no UUID in room name
-        assert len(body["meeting_url"].rsplit("-", 1)[-1]) > 20  # random suffix
+        # token_urlsafe(24) may itself contain '-' — measure the part after
+        # the fixed 'medconnect-' prefix, not a '-' split.
+        suffix = body["meeting_url"].split("medconnect-", 1)[-1]
+        assert len(suffix) > 20  # random token
 
 
 # ---------------------------------------------------------------------------
