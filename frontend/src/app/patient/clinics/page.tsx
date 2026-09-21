@@ -3,34 +3,37 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Copy, Building2, CheckCircle, XCircle, Clock, RefreshCw, ShieldCheck } from "lucide-react";
-import api from "@/lib/api";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { toast } from "@/hooks/use-toast";
+import {
+  getPatientLinkCode,
+  getMyClinicLinks,
+  updateClinicLinkConsent,
+  type ClinicLink,
+  type PatientLinkCode,
+} from "@/lib/api/patient-links";
 import {
   getPatientRecordAccessRequests,
   actOnRecordAccessRequest,
   type RecordAccessConsent,
 } from "@/lib/api/record-access";
 
-interface LinkCode {
-  code: string;
-  expires_at: string;
-}
-
-interface ClinicLink {
-  id: string;
-  clinic_id: string;
-  clinic_name: string;
-  clinic_city: string;
-  consent_status: "pending" | "approved" | "revoked";
-  consented_at: string | null;
-  created_at: string;
-}
-
 const consentBadgeVariant = {
   pending: "pending" as const,
   approved: "completed" as const,
-  revoked: "overdue" as const,
+  revoked: "cancelled" as const,
 };
 
 const accessBadgeVariant = {
@@ -44,21 +47,28 @@ export default function PatientClinicsPage() {
   const queryClient = useQueryClient();
   const [copied, setCopied] = useState(false);
 
-  const { data: codeData, isLoading: codeLoading } = useQuery<LinkCode>({
+  const { data: codeData, isLoading: codeLoading } = useQuery<PatientLinkCode>({
     queryKey: ["patient-link-code"],
-    queryFn: () => api.get("/api/v1/patients/link-code").then((r) => r.data),
+    queryFn: () => getPatientLinkCode(),
   });
 
   const { data: linksData, isLoading: linksLoading } = useQuery<{ data: ClinicLink[] }>({
     queryKey: ["patient-clinic-links"],
-    queryFn: () => api.get("/api/v1/patients/clinic-links").then((r) => r.data),
+    queryFn: () => getMyClinicLinks(),
   });
 
   const consentMutation = useMutation({
     mutationFn: ({ id, action }: { id: string; action: "approved" | "revoked" }) =>
-      api.put(`/api/v1/patients/clinic-links/${id}/consent`, { action }),
+      updateClinicLinkConsent(id, action),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["patient-clinic-links"] });
+    },
+    onError: () => {
+      toast({
+        title: "Could not update clinic access",
+        description: "Your change was not saved. Please try again.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -72,6 +82,13 @@ export default function PatientClinicsPage() {
       actOnRecordAccessRequest(id, action),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["record-access-requests"] });
+    },
+    onError: () => {
+      toast({
+        title: "Could not update access request",
+        description: "Your change was not saved. Please try again.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -206,12 +223,50 @@ export default function PatientClinicsPage() {
                   )}
 
                   {link.consent_status === "approved" && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <button
+                          disabled={consentMutation.isPending}
+                          className="rounded-lg px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+                        >
+                          Revoke access
+                        </button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>
+                            Revoke access for {link.clinic_name}?
+                          </AlertDialogTitle>
+                          <AlertDialogDescription>
+                            The clinic will no longer be able to add new records
+                            or appointments on your behalf. Records created
+                            before you revoke will still be visible to the
+                            clinic. You can restore access at any time.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Keep access</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() =>
+                              consentMutation.mutate({ id: link.id, action: "revoked" })
+                            }
+                            className="bg-red-600 text-white hover:bg-red-700"
+                          >
+                            Revoke access
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
+
+                  {link.consent_status === "revoked" && (
                     <button
-                      onClick={() => consentMutation.mutate({ id: link.id, action: "revoked" })}
+                      onClick={() => consentMutation.mutate({ id: link.id, action: "approved" })}
                       disabled={consentMutation.isPending}
-                      className="rounded-lg px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+                      className="flex items-center gap-1 rounded-lg bg-green-50 px-3 py-1.5 text-sm text-green-700 hover:bg-green-100 disabled:opacity-50"
                     >
-                      Revoke
+                      <CheckCircle className="h-3.5 w-3.5" />
+                      Restore access
                     </button>
                   )}
                 </div>
