@@ -86,8 +86,10 @@ interface DoctorSuggestion {
 
 function DoctorSearchInput({
   onSelect,
+  id,
 }: {
   onSelect: (d: DoctorSuggestion) => void;
+  id?: string;
 }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<DoctorSuggestion[]>([]);
@@ -129,6 +131,7 @@ function DoctorSearchInput({
   return (
     <div className="relative">
       <input
+        id={id}
         type="text"
         value={query}
         onChange={handleChange}
@@ -366,10 +369,14 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
           )}
           {approvedClinics.length > 0 && (
             <div>
-              <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+              <label
+                htmlFor="booking-clinic"
+                className="mb-1 block text-sm font-medium text-dreams-textPrimary"
+              >
                 Clinic
               </label>
               <select
+                id="booking-clinic"
                 value={selectedClinicId}
                 onChange={(e) => handleClinicChange(e.target.value)}
                 className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20 bg-white"
@@ -386,7 +393,10 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
 
           {/* Doctor */}
           <div>
-            <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+            <label
+              htmlFor="booking-doctor"
+              className="mb-1 block text-sm font-medium text-dreams-textPrimary"
+            >
               Doctor *
             </label>
             {selectedClinicId ? (
@@ -395,6 +405,7 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
                 <p className="text-sm text-dreams-textSecondary py-2">No verified doctors at this clinic yet.</p>
               ) : (
                 <select
+                  id="booking-doctor"
                   value={selectedDoctor?.id ?? ""}
                   onChange={(e) => {
                     const doc = clinicDoctors.find((d) => d.id === e.target.value) ?? null;
@@ -434,14 +445,15 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
                 </button>
               </div>
             ) : (
-              <DoctorSearchInput onSelect={handleDoctorChange} />
+              <DoctorSearchInput id="booking-doctor" onSelect={handleDoctorChange} />
             )}
           </div>
 
           {/* Date */}
           <div>
-            <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Date *</label>
+            <label htmlFor="booking-date" className="mb-1 block text-sm font-medium text-dreams-textPrimary">Date *</label>
             <input
+              id="booking-date"
               type="date"
               value={date}
               onChange={(e) => handleDateChange(e.target.value)}
@@ -474,8 +486,9 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
           {showManualTime && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Time *</label>
+                <label htmlFor="booking-time" className="mb-1 block text-sm font-medium text-dreams-textPrimary">Time *</label>
                 <input
+                  id="booking-time"
                   type="time"
                   value={time}
                   onChange={(e) => setTime(e.target.value)}
@@ -484,8 +497,9 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Duration</label>
+                <label htmlFor="booking-duration" className="mb-1 block text-sm font-medium text-dreams-textPrimary">Duration</label>
                 <select
+                  id="booking-duration"
                   value={duration}
                   onChange={(e) => setDuration(Number(e.target.value))}
                   className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
@@ -501,8 +515,9 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
 
           {/* Type */}
           <div>
-            <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">Type *</label>
+            <label htmlFor="booking-type" className="mb-1 block text-sm font-medium text-dreams-textPrimary">Type *</label>
             <select
+              id="booking-type"
               value={type}
               onChange={(e) => setType(e.target.value as typeof type)}
               className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
@@ -515,10 +530,11 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
 
           {/* Chief Complaint */}
           <div>
-            <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+            <label htmlFor="booking-complaint" className="mb-1 block text-sm font-medium text-dreams-textPrimary">
               Chief Complaint
             </label>
             <input
+              id="booking-complaint"
               type="text"
               value={chiefComplaint}
               onChange={(e) => setChiefComplaint(e.target.value)}
