@@ -17,4 +17,5 @@ pgvector==0.3.6
 pandas==2.2.0
 reportlab==4.2.5
 arq==0.26.1
+pywebpush==2.5.0
 prometheus-fastapi-instrumentator==7.0.0

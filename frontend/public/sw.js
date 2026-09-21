@@ -55,3 +55,45 @@ self.addEventListener('fetch', (event) => {
     )
   );
 });
+
+// ---------------------------------------------------------------------------
+// Web Push
+// ---------------------------------------------------------------------------
+// The backend sends {title, url} only — no body — because push payloads
+// transit third-party push services and bodies could carry PHI.
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = {};
+  }
+  const title = data.title || 'MedConnect';
+  const url = typeof data.url === 'string' && data.url ? data.url : '/';
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      icon: '/icon-192.png',
+      data: { url },
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url =
+    (event.notification.data && event.notification.data.url) || '/';
+  event.waitUntil(
+    clients
+      .matchAll({ type: 'window', includeUncontrolled: true })
+      .then((windowClients) => {
+        // Focus an existing app tab and navigate it, else open a new one.
+        for (const client of windowClients) {
+          if (client.url.startsWith(self.location.origin)) {
+            client.navigate(url);
+            return client.focus();
+          }
+        }
+        return clients.openWindow(url);
+      })
+  );
+});

@@ -2,7 +2,7 @@
 Appointment reminder tasks executed by the ARQ worker.
 
 Dispatches the reminder over every notification channel enabled in the
-patient's NotificationPreferences (in_app, email, sms, whatsapp) via
+patient's NotificationPreferences (in_app, email, sms, whatsapp, push) via
 app.services.notification_channels, then writes one ReminderLog row per
 attempted channel with the real channel value and a sent/failed/skipped
 status. The doctor always gets an in-app notification.

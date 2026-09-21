@@ -22,6 +22,12 @@ Channels:
                (``services/providers/whatsapp.py``), gated on
                ``WHATSAPP_ACCESS_TOKEN`` + ``WHATSAPP_PHONE_NUMBER_ID`` +
                ``WHATSAPP_TEMPLATE_NAME``; unconfigured -> skipped.
+    push     — Web Push via VAPID-signed requests
+               (``services/providers/webpush.py``), gated on
+               ``VAPID_SUBJECT`` + ``VAPID_PRIVATE_KEY`` + ``VAPID_PUBLIC_KEY``;
+               unconfigured or no browser subscriptions -> skipped. Payload is
+               title + action_url only — no body (push payloads transit
+               third-party push services; bodies can carry PHI).
 
 PHI note: never log message bodies, names, emails or phone numbers —
 identifiers (user_id, channel, status) only.
@@ -43,15 +49,16 @@ from app.models.notification import NotificationPreferences, NotificationType
 from app.models.user import User
 from app.services import notification_service
 from app.services.providers import sms as sms_provider
+from app.services.providers import webpush as webpush_provider
 from app.services.providers import whatsapp as whatsapp_provider
 
 logger = structlog.get_logger()
 
-Channel = Literal["in_app", "email", "sms", "whatsapp"]
+Channel = Literal["in_app", "email", "sms", "whatsapp", "push"]
 
 # Dispatch order — in_app first so the baseline notification lands even if an
 # external channel misbehaves.
-CHANNELS: tuple[str, ...] = ("in_app", "email", "sms", "whatsapp")
+CHANNELS: tuple[str, ...] = ("in_app", "email", "sms", "whatsapp", "push")
 
 # NotificationPreferences.preferences keys gating each channel. ``in_app``
 # intentionally has no key — it is the baseline channel and is only skipped
@@ -60,6 +67,7 @@ CHANNEL_PREF_KEYS: dict[str, str] = {
     "email": "email_notifications",
     "sms": "sms_notifications",
     "whatsapp": "whatsapp_notifications",
+    "push": "push_notifications",
 }
 
 ChannelStatus = Literal["sent", "failed", "skipped"]
@@ -115,11 +123,13 @@ async def send(
 
     Args:
         user: recipient User row (needs email/phone for external channels).
-        kind: one of CHANNELS ("in_app" | "email" | "sms" | "whatsapp").
+        kind: one of CHANNELS ("in_app" | "email" | "sms" | "whatsapp" | "push").
         title/body: rendered notification content.
         db: async session (used for prefs lookup and the in_app channel).
-        notif_type/action_url/metadata: in_app-only extras forwarded to
+        notif_type/metadata: in_app-only extras forwarded to
             notification_service.create_notification.
+        action_url: click-through URL for in_app metadata and the push
+            payload (the only per-channel content push receives, with title).
         prefs: optional pre-fetched preferences dict; fetched when omitted.
 
     Returns:
@@ -158,7 +168,9 @@ async def send(
         return await _send_email(user, title, body)
     if kind == "sms":
         return await _send_sms(user, body)
-    return await _send_whatsapp(user, body)
+    if kind == "whatsapp":
+        return await _send_whatsapp(user, body)
+    return await _send_push(user, title, action_url=action_url, db=db)
 
 
 async def send_all(
@@ -272,3 +284,18 @@ async def _send_sms(user: User, body: str) -> ChannelResult:
 async def _send_whatsapp(user: User, body: str) -> ChannelResult:
     """WhatsApp via the Cloud API adapter (services/providers/whatsapp.py)."""
     return await whatsapp_provider.send(user, body)
+
+
+async def _send_push(
+    user: User,
+    title: str,
+    *,
+    action_url: Optional[str],
+    db: AsyncSession,
+) -> ChannelResult:
+    """Web Push via the VAPID adapter (services/providers/webpush.py).
+
+    Title + click-through URL only — the body is deliberately not forwarded
+    (it can carry PHI and push payloads transit third-party services).
+    """
+    return await webpush_provider.send(user, title, url=action_url, db=db)

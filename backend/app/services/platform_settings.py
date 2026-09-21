@@ -16,7 +16,7 @@ from app.models.platform_setting import PlatformSetting
 DEFAULT_VALUES: dict[str, Any] = {
     "maintenance_mode": False,
     "registration_enabled": True,
-    "reminder_channels_enabled": {"in_app": True, "email": False, "sms": False, "whatsapp": False},
+    "reminder_channels_enabled": {"in_app": True, "email": False, "sms": False, "whatsapp": False, "push": False},
     "max_upload_mb": 10,
 }
 

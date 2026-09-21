@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { BellOff } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
@@ -14,6 +14,12 @@ import {
   type NotificationPreferences,
   type NotificationPreferencesUpdate,
 } from "@/lib/api/notifications";
+import {
+  disablePushNotifications,
+  enablePushNotifications,
+  getPushSubscription,
+  pushSupported,
+} from "@/lib/push";
 
 const PREFERENCES_QUERY_KEY = ["notification-preferences"];
 
@@ -135,6 +141,94 @@ function PreferenceRow({
   );
 }
 
+/**
+ * "This device" push subscription control — registers the browser's
+ * PushManager subscription with the backend (distinct from the "Push"
+ * channel toggle, which only gates dispatch preference).
+ */
+function PushDeviceControl() {
+  // null = still probing, "unsupported" hides the control entirely.
+  const [subscribed, setSubscribed] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!pushSupported()) {
+      setSubscribed(null);
+      return;
+    }
+    let cancelled = false;
+    getPushSubscription()
+      .then((sub) => {
+        if (!cancelled) setSubscribed(sub !== null);
+      })
+      .catch(() => {
+        if (!cancelled) setSubscribed(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (subscribed === null) return null;
+
+  const handleClick = async () => {
+    setBusy(true);
+    try {
+      if (subscribed) {
+        await disablePushNotifications();
+        setSubscribed(false);
+        toast({ title: "Push disabled", description: "This device will no longer receive push notifications." });
+      } else {
+        const ok = await enablePushNotifications();
+        setSubscribed(ok);
+        toast(
+          ok
+            ? { title: "Push enabled", description: "This device will now receive notifications." }
+            : {
+                title: "Push not enabled",
+                description: "Push is unavailable or permission was denied.",
+                variant: "destructive",
+              }
+        );
+      }
+    } catch {
+      toast({
+        title: "Push setup failed",
+        description: "Could not update push notifications. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-between gap-4 py-3">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-dreams-textPrimary">This device</p>
+        <p className="text-xs text-dreams-textSecondary mt-0.5">
+          {subscribed
+            ? "Push notifications are enabled on this browser."
+            : "Enable browser push notifications on this device."}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={busy}
+        className={cn(
+          "h-9 px-4 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 shrink-0",
+          subscribed
+            ? "border border-dreams-border text-dreams-textPrimary hover:bg-gray-50"
+            : "bg-dreams-blue text-white hover:bg-dreams-blue/90"
+        )}
+      >
+        {busy ? "Working…" : subscribed ? "Disable push" : "Enable push"}
+      </button>
+    </div>
+  );
+}
+
 export default function PatientPreferencesPage() {
   const queryClient = useQueryClient();
 
@@ -246,6 +340,7 @@ export default function PatientPreferencesPage() {
                 onChange={(next) => handleToggle(item.key, next)}
               />
             ))}
+            <PushDeviceControl />
           </div>
         </div>
 

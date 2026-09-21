@@ -70,6 +70,12 @@ class Settings(BaseSettings):
     WHATSAPP_BUSINESS_ACCOUNT_ID: str | None = None
     WHATSAPP_TEMPLATE_NAME: str | None = None  # approved template; required to send
     WHATSAPP_TEMPLATE_LANG: str = "en_US"
+    # Web Push (services/providers/webpush.py — VAPID-signed requests via
+    # pywebpush). Generate a keypair with `npx web-push generate-vapid-keys`;
+    # never commit keys. All three must be set or the channel is skipped.
+    VAPID_SUBJECT: str | None = None    # contact URI, e.g. "mailto:ops@example.com"
+    VAPID_PRIVATE_KEY: str | None = None  # base64url VAPID private key
+    VAPID_PUBLIC_KEY: str | None = None   # base64url public key (served at /api/v1/push/vapid-public)
 
     @model_validator(mode="after")
     def check_production_config(self) -> "Settings":
