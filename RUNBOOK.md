@@ -215,3 +215,33 @@ failing request end-to-end by grepping for its `request_id`.
 
 Grafana/Prometheus/Alertmanager UIs (cluster): `kubectl -n monitoring
 port-forward svc/kube-prometheus-stack-grafana 3001:80` etc.
+
+## 8. Logs (Loki aggregation)
+
+The backend already writes structlog JSON to stdout — no app config needed.
+For local development, the `observability` compose profile adds
+Loki + Promtail + Grafana (opt-in; plain `docker compose up` is unchanged):
+
+```bash
+docker compose --profile observability up -d
+# Grafana → http://localhost:3001 (Explore → Loki, datasource pre-wired)
+# Loki API → http://localhost:3100
+```
+
+Promtail tails every compose-managed container through the Docker socket
+and labels each stream `service` / `project` / `container` / `level`.
+Configs: `infra/monitoring/{loki,promtail}-config.yml`,
+`grafana-datasources.yml`. Full field list + LogQL examples:
+**docs/logging.md**. Quick ones:
+
+```logql
+{service="backend", level="error"}                  # backend errors
+{service="backend"} | json | request_id="<id>"      # one request, all lines
+{service="backend"} |= "unhandled_exception"        # the 500s behind HighErrorRate
+```
+
+PHI rule for new log fields: IDs/codes only — never bodies, query strings,
+or patient data (same constraint the audit middleware already enforces).
+
+K8s has no aggregation yet — use `kubectl -n <ns> logs deploy/backend |
+jq …` (§7); a promtail/alloy DaemonSet is the follow-up.
