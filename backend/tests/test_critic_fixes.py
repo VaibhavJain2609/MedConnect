@@ -279,3 +279,23 @@ class TestEncounterGuards:
         )
         assert res.status_code == 403
         assert res.json()["error"]["code"] == "PATIENT_ACCESS_DENIED"
+
+
+# ---------------------------------------------------------------------------
+# Notification channel preference keys (sms/whatsapp were silently dropped)
+# ---------------------------------------------------------------------------
+
+
+class TestChannelPrefs:
+    async def test_sms_whatsapp_prefs_roundtrip(self, patient_client):
+        res = await patient_client.put(
+            "/api/v1/notifications/preferences",
+            json={"sms_notifications": True, "whatsapp_notifications": True},
+        )
+        assert res.status_code == 200, res.text
+        prefs = res.json()  # PUT returns the merged prefs dict directly
+        assert prefs["sms_notifications"] is True
+        assert prefs["whatsapp_notifications"] is True
+
+        got = await patient_client.get("/api/v1/notifications/preferences")
+        assert got.json()["sms_notifications"] is True
