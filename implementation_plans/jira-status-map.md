@@ -86,17 +86,9 @@
   - Verified badge in patient doctor search (backend field + UI)
   - Clinic timezone settable via `ClinicUpdate` (IANA-validated)
   - 46-test coverage file (exports, receptionist authz, queue ops, encounter access) — caught `GET /encounters` 500 (missing batched name-loader, fixed) + 422-handler flattening of domain codes (fixed)
-- **Round-6 unblocked candidates:**
-  1. Receptionist existing-patient booking + status/reschedule (global-role gates remain — front-desk currently queue-only)
-  2. Backup/restore drill script + doc
-  3. Keycloak-side erasure (ops step — identity record persists after DPDP erasure)
-  4. Push notifications (Web Push / APNs)
-  5. i18n scaffolding
-  6. Load testing (locust/k6) + pg_stat_statements tuning
-  7. OCR/AI record ingestion
-  8. Barcode data source
-  9. OpenAPI → generated TS client (kill contract drift)
-  10. Coverage toward 80% (more authz matrices + worker tests)
+- **Round-6 — LANDED:** announcement broadcast (audience/type/recipient preview, audit-backed list), admin settings wired to platform flags (maintenance confirm, upload cap, reminder channels) + settings now audit-logged, admin system-health page (`GET /admin/system/status` — deps latency, ARQ depth, counts, uptime), backup/restore drill scripts + docs
+- **Round-6 in flight:** receptionist booking/status/reschedule, per-clinic metrics, Rx draft autosave + interaction-gate ack, OpenAPI→TS contract gen, pgbouncer+uvicorn workers, patient onboarding checklist, Loki/Promtail logs
+- **Round-6+ queue:** Keycloak-side erasure (ops creds), Web Push, i18n, load testing, OCR/AI ingest, barcode source, coverage→80%
 - **BLOCKED — ABDM/ABHA: awaiting regulatory approval (user-confirmed)** — do not implement: ABHA creation/linking, NRCeS-conformant FHIR, HIP module (tickets 107–116)
 - **Blocked/external:** SMS/WhatsApp live provider accounts (code adapters anyway), OCR/AI features, load testing env, i18n assets, barcode data source, push VAPID/service
 
