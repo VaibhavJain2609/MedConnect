@@ -58,3 +58,8 @@ graphify-out/
 .serena/
 analysis/
 .worktrees/
+
+# Exported OpenAPI spec — regenerated on demand by
+# backend/scripts/export_openapi.py; the committed artifact is
+# frontend/src/lib/api/schema.d.ts (CI verifies it stays in sync).
+frontend/openapi.json
