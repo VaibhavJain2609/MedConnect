@@ -19,6 +19,7 @@ from app.database import get_db
 from app.dependencies import get_clinic_staff, require_patient
 from app.models.clinic import Clinic
 from app.models.doctor import Doctor
+from app.models.notification import Notification, NotificationType
 from app.models.queue import QueueEntry
 from app.models.user import User
 from app.schemas.queue import (
@@ -99,6 +100,138 @@ async def _resolve_names(
         doctor_names = {row.id: row.full_name for row in dr.all()}
 
     return patient_names, doctor_names
+
+
+# ----------------------------------------------------------------------
+# Patient queue notifications (in-app)
+# ----------------------------------------------------------------------
+
+QUEUE_CALLED_TITLE = "It's your turn"
+QUEUE_CALLED_BODY = "You're being called — please proceed to the consultation room."
+QUEUE_NEXT_UP_TITLE = "You're next in line"
+QUEUE_NEXT_UP_BODY = "You're next in the queue — please stay nearby and keep an eye on your position."
+
+
+async def _notify_queue_patient(
+    db: AsyncSession,
+    entry: QueueEntry,
+    *,
+    kind: str,
+    title: str,
+    body: str,
+) -> None:
+    """Emit a deduped in-app queue notification to an entry's patient.
+
+    Skips silently when:
+    - the patient does not resolve to an active user account (walk-in style
+      entries whose user was deactivated/erased have no in-app inbox),
+    - a notification of the same ``kind`` already exists for this entry
+      (dedupe on Notification.meta, same pattern as the doctor-reminder
+      dedupe in workers/tasks/appointment_reminders.py — makes a retried
+      PATCH idempotent),
+    - the platform-level in_app kill-switch is off.
+
+    Dispatches via notification_channels.send() so the in_app channel path
+    (preferences + channel implementation) is the same one other emitters
+    use. Never raises for channel-level failures — notification problems
+    must not fail the queue operation.
+    """
+    from app.services import notification_channels, platform_settings
+
+    patient_res = await db.execute(
+        select(User).where(
+            User.id == entry.patient_id,
+            User.deleted_at.is_(None),
+            User.is_active.is_(True),
+        )
+    )
+    patient = patient_res.scalar_one_or_none()
+    if patient is None:
+        return
+
+    already = (
+        await db.execute(
+            select(Notification.id).where(
+                Notification.user_id == patient.id,
+                Notification.meta["queue_entry_id"].astext == str(entry.id),
+                Notification.meta["kind"].astext == kind,
+                Notification.deleted_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+    if already is not None:
+        return
+
+    if not await platform_settings.platform_channel_enabled(db, "in_app"):
+        return
+
+    await notification_channels.send(
+        patient,
+        "in_app",
+        title,
+        body,
+        db=db,
+        notif_type=NotificationType.SYSTEM.value,
+        action_url="/patient/queue",
+        metadata={
+            "queue_entry_id": str(entry.id),
+            "clinic_id": str(entry.clinic_id),
+            "kind": kind,
+        },
+    )
+
+
+async def _notify_next_up(db: AsyncSession, clinic_id: uuid.UUID) -> None:
+    """Notify the patient who just became next in line (position 1).
+
+    Called after an entry leaves the active set (completed / cancelled /
+    removed). The next-up entry is today's lowest-queue_number row still
+    ``waiting`` with no active entries ahead of it — if the lowest active
+    entry is already ``in_consultation`` it got its "called" notification
+    at call time and is not re-notified here.
+    """
+    today = datetime.now(tz=timezone.utc).date()
+    day_start = datetime(today.year, today.month, today.day, 0, 0, 0, tzinfo=timezone.utc)
+    day_end = day_start + timedelta(days=1)
+
+    next_res = await db.execute(
+        select(QueueEntry)
+        .where(
+            QueueEntry.clinic_id == clinic_id,
+            QueueEntry.deleted_at.is_(None),
+            QueueEntry.created_at >= day_start,
+            QueueEntry.created_at < day_end,
+            QueueEntry.status == "waiting",
+        )
+        .order_by(QueueEntry.queue_number.asc())
+        .limit(1)
+    )
+    next_entry = next_res.scalar_one_or_none()
+    if next_entry is None:
+        return
+
+    # Only notify when the entry actually holds position 1 — entries still
+    # behind an in_consultation row keep waiting quietly.
+    ahead_res = await db.execute(
+        select(func.count(QueueEntry.id)).where(
+            QueueEntry.clinic_id == clinic_id,
+            QueueEntry.deleted_at.is_(None),
+            QueueEntry.created_at >= day_start,
+            QueueEntry.created_at < day_end,
+            QueueEntry.status.in_(ACTIVE_STATUSES),
+            QueueEntry.queue_number < next_entry.queue_number,
+        )
+    )
+    if ahead_res.scalar_one() != 0:
+        return
+
+    await _notify_queue_patient(
+        db,
+        next_entry,
+        kind="queue_next_up",
+        title=QUEUE_NEXT_UP_TITLE,
+        body=QUEUE_NEXT_UP_BODY,
+    )
 
 
 @router.post("", response_model=QueueEntryResponse, status_code=status.HTTP_201_CREATED)
@@ -486,6 +619,21 @@ async def update_queue_status(
         new_values={"status": entry.status},
     )
 
+    # Patient notifications:
+    # - "in_consultation" is the call event — tell the patient it's their turn.
+    # - leaving the active set (completed/cancelled) may promote a waiting
+    #   entry to position 1 — tell that patient they're next.
+    if req.status == "in_consultation":
+        await _notify_queue_patient(
+            db,
+            entry,
+            kind="queue_called",
+            title=QUEUE_CALLED_TITLE,
+            body=QUEUE_CALLED_BODY,
+        )
+    elif req.status in {"completed", "cancelled"}:
+        await _notify_next_up(db, clinic_id)
+
     patient_names, doctor_names = await _resolve_names(db, [entry])
     return _serialize_entry(
         entry,
@@ -543,3 +691,7 @@ async def remove_from_queue(
     )
 
     await db.flush()
+
+    # Removing an active entry may promote a waiting entry to position 1.
+    if entry.status in ACTIVE_STATUSES:
+        await _notify_next_up(db, clinic_id)
