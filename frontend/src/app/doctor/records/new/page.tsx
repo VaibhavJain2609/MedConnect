@@ -4,7 +4,12 @@ import { Suspense, useState, useRef, useCallback, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import api from "@/lib/api";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
-import { X } from "lucide-react";
+import { Loader2, ScanLine, X } from "lucide-react";
+import { requestUpload, uploadBytes } from "@/lib/api/uploads";
+import {
+  ingestLabResultImage,
+  type LabIngestCandidate,
+} from "@/lib/api/lab-results";
 
 const RECORD_TYPES = [
   { value: "opd_note", label: "OPD Note" },
@@ -146,6 +151,205 @@ function PatientSearch({
   );
 }
 
+/**
+ * "Extract from image" — lab-report OCR assist (scaffold).
+ *
+ * NOTE: no structured lab-result entry form exists yet (the admin "New
+ * Test" action is disabled and lab values land on LabResult rows only via
+ * the admin CRUD API), so this lives on the doctor's record form — the
+ * closest lab-entry context — and is shown when Record Type = Lab Report.
+ *
+ * Flow: presign → PUT the image → POST /api/v1/lab-results/ingest → render
+ * returned candidates in an editable table for review. Candidates are
+ * human-in-the-loop only: nothing is saved until the doctor clicks
+ * "Insert into notes" (which formats them into the Description field) and
+ * then submits the record. When OCR is disabled server-side the endpoint
+ * answers 503 OCR_NOT_CONFIGURED and we show a quiet notice.
+ */
+function LabReportExtract({
+  patientId,
+  onApply,
+}: {
+  patientId: string | null;
+  onApply: (notes: string) => void;
+}) {
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [extractError, setExtractError] = useState("");
+  const [candidates, setCandidates] = useState<LabIngestCandidate[] | null>(
+    null
+  );
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setExtractError("");
+    setCandidates(null);
+    setBusy(true);
+    try {
+      const { presigned_url, object_key } = await requestUpload(
+        file.name,
+        file.type
+      );
+      await uploadBytes(object_key, file, undefined, presigned_url);
+      const res = await ingestLabResultImage(
+        object_key,
+        patientId ?? undefined
+      );
+      setCandidates(res.candidates);
+      if (res.candidates.length === 0) {
+        setExtractError("No lab values were detected in the image.");
+      }
+    } catch (err: any) {
+      const status = err.response?.status;
+      const code = err.response?.data?.error?.code;
+      if (status === 503 && code === "OCR_NOT_CONFIGURED") {
+        setExtractError("Image extraction is not enabled on this server.");
+      } else if (status === 503) {
+        setExtractError(
+          "Extraction service is unavailable right now — please enter values manually."
+        );
+      } else {
+        setExtractError(
+          err.response?.data?.error?.message ||
+            "Failed to extract values from the image."
+        );
+      }
+    } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const updateCandidate = (
+    idx: number,
+    field: keyof LabIngestCandidate,
+    value: string
+  ) => {
+    setCandidates(
+      (prev) =>
+        prev?.map((c, i) => (i === idx ? { ...c, [field]: value } : c)) ?? null
+    );
+  };
+
+  const applyToNotes = () => {
+    if (!candidates?.length) return;
+    const lines = candidates.map((c) => {
+      const range =
+        c.ref_low || c.ref_high
+          ? ` (ref ${c.ref_low ?? "—"}–${c.ref_high ?? "—"}${
+              c.unit ? ` ${c.unit}` : ""
+            })`
+          : "";
+      const flag =
+        c.flag && c.flag !== "normal" ? ` [${c.flag.toUpperCase()}]` : "";
+      return `• ${c.name}: ${c.value ?? "—"}${
+        c.unit ? ` ${c.unit}` : ""
+      }${range}${flag}`;
+    });
+    onApply(
+      ["Extracted lab values (review before saving):", ...lines].join("\n")
+    );
+  };
+
+  const cellInput =
+    "w-full rounded border border-transparent px-1 py-0.5 text-sm hover:border-dreams-border focus:border-dreams-blue focus:outline-none";
+
+  return (
+    <div className="rounded-lg border border-dashed border-dreams-border p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium text-dreams-textPrimary">
+            Extract from image
+          </p>
+          <p className="text-xs text-dreams-textSecondary mt-0.5">
+            Upload a photo/scan of the report to prefill values for review.
+          </p>
+        </div>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/jpeg,image/png"
+          className="hidden"
+          onChange={handleFile}
+        />
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => fileRef.current?.click()}
+          className="flex items-center gap-2 px-3 py-2 text-sm border border-dreams-border rounded-lg text-dreams-textPrimary hover:bg-dreams-lightBg disabled:opacity-50 transition-colors"
+        >
+          {busy ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <ScanLine className="h-4 w-4" />
+          )}
+          {busy ? "Extracting…" : "Choose image"}
+        </button>
+      </div>
+
+      {extractError && (
+        <p className="mt-3 text-sm text-red-600">{extractError}</p>
+      )}
+
+      {candidates && candidates.length > 0 && (
+        <div className="mt-4 space-y-3">
+          <p className="text-xs font-medium text-dreams-textSecondary uppercase tracking-wide">
+            Extracted values — review and edit before inserting
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-dreams-textSecondary border-b border-dreams-border">
+                  <th className="py-1 pr-2 font-medium">Test</th>
+                  <th className="py-1 pr-2 font-medium">Value</th>
+                  <th className="py-1 pr-2 font-medium">Unit</th>
+                  <th className="py-1 pr-2 font-medium">Ref Low</th>
+                  <th className="py-1 pr-2 font-medium">Ref High</th>
+                  <th className="py-1 font-medium">Flag</th>
+                </tr>
+              </thead>
+              <tbody>
+                {candidates.map((c, i) => (
+                  <tr key={i} className="border-b border-dreams-border/50">
+                    {(
+                      [
+                        "name",
+                        "value",
+                        "unit",
+                        "ref_low",
+                        "ref_high",
+                        "flag",
+                      ] as const
+                    ).map((f) => (
+                      <td key={f} className="py-1 pr-2">
+                        <input
+                          value={c[f] ?? ""}
+                          onChange={(e) =>
+                            updateCandidate(i, f, e.target.value)
+                          }
+                          className={cellInput}
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <button
+            type="button"
+            onClick={applyToNotes}
+            className="px-3 py-1.5 text-sm bg-dreams-blue text-white rounded-lg hover:opacity-90 transition-opacity"
+          >
+            Insert into notes
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NewRecordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -275,6 +479,17 @@ function NewRecordForm() {
           ))}
         </select>
       </div>
+
+      {recordType === "lab_report" && (
+        <div className="mb-4">
+          <LabReportExtract
+            patientId={selectedPatient?.id ?? null}
+            onApply={(text) =>
+              setDescription((prev) => (prev ? `${prev}\n\n${text}` : text))
+            }
+          />
+        </div>
+      )}
 
       <div className="mb-4">
         <label htmlFor="record-title" className="mb-1 block text-sm font-medium text-dreams-textPrimary">
