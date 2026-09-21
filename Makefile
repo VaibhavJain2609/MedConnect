@@ -35,7 +35,7 @@ TEST_DB_MEDICINE := postgresql+asyncpg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@l
 
 .PHONY: help up up-build down down-v restart ps logs health \
         migrate migrate-new migrate-down seed \
-        psql psql-medicine redis-cli \
+        psql psql-medicine redis-cli backup restore-drill \
         test-backend test-frontend lint lint-backend lint-frontend typecheck \
         backend-install frontend-install build clean \
         k8s-render k8s-alerts-staging k8s-alerts-prod
@@ -93,6 +93,27 @@ psql-medicine: ## psql into the medconnect_medicines database
 
 redis-cli: ## redis-cli into the Redis container
 	$(COMPOSE) exec redis redis-cli -a $(REDIS_PASSWORD) --no-auth-warning
+
+# --- backup & restore drill --------------------------------------------------
+# Both scripts live in backend/scripts/ and drive the compose `postgres`
+# service. See docs/backup-restore.md for the full workflow and the
+# production RDS path (snapshots — these targets are compose-only).
+
+backup: ## pg_dump both databases to ./backups (ARGS: --out DIR, --latest)
+	backend/scripts/backup_db.sh $(ARGS)
+
+restore-drill: ## End-to-end drill: fresh backup → restore into scratch DBs → row-count sanity → drop scratch DBs
+	@set -euo pipefail; \
+	tmpdir=$$(mktemp -d); \
+	trap 'rm -rf "$$tmpdir"' EXIT; \
+	echo "== step 1/3: backup both databases into $$tmpdir"; \
+	backend/scripts/backup_db.sh --out "$$tmpdir"; \
+	echo "== step 2/3: restore each dump into a scratch database + sanity counts"; \
+	backend/scripts/restore_db.sh --db restore_drill_medconnect \
+	    --file "$$tmpdir"/medconnect_*.dump --recreate --cleanup; \
+	backend/scripts/restore_db.sh --db restore_drill_medicines \
+	    --file "$$tmpdir"/medconnect_medicines_*.dump --recreate --cleanup; \
+	echo "== step 3/3: done — restore drill PASSED (live databases untouched)"
 
 # --- tests & lint -----------------------------------------------------------
 # Backend tests need the compose postgres running (init.sql creates the
