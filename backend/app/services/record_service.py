@@ -196,51 +196,34 @@ async def get_doctor_patients(
     limit: int = 20,
     search: str | None = None,
 ) -> tuple[list[dict], str | None, bool]:
-    from sqlalchemy import union
-    from app.models.clinic import ClinicMembership
-    from app.models.patient_link import PatientClinicLink
+    from app.services.access_service import accessible_patient_ids_select
 
     # doctor.user_id — needed for ClinicMembership lookup
     doctor_user_subq = select(Doctor.user_id).where(Doctor.id == doctor_id).scalar_subquery()
 
-    # Sub-query 1: patients who have records created by this doctor
-    records_stmt = (
+    # Accessible patients per the centralized rule: records authored by this
+    # doctor OR an approved clinic link at one of the doctor's clinics.
+    # Revoked links are excluded (allow_revoked=False) — the patient list is
+    # for initiating new care, not reading pre-revocation data.
+    stmt = (
         select(User.id, User.full_name, User.email, User.phone)
-        .join(MedicalRecord, MedicalRecord.patient_id == User.id)
-        .join(Doctor, MedicalRecord.doctor_id == Doctor.id)
         .where(
-            Doctor.id == doctor_id,
-            MedicalRecord.deleted_at.is_(None),
+            User.id.in_(
+                accessible_patient_ids_select(
+                    doctor_user_subq, doctor_id, allow_revoked=False
+                )
+            ),
             User.deleted_at.is_(None),
         )
     )
-
-    # Sub-query 2: patients with approved clinic links for any of the doctor's clinics
-    clinic_stmt = (
-        select(User.id, User.full_name, User.email, User.phone)
-        .join(PatientClinicLink, PatientClinicLink.patient_id == User.id)
-        .join(ClinicMembership, ClinicMembership.clinic_id == PatientClinicLink.clinic_id)
-        .where(
-            ClinicMembership.user_id == doctor_user_subq,
-            ClinicMembership.is_active.is_(True),
-            ClinicMembership.deleted_at.is_(None),
-            PatientClinicLink.consent_status == "approved",
-            PatientClinicLink.deleted_at.is_(None),
-            User.deleted_at.is_(None),
-        )
-    )
-
-    combined = union(records_stmt, clinic_stmt).subquery()
-
-    stmt = select(combined.c.id, combined.c.full_name, combined.c.email, combined.c.phone)
 
     if search:
         term = f"%{search}%"
         stmt = stmt.where(
             or_(
-                combined.c.full_name.ilike(term),
-                combined.c.email.ilike(term),
-                combined.c.phone.ilike(term),
+                User.full_name.ilike(term),
+                User.email.ilike(term),
+                User.phone.ilike(term),
             )
         )
 
@@ -249,15 +232,15 @@ async def get_doctor_patients(
     # after (full_name, id) in the sort order.
     if cursor:
         cursor_name = await db.scalar(
-            select(combined.c.full_name).where(combined.c.id == cursor)
+            select(User.full_name).where(User.id == cursor)
         )
         if cursor_name is not None:
             stmt = stmt.where(
-                tuple_(combined.c.full_name, combined.c.id)
+                tuple_(User.full_name, User.id)
                 > tuple_(cursor_name, cursor)
             )
 
-    stmt = stmt.order_by(combined.c.full_name, combined.c.id).limit(limit + 1)
+    stmt = stmt.order_by(User.full_name, User.id).limit(limit + 1)
 
     result = await db.execute(stmt)
     rows = result.all()
