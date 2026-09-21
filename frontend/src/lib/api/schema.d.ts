@@ -125,6 +125,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/audit-logs/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Audit Logs
+         * @description Export audit logs as CSV (text/csv attachment).
+         *
+         *     Honors the same filters as GET /api/v1/admin/audit — table_name,
+         *     record_id, from_date, to_date, changed_by_name, user_id — via the
+         *     shared _audit_filters query builder. Newest first, capped at
+         *     _EXPORT_MAX_ROWS (50k). The AuditLog model stores no ip/request_id
+         *     columns, so they are not exported (request metadata lives inside
+         *     new_values for READ/EXPORT rows and is exported with it).
+         */
+        get: operations["export_audit_logs_api_v1_admin_audit_logs_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/brands": {
         parameters: {
             query?: never;
@@ -242,6 +269,31 @@ export interface paths {
         post?: never;
         /** Delete Clinic */
         delete: operations["delete_clinic_api_v1_admin_clinics__clinic_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/clinics/{clinic_id}/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Clinic Metrics
+         * @description Per-clinic usage metrics for the admin clinic detail page.
+         *
+         *     One GROUP BY query per aggregate — no N+1. All counts exclude
+         *     soft-deleted rows. Role counts (doctors/receptionists/owners) cover
+         *     active memberships only; `inactive` counts is_active=False rows and
+         *     `total` counts every live membership.
+         */
+        get: operations["get_clinic_metrics_api_v1_admin_clinics__clinic_id__metrics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -593,6 +645,26 @@ export interface paths {
          * @description Send an announcement notification to all matching active users.
          */
         post: operations["send_broadcast_api_v1_admin_notifications_broadcast_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/notifications/broadcast/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Broadcast Audience Count
+         * @description Return how many active, non-deleted users an audience targets.
+         */
+        get: operations["broadcast_audience_count_api_v1_admin_notifications_broadcast_count_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1004,6 +1076,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/system/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get System Status
+         * @description Deep system diagnostics for the admin System Health page.
+         */
+        get: operations["get_system_status_api_v1_admin_system_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/users": {
         parameters: {
             query?: never;
@@ -1176,7 +1268,9 @@ export interface paths {
         put?: never;
         /**
          * Create Appointment
-         * @description Create a new appointment. Patient books for themselves; doctor books for a patient.
+         * @description Create a new appointment. Patient books for themselves; doctor books for
+         *     a patient; front-desk clinic staff (any active membership under the
+         *     X-Clinic-Id context, incl. receptionist) book linked patients.
          */
         post: operations["create_appointment_api_v1_appointments_post"];
         delete?: never;
@@ -1521,6 +1615,34 @@ export interface paths {
         patch: operations["update_bill_api_v1_billing__bill_id__patch"];
         trace?: never;
     };
+    "/api/v1/billing/{bill_id}/receipt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Bill Receipt
+         * @description Generate and return a PDF receipt (paid bills) or invoice (unpaid bills).
+         *
+         *     Access rules — identical to GET /{bill_id}:
+         *     - Patients can access their own bills.
+         *     - Doctors can access bills for clinics where they hold a membership.
+         *     - Admins can access any bill.
+         *
+         *     ``bill_id`` is parsed manually so that a malformed UUID returns 404
+         *     (bill not found) rather than a 422 validation error.
+         */
+        get: operations["get_bill_receipt_api_v1_billing__bill_id__receipt_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/brands": {
         parameters: {
             query?: never;
@@ -1646,7 +1768,12 @@ export interface paths {
         };
         /**
          * List Clinic Doctors
-         * @description Return verified doctors who are members of a clinic the patient is linked to.
+         * @description Clinicians at a clinic.
+         *
+         *     Clinic members (any role incl. receptionist) get the staff list — all
+         *     active doctor memberships, used by front-desk booking. Patients get the
+         *     patient-facing list — verified doctors only, gated on an approved
+         *     PatientClinicLink. Neither → 403.
          */
         get: operations["list_clinic_doctors_api_v1_clinics__clinic_id__doctors_get"];
         put?: never;
@@ -2216,6 +2343,32 @@ export interface paths {
         patch: operations["update_encounter_api_v1_encounters__encounter_id__patch"];
         trace?: never;
     };
+    "/api/v1/encounters/{encounter_id}/summary-pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Encounter Summary Pdf
+         * @description Generate and return a PDF visit summary for a single encounter.
+         *
+         *     Access rules — identical to GET /api/v1/encounters/{encounter_id}:
+         *     - The authoring doctor.
+         *     - The patient the encounter belongs to.
+         *     - An owner/admin member of the encounter's clinic.
+         *     - An admin.
+         */
+        get: operations["get_encounter_summary_pdf_api_v1_encounters__encounter_id__summary_pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/interactions": {
         parameters: {
             query?: never;
@@ -2290,6 +2443,37 @@ export interface paths {
          *     Returns interactions ordered by severity (most severe first).
          */
         post: operations["check_interactions_api_v1_interactions_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/interactions/check-allergies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Allergies
+         * @description Check a patient's recorded allergies against a set of catalog salts.
+         *
+         *     Replaces client-side fuzzy substring matching on the Rx page: the
+         *     backend matches each free-text allergy term against salt names
+         *     (normalized exact match, or length-guarded containment reported as
+         *     ``match="partial"``).
+         *
+         *     Authorization:
+         *     - patients may only check their own record (``patient_id`` == caller)
+         *     - doctors must be verified/onboarded and have a relationship with the
+         *       patient (authored record or approved/revoked clinic link — same rule
+         *       as doctors.py prescription endpoints)
+         */
+        post: operations["check_allergies_api_v1_interactions_check_allergies_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2745,6 +2929,11 @@ export interface paths {
          * @description DPDP right to erasure — anonymize account PII and revoke clinic consents.
          *
          *     Idempotent: a second call returns ``{"status": "already_processed"}``.
+         *
+         *     The Keycloak identity (email/name in the IdP) is NOT erased here — the app
+         *     holds no IdP admin credential. The response always includes
+         *     ``keycloak_identity_retained: true``; ops completes erasure with
+         *     ``backend/scripts/keycloak_erasure.sh`` (see ``docs/dpdp-erasure.md``).
          */
         post: operations["request_erasure_api_v1_patients_erasure_post"];
         delete?: never;
@@ -2961,6 +3150,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/records/{record_id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Record Versions
+         * @description Return the full version chain (original + amendments) for one of the
+         *     caller's records, oldest first. Version 1 is the original record; each
+         *     amendment is a separate MedicalRecord row linked via amended_from_id
+         *     (chained amendments are disallowed, so the chain is flat).
+         *
+         *     record_id may be the original or any amendment — the chain always
+         *     resolves to the original. Same authz as GET /records/{record_id}.
+         */
+        get: operations["get_record_versions_api_v1_patients_records__record_id__versions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/records/export": {
         parameters: {
             query?: never;
@@ -3039,6 +3254,53 @@ export interface paths {
          *     - Admins can access any prescription.
          */
         get: operations["get_prescription_pdf_api_v1_prescriptions__prescription_id__pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/push/subscribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Subscribe
+         * @description Upsert a browser push subscription, keyed by its unique endpoint.
+         */
+        post: operations["subscribe_api_v1_push_subscribe_post"];
+        /**
+         * Unsubscribe
+         * @description Soft-delete one of the current user's subscriptions by endpoint.
+         */
+        delete: operations["unsubscribe_api_v1_push_subscribe_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/push/vapid-public": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vapid Public Key
+         * @description Return the VAPID public key browsers need for pushManager.subscribe().
+         *
+         *     404 when push is not configured — the frontend treats that as "push
+         *     unavailable" and hides the enable button.
+         */
+        get: operations["vapid_public_key_api_v1_push_vapid_public_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3776,6 +4038,23 @@ export interface components {
             role: string;
         };
         /**
+         * AllergyConflict
+         * @description One allergy↔salt conflict.
+         */
+        AllergyConflict: {
+            /** Allergy */
+            allergy: string;
+            /**
+             * Match
+             * @enum {string}
+             */
+            match: "exact" | "partial";
+            /** Salt Id */
+            salt_id: string;
+            /** Salt Name */
+            salt_name: string;
+        };
+        /**
          * BrandResponse
          * @description Response schema for brand.
          */
@@ -4093,6 +4372,88 @@ export interface components {
             /** Reason */
             reason?: string | null;
         };
+        /** AppointmentResponse */
+        AppointmentResponse: {
+            /** Branch Id */
+            branch_id?: string | null;
+            /** Branch Name */
+            branch_name?: string | null;
+            /** Cancelled Reason */
+            cancelled_reason?: string | null;
+            /** Chief Complaint */
+            chief_complaint?: string | null;
+            /** Clinic Id */
+            clinic_id?: string | null;
+            /** Clinic Name */
+            clinic_name?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Created By
+             * Format: uuid
+             */
+            created_by: string;
+            /**
+             * Doctor Id
+             * Format: uuid
+             */
+            doctor_id: string;
+            /** Doctor Name */
+            doctor_name?: string | null;
+            /** Duration Minutes */
+            duration_minutes: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Is Provisional
+             * @default false
+             */
+            is_provisional: boolean;
+            /** Meeting Url */
+            meeting_url?: string | null;
+            /** Notes */
+            notes?: string | null;
+            /**
+             * Patient Id
+             * Format: uuid
+             */
+            patient_id: string;
+            /** Patient Name */
+            patient_name?: string | null;
+            /** Patient Phone */
+            patient_phone?: string | null;
+            /**
+             * Scheduled At
+             * Format: date-time
+             */
+            scheduled_at: string;
+            /** Status */
+            status: string;
+            /** Type */
+            type: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** AppointmentsListResponse */
+        AppointmentsListResponse: {
+            /** Data */
+            data: components["schemas"]["AppointmentResponse"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
         /** AppointmentStatusUpdate */
         AppointmentStatusUpdate: {
             /** Cancelled Reason */
@@ -4168,11 +4529,13 @@ export interface components {
         /** BillingCreate */
         BillingCreate: {
             /** Amount */
-            amount: number | string;
+            amount?: number | string | null;
             /** Appointment Id */
             appointment_id?: string | null;
             /** Clinic Id */
             clinic_id?: string | null;
+            /** Items */
+            items?: components["schemas"]["BillingItemCreate"][] | null;
             /** Notes */
             notes?: string | null;
             /**
@@ -4180,6 +4543,24 @@ export interface components {
              * Format: uuid
              */
             patient_id: string;
+        };
+        /**
+         * BillingItemCreate
+         * @description One line item supplied at bill creation.
+         *
+         *     The server computes the line ``amount`` (quantity * unit_amount) and the
+         *     bill total — clients never send either.
+         */
+        BillingItemCreate: {
+            /** Description */
+            description: string;
+            /**
+             * Quantity
+             * @default 1
+             */
+            quantity: number | string;
+            /** Unit Amount */
+            unit_amount: number | string;
         };
         /** BillingUpdate */
         BillingUpdate: {
@@ -4298,16 +4679,20 @@ export interface components {
         BroadcastRequest: {
             /** Action Url */
             action_url?: string | null;
+            /** Audience */
+            audience?: ("all" | "patients" | "doctors" | "admins" | "patient" | "doctor" | "admin") | null;
             /** Body */
             body: string;
-            /**
-             * Target Role
-             * @default all
-             * @enum {string}
-             */
-            target_role: "all" | "patient" | "doctor" | "admin";
+            /** Target Role */
+            target_role?: ("all" | "patient" | "doctor" | "admin") | null;
             /** Title */
             title: string;
+            /**
+             * Type
+             * @default system
+             * @enum {string}
+             */
+            type: "system" | "info" | "warning";
         };
         /**
          * BulkImportResponse
@@ -4364,6 +4749,29 @@ export interface components {
             manufacturer_name: string;
             /** Salt Compositions */
             salt_compositions: string;
+        };
+        /**
+         * CheckAllergiesRequest
+         * @description Request model for checking a patient's allergies against salts.
+         */
+        CheckAllergiesRequest: {
+            /**
+             * Patient Id
+             * Format: uuid
+             */
+            patient_id: string;
+            /** Salt Ids */
+            salt_ids: string[];
+        };
+        /**
+         * CheckAllergiesResponse
+         * @description Structured allergy check result.
+         */
+        CheckAllergiesResponse: {
+            /** Checked Allergies */
+            checked_allergies: string[];
+            /** Conflicts */
+            conflicts: components["schemas"]["AllergyConflict"][];
         };
         /**
          * CheckInteractionsRequest
@@ -4583,6 +4991,11 @@ export interface components {
             salt_id_2: string;
             /** Severity */
             severity: string;
+        };
+        /** DeletedCountResponse */
+        DeletedCountResponse: {
+            /** Deleted Count */
+            deleted_count: number;
         };
         /** DoctorLeaveCreate */
         DoctorLeaveCreate: {
@@ -4894,6 +5307,24 @@ export interface components {
             provisional_patient_id: string;
         };
         /**
+         * LinkProvisionalResponse
+         * @description Returned by POST /appointments/link-provisional after merging a
+         *     provisional (walk-in) patient into a real patient account.
+         */
+        LinkProvisionalResponse: {
+            /** Full Name */
+            full_name: string;
+            /** Linked Count */
+            linked_count: number;
+            /** Phone */
+            phone?: string | null;
+            /**
+             * Real Patient Id
+             * Format: uuid
+             */
+            real_patient_id: string;
+        };
+        /**
          * ManufacturerCreateRequest
          * @description Request schema for creating a manufacturer.
          */
@@ -4928,6 +5359,11 @@ export interface components {
             /** Manufacturer Name */
             manufacturer_name?: string | null;
         };
+        /** MarkAllReadResponse */
+        MarkAllReadResponse: {
+            /** Message */
+            message: string;
+        };
         /** MedicalHistoryUpdate */
         MedicalHistoryUpdate: {
             /** Allergies */
@@ -4940,6 +5376,57 @@ export interface components {
             height_cm?: number | null;
             /** Weight Kg */
             weight_kg?: number | null;
+        };
+        /**
+         * NotificationPreferencesResponse
+         * @description Bare preferences map returned by GET/PUT /notifications/preferences.
+         *
+         *     Known keys carry the documented defaults; stored rows may contain legacy
+         *     keys, so extras are allowed through rather than filtered.
+         */
+        NotificationPreferencesResponse: {
+            /**
+             * Appointment Reminders
+             * @default true
+             */
+            appointment_reminders: boolean;
+            /**
+             * Email Notifications
+             * @default true
+             */
+            email_notifications: boolean;
+            /**
+             * Lab Results
+             * @default true
+             */
+            lab_results: boolean;
+            /**
+             * Prescription Alerts
+             * @default true
+             */
+            prescription_alerts: boolean;
+            /**
+             * Push Notifications
+             * @default true
+             */
+            push_notifications: boolean;
+            /**
+             * Sms Notifications
+             * @default false
+             */
+            sms_notifications: boolean;
+            /**
+             * System Alerts
+             * @default true
+             */
+            system_alerts: boolean;
+            /**
+             * Whatsapp Notifications
+             * @default false
+             */
+            whatsapp_notifications: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * NotificationPreferencesUpdate
@@ -5214,6 +5701,27 @@ export interface components {
             /** Specialization */
             specialization?: string | null;
         };
+        /**
+         * PushKeys
+         * @description Client encryption keys from ``PushSubscription.keys``.
+         */
+        PushKeys: {
+            /** Auth */
+            auth: string;
+            /** P256Dh */
+            p256dh: string;
+        };
+        /** PushSubscribeRequest */
+        PushSubscribeRequest: {
+            /** Endpoint */
+            endpoint: string;
+            keys: components["schemas"]["PushKeys"];
+        };
+        /** PushUnsubscribeRequest */
+        PushUnsubscribeRequest: {
+            /** Endpoint */
+            endpoint: string;
+        };
         /** QueueEntryCreate */
         QueueEntryCreate: {
             /** Appointment Id */
@@ -5227,6 +5735,88 @@ export interface components {
              * Format: uuid
              */
             patient_id: string;
+        };
+        /** QueueEntryResponse */
+        QueueEntryResponse: {
+            /** Appointment Id */
+            appointment_id?: string | null;
+            /** Branch Id */
+            branch_id?: string | null;
+            /** Called At */
+            called_at?: string | null;
+            /**
+             * Clinic Id
+             * Format: uuid
+             */
+            clinic_id: string;
+            /** Completed At */
+            completed_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Doctor Id */
+            doctor_id?: string | null;
+            /** Doctor Name */
+            doctor_name?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Notes */
+            notes?: string | null;
+            /**
+             * Patient Id
+             * Format: uuid
+             */
+            patient_id: string;
+            /** Patient Name */
+            patient_name?: string | null;
+            /** Queue Number */
+            queue_number: number;
+            /** Status */
+            status: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** QueueListResponse */
+        QueueListResponse: {
+            /** Data */
+            data: components["schemas"]["QueueEntryResponse"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * QueuePositionResponse
+         * @description Patient-facing live queue position (GET /queue/my-position).
+         *
+         *     All fields are null/empty (ahead_count=0) when the patient has no queue
+         *     entry today — the endpoint returns 200, not 404, in that case.
+         */
+        QueuePositionResponse: {
+            /** Ahead Count */
+            ahead_count: number;
+            /** Clinic Id */
+            clinic_id: string | null;
+            /** Clinic Name */
+            clinic_name: string | null;
+            /** Doctor Name */
+            doctor_name: string | null;
+            /** Estimated Wait Minutes */
+            estimated_wait_minutes: number | null;
+            /** Position */
+            position: number | null;
+            /** Queue Entry Id */
+            queue_entry_id: string | null;
+            /** Queue Number */
+            queue_number: number | null;
+            /** Status */
+            status: string | null;
         };
         /** QueueStatusUpdate */
         QueueStatusUpdate: {
@@ -5547,6 +6137,11 @@ export interface components {
             /** Total Salts */
             total_salts: number;
         };
+        /** UnreadCountResponse */
+        UnreadCountResponse: {
+            /** Count */
+            count: number;
+        };
         /** UserResponse */
         UserResponse: {
             /** Email */
@@ -5564,6 +6159,10 @@ export interface components {
         };
         /** ValidationError */
         ValidationError: {
+            /** Context */
+            ctx?: Record<string, never>;
+            /** Input */
+            input?: unknown;
             /** Location */
             loc: (string | number)[];
             /** Message */
@@ -5753,6 +6352,43 @@ export interface operations {
                 from_date?: string | null;
                 limit?: number;
                 page?: number;
+                record_id?: string | null;
+                table_name?: string | null;
+                to_date?: string | null;
+                /** @description Filter to changes made by this user (audit_logs.changed_by) */
+                user_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_audit_logs_api_v1_admin_audit_logs_export_get: {
+        parameters: {
+            query?: {
+                changed_by_name?: string | null;
+                from_date?: string | null;
                 record_id?: string | null;
                 table_name?: string | null;
                 to_date?: string | null;
@@ -6065,6 +6701,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_clinic_metrics_api_v1_admin_clinics__clinic_id__metrics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clinic_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
             };
             /** @description Validation Error */
             422: {
@@ -6796,6 +7463,37 @@ export interface operations {
             };
         };
     };
+    broadcast_audience_count_api_v1_admin_notifications_broadcast_count_get: {
+        parameters: {
+            query?: {
+                audience?: "all" | "patients" | "doctors" | "admins" | "patient" | "doctor" | "admin";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_broadcasts_api_v1_admin_notifications_broadcasts_get: {
         parameters: {
             query?: {
@@ -7471,6 +8169,26 @@ export interface operations {
             };
         };
     };
+    get_system_status_api_v1_admin_system_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     list_users_api_v1_admin_users_get: {
         parameters: {
             query?: {
@@ -7876,7 +8594,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AppointmentsListResponse"];
                 };
             };
             /** @description Validation Error */
@@ -7893,7 +8611,9 @@ export interface operations {
     create_appointment_api_v1_appointments_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Clinic-Id"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -7909,7 +8629,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AppointmentResponse"];
                 };
             };
             /** @description Validation Error */
@@ -7940,7 +8660,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AppointmentResponse"];
                 };
             };
             /** @description Validation Error */
@@ -7975,7 +8695,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AppointmentResponse"];
                 };
             };
             /** @description Validation Error */
@@ -8035,7 +8755,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AppointmentResponse"];
                 };
             };
             /** @description Validation Error */
@@ -8070,7 +8790,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AppointmentResponse"];
                 };
             };
             /** @description Validation Error */
@@ -8105,7 +8825,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AppointmentResponse"];
                 };
             };
             /** @description Validation Error */
@@ -8140,7 +8860,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["LinkProvisionalResponse"];
                 };
             };
             /** @description Validation Error */
@@ -8585,6 +9305,40 @@ export interface operations {
                 "application/json": components["schemas"]["BillingUpdate"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_bill_receipt_api_v1_billing__bill_id__receipt_get: {
+        parameters: {
+            query?: {
+                /** @description Set to true to force browser download */
+                download?: boolean;
+            };
+            header?: never;
+            path: {
+                bill_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -10094,6 +10848,40 @@ export interface operations {
             };
         };
     };
+    get_encounter_summary_pdf_api_v1_encounters__encounter_id__summary_pdf_get: {
+        parameters: {
+            query?: {
+                /** @description Set to true to force browser download */
+                download?: boolean;
+            };
+            header?: never;
+            path: {
+                encounter_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_interaction_api_v1_interactions_post: {
         parameters: {
             query?: never;
@@ -10176,6 +10964,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InteractionResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    check_allergies_api_v1_interactions_check_allergies_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckAllergiesRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckAllergiesResponse"];
                 };
             };
             /** @description Validation Error */
@@ -10530,7 +11351,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["NotificationPreferencesResponse"];
                 };
             };
         };
@@ -10554,7 +11375,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["NotificationPreferencesResponse"];
                 };
             };
             /** @description Validation Error */
@@ -10583,7 +11404,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeletedCountResponse"];
                 };
             };
         };
@@ -10603,7 +11424,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MarkAllReadResponse"];
                 };
             };
         };
@@ -10623,7 +11444,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["UnreadCountResponse"];
                 };
             };
         };
@@ -11283,6 +12104,37 @@ export interface operations {
             };
         };
     };
+    get_record_versions_api_v1_patients_records__record_id__versions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     export_records_api_v1_patients_records_export_get: {
         parameters: {
             query?: {
@@ -11454,6 +12306,92 @@ export interface operations {
             };
         };
     };
+    subscribe_api_v1_push_subscribe_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushSubscribeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unsubscribe_api_v1_push_subscribe_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushUnsubscribeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    vapid_public_key_api_v1_push_vapid_public_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     get_queue_api_v1_queue_get: {
         parameters: {
             query?: {
@@ -11474,7 +12412,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["QueueListResponse"];
                 };
             };
             /** @description Validation Error */
@@ -11509,7 +12447,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["QueueEntryResponse"];
                 };
             };
             /** @description Validation Error */
@@ -11542,7 +12480,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["QueueEntryResponse"];
                 };
             };
             /** @description Validation Error */
@@ -11610,7 +12548,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["QueueEntryResponse"];
                 };
             };
             /** @description Validation Error */
@@ -11639,7 +12577,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["QueuePositionResponse"];
                 };
             };
         };
@@ -11880,7 +12818,7 @@ export interface operations {
                 offset?: number;
                 /** @description Search query */
                 q: string;
-                /** @description Entity filter: patient|doctor|clinic|appointment|medicine|record */
+                /** @description Entity filter: patient|doctor|clinic|appointment|medicine|record|lab_result|prescription */
                 type?: string | null;
             };
             header?: never;
