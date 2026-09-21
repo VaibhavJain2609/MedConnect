@@ -56,7 +56,7 @@ export function HomeClient() {
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100 text-2xl">
               📋
             </div>
-            <h3 className="mb-2 font-semibold">Digital Records</h3>
+            <h2 className="mb-2 font-semibold">Digital Records</h2>
             <p className="text-sm text-gray-600">
               Doctors create structured medical records and prescriptions digitally.
             </p>
@@ -65,7 +65,7 @@ export function HomeClient() {
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-green-100 text-2xl">
               📱
             </div>
-            <h3 className="mb-2 font-semibold">Patient Timeline</h3>
+            <h2 className="mb-2 font-semibold">Patient Timeline</h2>
             <p className="text-sm text-gray-600">
               Patients view their complete health history in one chronological timeline.
             </p>
@@ -74,7 +74,7 @@ export function HomeClient() {
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-purple-100 text-2xl">
               🔒
             </div>
-            <h3 className="mb-2 font-semibold">FHIR R4 Ready</h3>
+            <h2 className="mb-2 font-semibold">FHIR R4 Ready</h2>
             <p className="text-sm text-gray-600">
               Records stored in international health data standard, ready for ABDM integration.
             </p>

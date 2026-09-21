@@ -88,4 +88,13 @@
     @apply bg-background text-foreground;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   }
+
+  /* WCAG AA: Tailwind preflight renders ::placeholder as gray-400 (#9CA3AF),
+     only ~2.8:1 on white. Bump placeholders to --muted-foreground
+     (~4.8:1 on white) so raw <input placeholder="..."> text stays readable.
+     Components using placeholder:text-muted-foreground are unaffected. */
+  ::placeholder {
+    color: hsl(var(--muted-foreground));
+    opacity: 1;
+  }
 }

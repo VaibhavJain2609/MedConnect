@@ -49,7 +49,7 @@ export function StatCard({
         )}
         {trend && (
           <div className="flex items-center gap-1 mt-2 text-xs">
-            <span className={cn(trend.direction === "up" ? "text-green-600" : "text-red-600")}>
+            <span className={cn(trend.direction === "up" ? "text-green-700" : "text-red-600")}>
               {trend.direction === "up" ? "↑" : "↓"} {trend.value}%
             </span>
             <span className="text-gray-500">{trend.label}</span>

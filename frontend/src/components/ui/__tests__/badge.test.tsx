@@ -28,7 +28,7 @@ describe('Badge', () => {
   it('applies Dreams EMR status variants', () => {
     render(<Badge variant="inProgress">Active</Badge>)
     const el = screen.getByText('Active')
-    expect(el.className).toContain('text-status-inProgress')
+    expect(el.className).toContain('text-purple-800')
   })
 
   it('merges a custom className over variant classes', () => {

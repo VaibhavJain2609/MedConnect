@@ -96,7 +96,7 @@ export const StatCard: React.FC<StatCardProps> = ({
               <span
                 className={cn(
                   "text-sm font-medium",
-                  trend >= 0 ? "text-status-completed" : "text-status-overdue"
+                  trend >= 0 ? "text-green-700" : "text-red-700"
                 )}
               >
                 {trend >= 0 ? "+" : ""}
