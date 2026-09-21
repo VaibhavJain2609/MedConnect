@@ -97,6 +97,8 @@ jobs:
             NEXT_PUBLIC_KEYCLOAK_URL=${{ vars.NEXT_PUBLIC_KEYCLOAK_URL }}
             NEXT_PUBLIC_KEYCLOAK_REALM=${{ vars.NEXT_PUBLIC_KEYCLOAK_REALM }}
             NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=${{ vars.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID }}
+            NEXT_PUBLIC_SENTRY_DSN=${{ vars.NEXT_PUBLIC_SENTRY_DSN }}
+            NEXT_PUBLIC_APP_ENV=${{ vars.NEXT_PUBLIC_APP_ENV }}
 
       - name: Build keycloak (local only — scan gate before push)
         uses: docker/build-push-action@v6 # pin: resolve tag to full commit SHA
@@ -163,6 +165,8 @@ jobs:
             NEXT_PUBLIC_KEYCLOAK_URL=${{ vars.NEXT_PUBLIC_KEYCLOAK_URL }}
             NEXT_PUBLIC_KEYCLOAK_REALM=${{ vars.NEXT_PUBLIC_KEYCLOAK_REALM }}
             NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=${{ vars.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID }}
+            NEXT_PUBLIC_SENTRY_DSN=${{ vars.NEXT_PUBLIC_SENTRY_DSN }}
+            NEXT_PUBLIC_APP_ENV=${{ vars.NEXT_PUBLIC_APP_ENV }}
 
       - name: Push keycloak (scan passed)
         uses: docker/build-push-action@v6 # pin: resolve tag to full commit SHA
