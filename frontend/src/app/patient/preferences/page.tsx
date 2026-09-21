@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { BellOff } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
@@ -136,6 +137,15 @@ function PreferenceRow({
 
 export default function PatientPreferencesPage() {
   const queryClient = useQueryClient();
+
+  // Mark the "Set notification preferences" onboarding-checklist item done.
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("pt-onboarding-prefs-visited", "1");
+    } catch {
+      // localStorage unavailable — non-fatal
+    }
+  }, []);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: PREFERENCES_QUERY_KEY,
