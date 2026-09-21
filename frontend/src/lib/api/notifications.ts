@@ -103,19 +103,38 @@ export async function deleteAllRead(): Promise<void> {
 }
 
 /**
+ * Notification preference keys.
+ * Both GET and PUT /notifications/preferences return the bare preferences map.
+ * sms_notifications / whatsapp_notifications default to false; all others default to true.
+ */
+export interface NotificationPreferences {
+  email_notifications: boolean;
+  push_notifications: boolean;
+  sms_notifications: boolean;
+  whatsapp_notifications: boolean;
+  appointment_reminders: boolean;
+  lab_results: boolean;
+  prescription_alerts: boolean;
+  system_alerts: boolean;
+}
+
+export type NotificationPreferencesUpdate = Partial<NotificationPreferences>;
+
+/**
  * Get notification preferences
  */
-export async function getNotificationPreferences(): Promise<Record<string, boolean>> {
+export async function getNotificationPreferences(): Promise<NotificationPreferences> {
   const response = await api.get("/api/v1/notifications/preferences");
   return response.data;
 }
 
 /**
  * Update notification preferences
+ * Only the keys sent are updated; unset keys keep their current value.
  */
 export async function updateNotificationPreferences(
-  preferences: Record<string, boolean>
-): Promise<Record<string, boolean>> {
+  preferences: NotificationPreferencesUpdate
+): Promise<NotificationPreferences> {
   const response = await api.put("/api/v1/notifications/preferences", preferences);
   return response.data;
 }
