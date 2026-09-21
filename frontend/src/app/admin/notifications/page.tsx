@@ -2,30 +2,62 @@
 
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, Megaphone, Send } from "lucide-react";
+import { Bell, Megaphone, Send, Users } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import {
-  BroadcastTargetRole,
+  BroadcastAudience,
+  BroadcastType,
   BroadcastsResponse,
+  broadcastNotification,
+  getBroadcastAudienceCount,
   listBroadcasts,
-  sendBroadcast,
-} from "@/lib/api/admin-broadcast";
+} from "@/lib/api/notifications";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
-const AUDIENCE_OPTIONS: { value: BroadcastTargetRole; label: string }[] = [
+const AUDIENCE_OPTIONS: { value: BroadcastAudience; label: string }[] = [
   { value: "all", label: "All users" },
-  { value: "patient", label: "Patients" },
-  { value: "doctor", label: "Doctors" },
-  { value: "admin", label: "Admins" },
+  { value: "patients", label: "Patients" },
+  { value: "doctors", label: "Doctors" },
+  { value: "admins", label: "Admins" },
 ];
+
+const AUDIENCE_LABEL: Record<string, string> = {
+  all: "All users",
+  patients: "Patients",
+  doctors: "Doctors",
+  admins: "Admins",
+  // legacy singular values from older broadcast rows
+  patient: "Patients",
+  doctor: "Doctors",
+  admin: "Admins",
+};
 
 const AUDIENCE_BADGE: Record<string, string> = {
   all: "inProgress",
+  patients: "completed",
+  doctors: "upcoming",
+  admins: "overdue",
   patient: "completed",
   doctor: "upcoming",
   admin: "overdue",
 };
+
+const TYPE_OPTIONS: { value: BroadcastType; label: string }[] = [
+  { value: "system", label: "System" },
+  { value: "info", label: "Info" },
+  { value: "warning", label: "Warning" },
+];
 
 function formatDateTime(isoString: string): string {
   const date = new Date(isoString);
@@ -39,21 +71,26 @@ export default function AdminNotificationsPage() {
   const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
-  const [targetRole, setTargetRole] = useState<BroadcastTargetRole>("all");
-  const [actionUrl, setActionUrl] = useState("");
+  const [audience, setAudience] = useState<BroadcastAudience>("all");
+  const [notifType, setNotifType] = useState<BroadcastType>("system");
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [sending, setSending] = useState(false);
-  const [page, setPage] = useState(1);
-  const limit = 10;
+
+  // Live recipient preview for the selected audience
+  const { data: audienceCount } = useQuery({
+    queryKey: ["admin-broadcast-count", audience],
+    queryFn: () => getBroadcastAudienceCount(audience),
+  });
 
   const { data, isLoading, error } = useQuery<BroadcastsResponse>({
-    queryKey: ["admin-broadcasts", page],
-    queryFn: () => listBroadcasts(page, limit),
+    queryKey: ["admin-broadcasts"],
+    queryFn: () => listBroadcasts(1, 10),
   });
 
   const broadcasts = data?.data ?? [];
-  const totalPages = data?.totalPages ?? 0;
+  const recipientCount = audienceCount?.count;
 
-  const handleSend = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !body.trim()) {
       toast({
@@ -63,35 +100,42 @@ export default function AdminNotificationsPage() {
       });
       return;
     }
+    setConfirmOpen(true);
+  };
+
+  const handleConfirmSend = async () => {
     setSending(true);
     try {
-      const result = await sendBroadcast({
+      const result = await broadcastNotification({
         title: title.trim(),
         body: body.trim(),
-        target_role: targetRole,
-        action_url: actionUrl.trim() || undefined,
+        audience,
+        type: notifType,
       });
       toast({
         title: "Broadcast sent",
-        description: `Delivered to ${result.recipient_count} user${
-          result.recipient_count === 1 ? "" : "s"
+        description: `Delivered to ${result.sent} user${
+          result.sent === 1 ? "" : "s"
         }.`,
       });
       setTitle("");
       setBody("");
-      setActionUrl("");
-      setTargetRole("all");
-      setPage(1);
+      setAudience("all");
+      setNotifType("system");
       queryClient.invalidateQueries({ queryKey: ["admin-broadcasts"] });
     } catch (err) {
       toast({
         title: "Broadcast failed",
         description:
-          (err as { userMessage?: string })?.userMessage || (err instanceof Error ? err.message : "Could not send the announcement."),
+          (err as { userMessage?: string })?.userMessage ||
+          (err instanceof Error
+            ? err.message
+            : "Could not send the announcement."),
         variant: "destructive",
       });
     } finally {
       setSending(false);
+      setConfirmOpen(false);
     }
   };
 
@@ -107,7 +151,9 @@ export default function AdminNotificationsPage() {
       <div className="flex items-center gap-3">
         <Bell className="h-7 w-7 text-dreams-blue" />
         <div>
-          <h1 className="text-3xl font-bold text-dreams-textPrimary">Notifications</h1>
+          <h1 className="text-3xl font-bold text-dreams-textPrimary">
+            Notifications
+          </h1>
           <p className="text-dreams-textSecondary mt-0.5">
             Send platform-wide announcements and review past broadcasts
           </p>
@@ -116,7 +162,7 @@ export default function AdminNotificationsPage() {
 
       {/* Compose form */}
       <form
-        onSubmit={handleSend}
+        onSubmit={handleSubmit}
         className="bg-white rounded-xl border border-dreams-border shadow-card p-6 space-y-4"
       >
         <div className="flex items-center gap-2">
@@ -124,6 +170,42 @@ export default function AdminNotificationsPage() {
           <h2 className="text-lg font-semibold text-dreams-textPrimary">
             New announcement
           </h2>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-dreams-textPrimary mb-2">
+            Audience
+          </label>
+          <div className="flex flex-wrap gap-3">
+            {AUDIENCE_OPTIONS.map((opt) => (
+              <label
+                key={opt.value}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm cursor-pointer transition-colors ${
+                  audience === opt.value
+                    ? "border-dreams-blue bg-dreams-blue/5 text-dreams-textPrimary font-medium"
+                    : "border-dreams-border bg-white text-dreams-textSecondary hover:bg-dreams-lightBg"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="audience"
+                  value={opt.value}
+                  checked={audience === opt.value}
+                  onChange={() => setAudience(opt.value)}
+                  className="accent-dreams-blue"
+                />
+                {opt.label}
+              </label>
+            ))}
+          </div>
+          <p className="flex items-center gap-1.5 text-xs text-dreams-textSecondary mt-2">
+            <Users className="h-3.5 w-3.5" />
+            {recipientCount === undefined
+              ? "Counting recipients…"
+              : `Will be sent to ${recipientCount} active user${
+                  recipientCount === 1 ? "" : "s"
+                }`}
+          </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -142,14 +224,14 @@ export default function AdminNotificationsPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-dreams-textPrimary mb-1">
-              Audience
+              Type
             </label>
             <select
-              value={targetRole}
-              onChange={(e) => setTargetRole(e.target.value as BroadcastTargetRole)}
+              value={notifType}
+              onChange={(e) => setNotifType(e.target.value as BroadcastType)}
               className="h-10 w-full px-3 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
             >
-              {AUDIENCE_OPTIONS.map((opt) => (
+              {TYPE_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>
@@ -172,23 +254,6 @@ export default function AdminNotificationsPage() {
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-dreams-textPrimary mb-1">
-            Action URL <span className="text-dreams-textSecondary font-normal">(optional)</span>
-          </label>
-          <input
-            type="text"
-            value={actionUrl}
-            onChange={(e) => setActionUrl(e.target.value)}
-            maxLength={512}
-            placeholder="/patient/appointments"
-            className="h-10 w-full px-3 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
-          />
-          <p className="text-xs text-dreams-textSecondary mt-1">
-            Recipients are taken to this link when they tap the notification.
-          </p>
-        </div>
-
         <div className="flex justify-end">
           <button
             type="submit"
@@ -200,6 +265,32 @@ export default function AdminNotificationsPage() {
           </button>
         </div>
       </form>
+
+      {/* Confirm dialog */}
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Send this announcement?</AlertDialogTitle>
+            <AlertDialogDescription>
+              &ldquo;{title.trim()}&rdquo; will be delivered to{" "}
+              <strong>
+                {recipientCount ?? "…"} {AUDIENCE_LABEL[audience] ?? audience}
+              </strong>{" "}
+              as a {notifType} notification. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={sending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmSend}
+              disabled={sending}
+              className="bg-dreams-blue text-white hover:opacity-90"
+            >
+              {sending ? "Sending..." : "Send"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Recent broadcasts */}
       <div className="bg-white rounded-xl border border-dreams-border overflow-hidden shadow-card">
@@ -248,74 +339,52 @@ export default function AdminNotificationsPage() {
                   </td>
                 </tr>
               ) : (
-                broadcasts.map((b) => (
-                  <tr key={b.id} className="hover:bg-dreams-lightBg transition-colors">
-                    <td className="px-5 py-3 text-dreams-textSecondary whitespace-nowrap">
-                      {formatDateTime(b.sent_at)}
-                    </td>
-                    <td className="px-5 py-3 text-dreams-textPrimary max-w-xs">
-                      <p className="font-medium truncate" title={b.title ?? ""}>
-                        {b.title}
-                      </p>
-                      {b.body && (
-                        <p
-                          className="text-xs text-dreams-textSecondary truncate"
-                          title={b.body}
-                        >
-                          {b.body}
+                broadcasts.map((b) => {
+                  const audienceKey = b.audience ?? b.target_role ?? "all";
+                  return (
+                    <tr
+                      key={b.id}
+                      className="hover:bg-dreams-lightBg transition-colors"
+                    >
+                      <td className="px-5 py-3 text-dreams-textSecondary whitespace-nowrap">
+                        {formatDateTime(b.sent_at)}
+                      </td>
+                      <td className="px-5 py-3 text-dreams-textPrimary max-w-xs">
+                        <p className="font-medium truncate" title={b.title ?? ""}>
+                          {b.title}
                         </p>
-                      )}
-                    </td>
-                    <td className="px-5 py-3">
-                      <Badge
-                        variant={
-                          (AUDIENCE_BADGE[b.target_role ?? "all"] as any) ??
-                          "default"
-                        }
-                      >
-                        {b.target_role ?? "all"}
-                      </Badge>
-                    </td>
-                    <td className="px-5 py-3 text-dreams-textPrimary">
-                      {b.recipient_count ?? 0}
-                    </td>
-                    <td className="px-5 py-3 text-dreams-textSecondary">
-                      {b.sent_by_name ?? (
-                        <span className="italic">System</span>
-                      )}
-                    </td>
-                  </tr>
-                ))
+                        {b.body && (
+                          <p
+                            className="text-xs text-dreams-textSecondary truncate"
+                            title={b.body}
+                          >
+                            {b.body}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-5 py-3">
+                        <Badge
+                          variant={
+                            (AUDIENCE_BADGE[audienceKey] as any) ?? "default"
+                          }
+                        >
+                          {AUDIENCE_LABEL[audienceKey] ?? audienceKey}
+                        </Badge>
+                      </td>
+                      <td className="px-5 py-3 text-dreams-textPrimary">
+                        {b.recipient_count ?? 0}
+                      </td>
+                      <td className="px-5 py-3 text-dreams-textSecondary">
+                        {b.sent_by_name ?? <span className="italic">System</span>}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         )}
       </div>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-dreams-textSecondary">
-            Page {page} of {totalPages} · {data?.total} total
-          </p>
-          <div className="flex gap-2">
-            <button
-              disabled={page === 1}
-              onClick={() => setPage((p) => p - 1)}
-              className="px-4 py-2 text-sm rounded-lg border border-dreams-border bg-white disabled:opacity-40 hover:bg-dreams-lightBg transition-colors"
-            >
-              Previous
-            </button>
-            <button
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-              className="px-4 py-2 text-sm rounded-lg border border-dreams-border bg-white disabled:opacity-40 hover:bg-dreams-lightBg transition-colors"
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

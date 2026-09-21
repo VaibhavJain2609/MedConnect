@@ -11,9 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import require_admin
 from app.models.audit import AuditLog
-from app.models.notification import NotificationType
 from app.models.platform_setting import PlatformSetting
 from app.models.user import User
+from app.services.audit_service import log_change
 from app.services.notification_service import create_notifications_bulk
 
 router = APIRouter(
@@ -30,11 +30,47 @@ router = APIRouter(
 # entry so past broadcasts can be listed without a dedicated table.
 BROADCAST_AUDIT_KIND = "broadcast"
 
+# Audience (plural, public API) -> User.role value. "all" maps to no filter.
+AUDIENCE_TO_ROLE = {
+    "patients": "patient",
+    "doctors": "doctor",
+    "admins": "admin",
+}
+# Legacy singular role values accepted on `audience`/`target_role`.
+ROLE_TO_AUDIENCE = {
+    "all": "all",
+    "patient": "patients",
+    "doctor": "doctors",
+    "admin": "admins",
+}
+
+BroadcastAudience = Literal[
+    "all", "patients", "doctors", "admins", "patient", "doctor", "admin"
+]
+
+
+def _resolve_audience(payload: "BroadcastRequest") -> str:
+    """Normalize audience to the plural public form (all|patients|doctors|admins).
+
+    `target_role` is kept as a legacy alias for older callers.
+    """
+    raw = payload.audience or payload.target_role or "all"
+    return ROLE_TO_AUDIENCE.get(raw, raw)
+
+
+def _audience_user_filter(audience: str):
+    """Return the extra User WHERE clause for an audience, or None for 'all'."""
+    role = AUDIENCE_TO_ROLE.get(audience)
+    return User.role == role if role else None
+
 
 class BroadcastRequest(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     body: str = Field(min_length=1, max_length=5000)
-    target_role: Literal["all", "patient", "doctor", "admin"] = "all"
+    audience: Optional[BroadcastAudience] = None
+    # Legacy alias for `audience` (singular role names).
+    target_role: Optional[Literal["all", "patient", "doctor", "admin"]] = None
+    type: Literal["system", "info", "warning"] = "system"
     action_url: Optional[str] = Field(default=None, max_length=512)
 
 
@@ -42,60 +78,89 @@ class BroadcastRequest(BaseModel):
 async def send_broadcast(
     payload: BroadcastRequest,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
 ):
     """Send an announcement notification to all matching active users."""
+    audience = _resolve_audience(payload)
+
     stmt = select(User.id).where(
         User.deleted_at.is_(None),
         User.is_active.is_(True),
     )
-    if payload.target_role != "all":
-        stmt = stmt.where(User.role == payload.target_role)
+    role_filter = _audience_user_filter(audience)
+    if role_filter is not None:
+        stmt = stmt.where(role_filter)
     user_ids = (await db.execute(stmt)).scalars().all()
 
     broadcast_id = uuid.uuid4()
     meta = {
+        "kind": BROADCAST_AUDIT_KIND,
         "broadcast": True,
         "broadcast_id": str(broadcast_id),
-        "target_role": payload.target_role,
+        "audience": audience,
     }
-    recipient_count = await create_notifications_bulk(
+    sent = await create_notifications_bulk(
         db,
         user_ids,
-        NotificationType.SYSTEM.value,
+        payload.type,
         payload.title,
         payload.body,
         action_url=payload.action_url,
         metadata=meta,
+        chunk_size=500,
     )
 
     # Persist the broadcast as an audit_logs entry — the broadcasts list is
     # derived from these rows (new_values carries the full payload).
-    db.add(
-        AuditLog(
-            id=uuid.uuid4(),
-            table_name="notifications",
-            record_id=broadcast_id,
-            action="INSERT",
-            changed_by=admin.id,
-            new_values={
-                "kind": BROADCAST_AUDIT_KIND,
-                "broadcast_id": str(broadcast_id),
-                "title": payload.title,
-                "body": payload.body,
-                "target_role": payload.target_role,
-                "action_url": payload.action_url,
-                "recipient_count": recipient_count,
-            },
-        )
+    # "BROADCAST" is 9 chars, within AuditLog.action's String(10) limit.
+    await log_change(
+        db,
+        "notifications",
+        broadcast_id,
+        "BROADCAST",
+        None,
+        {
+            "kind": BROADCAST_AUDIT_KIND,
+            "broadcast_id": str(broadcast_id),
+            "title": payload.title,
+            "body": payload.body,
+            "audience": audience,
+            "type": payload.type,
+            "action_url": payload.action_url,
+            "recipient_count": sent,
+        },
     )
 
     return {
+        "sent": sent,
+        "audience": audience,
         "broadcast_id": str(broadcast_id),
         "title": payload.title,
-        "target_role": payload.target_role,
-        "recipient_count": recipient_count,
+        "target_role": AUDIENCE_TO_ROLE.get(audience, "all"),
+        "recipient_count": sent,
+        "type": payload.type,
     }
+
+
+@router.get("/notifications/broadcast/count")
+async def broadcast_audience_count(
+    audience: BroadcastAudience = Query("all"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return how many active, non-deleted users an audience targets."""
+    normalized = ROLE_TO_AUDIENCE.get(audience, audience)
+    stmt = (
+        select(func.count())
+        .select_from(User)
+        .where(
+            User.deleted_at.is_(None),
+            User.is_active.is_(True),
+        )
+    )
+    role_filter = _audience_user_filter(normalized)
+    if role_filter is not None:
+        stmt = stmt.where(role_filter)
+    count = await db.scalar(stmt)
+    return {"audience": normalized, "count": count or 0}
 
 
 @router.get("/notifications/broadcasts")
@@ -110,7 +175,7 @@ async def list_broadcasts(
         .outerjoin(User, AuditLog.changed_by == User.id)
         .where(
             AuditLog.table_name == "notifications",
-            AuditLog.action == "INSERT",
+            AuditLog.action.in_(["INSERT", "BROADCAST"]),
             AuditLog.new_values["kind"].astext == BROADCAST_AUDIT_KIND,
         )
     )
@@ -129,7 +194,13 @@ async def list_broadcasts(
                 "broadcast_id": values.get("broadcast_id") or str(log.record_id),
                 "title": values.get("title"),
                 "body": values.get("body"),
-                "target_role": values.get("target_role"),
+                "target_role": values.get("target_role")
+                or AUDIENCE_TO_ROLE.get(values.get("audience") or "", "all"),
+                "audience": values.get("audience")
+                or ROLE_TO_AUDIENCE.get(
+                    values.get("target_role") or "all", "all"
+                ),
+                "type": values.get("type", "system"),
                 "action_url": values.get("action_url"),
                 "recipient_count": values.get("recipient_count"),
                 "sent_by": str(log.changed_by) if log.changed_by else None,
