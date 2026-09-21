@@ -95,7 +95,18 @@
   - pgbouncer (transaction mode, SCRAM, statement_cache_size=0 flag) + UVICORN_WORKERS env
   - Patient onboarding checklist (5 real-data items, dismissible)
   - Loki+Promtail+Grafana under `observability` compose profile + docs/logging.md + RUNBOOK §8
-- **Round-7 queue:** structured allergy→salt mapping (fuzzy matching caveat), response_model= coverage for OpenAPI gen, Web Push, i18n, load testing, OCR/AI ingest, barcode source, coverage→80%, Keycloak-side erasure (needs admin creds)
+- **Round-7 — ALL LANDED (387 backend tests green, 29 frontend tests, 59-page build):**
+  - Consent management UI (revoke confirm + restore, status chips)
+  - i18n scaffold (next-intl, EN/HI, cookie-switched, sidebar+timeline proof)
+  - e2e: 3 new specs (queue/patient-journey/admin) + per-role auth setups
+  - Worker tests (36) + 3 REAL BUGS FIXED: expiry-sweep rollback crash, reminder partial-enqueue loss, doctor-notif retry duplicates
+  - Structured allergy→salt endpoint + Rx page wired (server match + local fallback)
+  - Locust loadtest scaffolding (weighted traffic, smoke/ramp/spike modes)
+  - Billing receipt/invoice PDFs + patient download
+  - Web Push end-to-end (subscriptions, VAPID, provider, prefs, SW handler, kill-switch)
+  - response_model= on 21 hot endpoints (OpenAPI→TS now emits real types)
+  - jest-axe a11y suite (29 tests) + fixes: labels, dialog roles, aria-labels
+- **Round-8 queue:** deps vulns (next 14.2.21 critical), OCR/AI ingest, barcode source, coverage→80%, Keycloak-side erasure (needs admin creds), record-version diff UI, contrast audit (real-browser), landmark e2e check, ABDM (BLOCKED pending approval)
 - **BLOCKED — ABDM/ABHA: awaiting regulatory approval (user-confirmed)** — do not implement: ABHA creation/linking, NRCeS-conformant FHIR, HIP module (tickets 107–116)
 - **Blocked/external:** SMS/WhatsApp live provider accounts (code adapters anyway), OCR/AI features, load testing env, i18n assets, barcode data source, push VAPID/service
 
