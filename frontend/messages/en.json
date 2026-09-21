@@ -1,0 +1,57 @@
+{
+  "nav": {
+    "sections": {
+      "main": "Main",
+      "health": "Health",
+      "clinics": "Clinics",
+      "account": "Account"
+    },
+    "healthTimeline": "Health Timeline",
+    "appointments": "Appointments",
+    "notifications": "Notifications",
+    "myRecords": "My Records",
+    "labResults": "Lab Results",
+    "medications": "Medications",
+    "vitals": "Vitals",
+    "medicalHistory": "Medical History",
+    "myClinics": "My Clinics",
+    "queueStatus": "Queue Status",
+    "joinAClinic": "Join a Clinic",
+    "billing": "Billing",
+    "preferences": "Preferences",
+    "myProfile": "My Profile",
+    "logout": "Logout",
+    "collapseSidebar": "Collapse sidebar",
+    "expandSidebar": "Expand sidebar",
+    "closeMenu": "Close menu"
+  },
+  "timeline": {
+    "breadcrumb": "Health Timeline",
+    "title": "Health Timeline",
+    "subtitle": "Your complete health record history",
+    "uploadRecord": "Upload Record",
+    "searchPlaceholder": "Search records...",
+    "filters": {
+      "allTypes": "All Types",
+      "prescription": "Prescriptions",
+      "opd_note": "OPD Notes",
+      "lab_report": "Lab Reports",
+      "diagnostic_report": "Diagnostic Reports",
+      "discharge_summary": "Discharge Summaries",
+      "imaging": "Imaging",
+      "immunization": "Immunization"
+    },
+    "emptyTitle": "No records found.",
+    "emptyHint": "Your health records will appear here when a doctor creates them for you, or when you upload one.",
+    "selfUploaded": "Self-uploaded",
+    "amended": "Amended",
+    "documentAttached": "Document attached",
+    "byDoctor": "by {name}",
+    "loadMore": "Load more",
+    "loading": "Loading..."
+  },
+  "languageSwitcher": {
+    "label": "Language",
+    "switchTo": "Switch to {language}"
+  }
+}

@@ -1,3 +1,9 @@
+// next-intl plugin — links src/i18n/request.ts (getRequestConfig) to the
+// server/client i18n plumbing. No [locale] routing: locale comes from the
+// NEXT_LOCALE cookie. See docs/i18n.md.
+const createNextIntlPlugin = require("next-intl/plugin");
+const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
+
 // Normalize an env URL (e.g. NEXT_PUBLIC_API_URL) to its origin so it can be
 // used as a CSP source. Returns '' for unset/invalid values so callers can
 // filter it out of the directive.
@@ -86,4 +92,4 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+module.exports = withNextIntl(nextConfig);
