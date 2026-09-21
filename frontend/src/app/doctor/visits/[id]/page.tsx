@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Trash2 } from "lucide-react";
+import { Download, Pencil, Trash2 } from "lucide-react";
 import {
   deleteEncounter,
   getEncounter,
   updateEncounter,
 } from "@/lib/api/encounters";
+import { downloadFile } from "@/lib/download";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
 
@@ -44,6 +45,7 @@ export default function EncounterDetailPage() {
   const [assessment, setAssessment] = useState("");
   const [plan, setPlan] = useState("");
   const [error, setError] = useState("");
+  const [downloading, setDownloading] = useState(false);
 
   const { data: enc, isLoading, error: loadError } = useQuery({
     queryKey: ["encounter", id],
@@ -90,6 +92,19 @@ export default function EncounterDetailPage() {
       </div>
     );
   }
+
+  const handleDownloadSummary = async () => {
+    if (downloading) return;
+    setDownloading(true);
+    setError("");
+    try {
+      await downloadFile(`/api/v1/encounters/${id}/summary-pdf?download=true`);
+    } catch {
+      setError("Failed to download the visit summary. Please try again.");
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const startEdit = () => {
     setSubjective(enc.subjective ?? "");
@@ -139,6 +154,14 @@ export default function EncounterDetailPage() {
 
         {!editing && (
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleDownloadSummary}
+              disabled={downloading}
+              className="flex items-center gap-2 px-4 py-2 border border-dreams-border text-sm rounded-lg hover:bg-dreams-lightBg disabled:opacity-40 transition-colors"
+            >
+              <Download className="h-4 w-4" />
+              {downloading ? "Downloading..." : "Download Summary"}
+            </button>
             <button
               onClick={startEdit}
               className="flex items-center gap-2 px-4 py-2 border border-dreams-border text-sm rounded-lg hover:bg-dreams-lightBg transition-colors"
