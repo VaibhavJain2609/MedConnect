@@ -425,6 +425,10 @@ export default function NewPrescriptionPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
 
+  // Safety-override flow: 409 SAFETY_OVERRIDE_REQUIRED → reason + resubmit
+  const [overrideAlerts, setOverrideAlerts] = useState<any[] | null>(null);
+  const [overrideReason, setOverrideReason] = useState("");
+
   // Patient safety info (allergies / chronic conditions from profile)
   const [patientAllergies, setPatientAllergies] = useState<string[]>([]);
   const [patientChronic, setPatientChronic] = useState<string[]>([]);
@@ -781,6 +785,66 @@ export default function NewPrescriptionPage() {
       setSuccess(true);
       setTimeout(() => router.push("/doctor/prescriptions"), 1500);
     } catch (err: any) {
+      const detail = err.response?.data?.detail;
+      if (
+        err.response?.status === 409 &&
+        detail?.error?.code === "SAFETY_OVERRIDE_REQUIRED"
+      ) {
+        setOverrideAlerts(detail.error.alerts || []);
+        setError(
+          "Major safety alert: enter a clinical justification to proceed"
+        );
+      } else {
+        const errorMsg =
+          detail?.error?.message || detail || "Failed to create prescription";
+        setError(typeof errorMsg === "string" ? errorMsg : JSON.stringify(errorMsg));
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOverrideSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!overrideReason.trim()) return;
+    setError("");
+    setLoading(true);
+    const medicinesFormatted = medicines
+      .filter((m) => m.brand_name)
+      .map((m) => ({
+        brand_name: m.brand_name,
+        brand_id: m.brand_id || undefined,
+        salt_id: m.salt_id || undefined,
+        dose: m.dose,
+        frequency: m.frequency,
+        duration: m.duration,
+        route: m.route,
+        instructions: m.instructions || undefined,
+      }));
+    try {
+      await api.post(
+        "/api/v1/doctors/prescriptions",
+        {
+          patient_id: selectedPatient?.id,
+          medicines: medicinesFormatted,
+          diagnosis: diagnosis || undefined,
+          notes: notes || undefined,
+          valid_until: validUntil || undefined,
+          clinic_id: selectedClinicId || undefined,
+          branch_id: selectedBranchId || undefined,
+          appointment_id: appointmentId || undefined,
+          safety_override_reason: overrideReason.trim(),
+        },
+        selectedClinicId ? { headers: { "X-Clinic-Id": selectedClinicId } } : undefined
+      );
+      try {
+        localStorage.removeItem(DRAFT_STORAGE_KEY);
+      } catch {
+        // best-effort
+      }
+      setSuccess(true);
+      setTimeout(() => router.push("/doctor/prescriptions"), 1500);
+    } catch (err: any) {
       const errorMsg =
         err.response?.data?.detail?.error?.message ||
         err.response?.data?.detail ||
@@ -915,6 +979,54 @@ export default function NewPrescriptionPage() {
           {error && (
             <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
               {error}
+            </div>
+          )}
+
+          {overrideAlerts && (
+            <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-4">
+              <p className="text-sm font-semibold text-amber-900 mb-2">
+                Major safety alerts detected
+              </p>
+              <ul className="mb-3 space-y-1 text-sm text-amber-800 list-disc pl-5">
+                {overrideAlerts.map((a: any, i: number) => (
+                  <li key={i}>
+                    {typeof a === "string" ? a : a.description || a.message || a.drug_pair || JSON.stringify(a)}
+                    {(a?.severity || a?.level) && (
+                      <span className="ml-1 text-xs uppercase font-medium">
+                        [{a.severity || a.level}]
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <label htmlFor="override-reason" className="mb-1 block text-sm font-medium text-amber-900">
+                Clinical justification *
+              </label>
+              <textarea
+                id="override-reason"
+                value={overrideReason}
+                onChange={(e) => setOverrideReason(e.target.value)}
+                rows={2}
+                className="mb-2 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+                placeholder="Reason for prescribing despite the alert"
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleOverrideSubmit}
+                  disabled={loading || !overrideReason.trim()}
+                  className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+                >
+                  {loading ? "Saving…" : "Save with override"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setOverrideAlerts(null); setOverrideReason(""); setError(""); }}
+                  className="rounded-lg border border-amber-300 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           )}
 

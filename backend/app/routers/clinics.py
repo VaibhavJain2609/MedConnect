@@ -20,6 +20,7 @@ from app.database import get_db
 from app.dependencies import get_current_doctor, get_current_user
 from app.models.clinic import ClinicMembership
 from app.models.doctor import Doctor
+from app.models.patient_link import PatientClinicLink
 from app.models.user import User
 from app.schemas.clinic import (
     ClinicBranchCreate,
@@ -172,10 +173,51 @@ async def list_clinic_doctors(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Active clinician members — used by receptionists booking guest appointments."""
-    await _require_membership(db, user, clinic_id)
-    cid = uuid.UUID(clinic_id)
-    res = await db.execute(
+    """Clinicians at a clinic.
+
+    Clinic members (any role incl. receptionist) get the staff list — all
+    active doctor memberships, used by front-desk booking. Patients get the
+    patient-facing list — verified doctors only, gated on an approved
+    PatientClinicLink. Neither → 403.
+    """
+    try:
+        cid = uuid.UUID(clinic_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"error": {"code": "INVALID_ID", "message": "Invalid clinic ID format"}},
+        )
+
+    membership = (
+        await db.execute(
+            select(ClinicMembership).where(
+                ClinicMembership.clinic_id == cid,
+                ClinicMembership.user_id == user.id,
+                ClinicMembership.is_active.is_(True),
+                ClinicMembership.deleted_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+    is_member = membership is not None
+
+    if not is_member:
+        link = (
+            await db.execute(
+                select(PatientClinicLink).where(
+                    PatientClinicLink.patient_id == user.id,
+                    PatientClinicLink.clinic_id == cid,
+                    PatientClinicLink.consent_status == "approved",
+                    PatientClinicLink.deleted_at.is_(None),
+                )
+            )
+        ).scalar_one_or_none()
+        if link is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "FORBIDDEN", "message": "Access denied"}},
+            )
+
+    stmt = (
         select(Doctor.id, User.full_name, Doctor.specialization)
         .join(User, Doctor.user_id == User.id)
         .join(
@@ -193,6 +235,10 @@ async def list_clinic_doctors(
         )
         .order_by(User.full_name.asc())
     )
+    if not is_member:
+        stmt = stmt.where(Doctor.verified.is_(True))
+
+    res = await db.execute(stmt)
     return {
         "data": [
             {"id": str(did), "full_name": name, "specialization": spec}

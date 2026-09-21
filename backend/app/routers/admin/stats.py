@@ -632,58 +632,6 @@ async def get_appointment_departments(
     return [row[0] for row in result.all()]
 
 
-@router.get("/visits")
-async def get_admin_visits(
-    page: int = Query(1, ge=1),
-    limit: int = Query(12, ge=1, le=100),
-    search: Optional[str] = Query(None),
-    status: Optional[str] = Query(None),
-    department: Optional[str] = Query(None),
-    date: Optional[str] = Query(None),
-    admin: User = Depends(require_admin),
-    db: AsyncSession = Depends(get_db),
-):
-    """Get paginated list of visits (prescriptions with patient info)."""
-    query = (
-        select(Prescription, User)
-        .join(User, Prescription.patient_id == User.id)
-        .where(Prescription.deleted_at.is_(None), User.deleted_at.is_(None))
-    )
-    if search:
-        query = query.where(User.full_name.ilike(f"%{search}%"))
-
-    total = await db.scalar(select(func.count()).select_from(query.subquery())) or 0
-    result = await db.execute(
-        query.order_by(Prescription.created_at.desc())
-        .offset((page - 1) * limit)
-        .limit(limit)
-    )
-    rows = result.all()
-
-    return {
-        "visits": [
-            {
-                "id": str(rx.id),
-                "visit_id": f"VIS-{str(rx.id)[:8].upper()}",
-                "patient_name": user.full_name,
-                "patient_photo": None,
-                "doctor_name": None,
-                "visit_date": rx.created_at.strftime("%Y-%m-%d"),
-                "visit_time": rx.created_at.strftime("%I:%M %p"),
-                "status": "completed",
-                "diagnosis": rx.diagnosis,
-                "notes": rx.notes,
-                "created_at": rx.created_at.isoformat(),
-            }
-            for rx, user in rows
-        ],
-        "total": total,
-        "page": page,
-        "limit": limit,
-        "totalPages": math.ceil(total / limit) if total else 0,
-    }
-
-
 @router.get("/visits/departments")
 async def get_visit_departments(
     admin: User = Depends(require_admin),

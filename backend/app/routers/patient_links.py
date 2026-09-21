@@ -355,69 +355,6 @@ async def update_consent(
     return {"consent_status": link.consent_status}
 
 
-# ── Patient: list doctors at a linked clinic (for booking) ────────────────
-
-@router.get("/clinics/{clinic_id}/doctors")
-async def list_clinic_doctors(
-    clinic_id: str,
-    user: User = Depends(require_patient),
-    db: AsyncSession = Depends(get_db),
-):
-    """Return verified doctors who are members of a clinic the patient is linked to."""
-    try:
-        cid = uuid.UUID(clinic_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"error": {"code": "INVALID_ID", "message": "Invalid clinic ID format"}},
-        )
-
-    # Ensure patient has an approved link to this clinic
-    link_result = await db.execute(
-        select(PatientClinicLink).where(
-            PatientClinicLink.patient_id == user.id,
-            PatientClinicLink.clinic_id == cid,
-            PatientClinicLink.consent_status == "approved",
-            PatientClinicLink.deleted_at.is_(None),
-        )
-    )
-    if not link_result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"error": {"code": "NOT_LINKED", "message": "No approved link to this clinic"}},
-        )
-
-    stmt = (
-        select(Doctor, User)
-        .join(User, User.id == Doctor.user_id)
-        .join(ClinicMembership, ClinicMembership.user_id == Doctor.user_id)
-        .where(
-            ClinicMembership.clinic_id == cid,
-            ClinicMembership.is_active.is_(True),
-            ClinicMembership.deleted_at.is_(None),
-            Doctor.deleted_at.is_(None),
-            Doctor.verified == True,
-            User.deleted_at.is_(None),
-        )
-        .order_by(User.full_name)
-    )
-    result = await db.execute(stmt)
-    rows = result.all()
-
-    return {
-        "data": [
-            {
-                "id": str(doctor.id),
-                "full_name": doc_user.full_name,
-                "specialization": doctor.specialization,
-                "facility_name": doctor.facility_name,
-                "facility_city": doctor.facility_city,
-            }
-            for doctor, doc_user in rows
-        ]
-    }
-
-
 # ── Clinic member: list linked patients ────────────────────────────────────
 
 @router.get("/clinics/{clinic_id}/patients")
