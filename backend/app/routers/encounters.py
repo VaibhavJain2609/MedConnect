@@ -274,6 +274,7 @@ async def create_encounter(
         table_name="encounters",
         record_id=enc.id,
         action="INSERT",
+        old_values=None,
         new_values={"patient_id": str(enc.patient_id), "clinic_id": str(enc.clinic_id) if enc.clinic_id else None},
     )
 
@@ -468,6 +469,7 @@ async def update_encounter(
             table_name="encounters",
             record_id=enc.id,
             action="UPDATE",
+            old_values=None,
             new_values={"fields_changed": sorted(update_fields.keys())},
         )
 

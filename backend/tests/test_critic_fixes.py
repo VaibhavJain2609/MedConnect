@@ -299,3 +299,55 @@ class TestChannelPrefs:
 
         got = await patient_client.get("/api/v1/notifications/preferences")
         assert got.json()["sms_notifications"] is True
+
+
+# ---------------------------------------------------------------------------
+# Maintenance-mode middleware (platform settings actually enforced)
+# ---------------------------------------------------------------------------
+
+
+class TestMaintenanceMode:
+    async def test_503_when_enabled_and_admin_exempt(self, client, monkeypatch):
+        from app.main import MaintenanceModeMiddleware
+
+        async def _on(self):
+            return True
+
+        monkeypatch.setattr(MaintenanceModeMiddleware, "_maintenance_on", _on)
+        res = await client.get("/api/v1/notifications")
+        assert res.status_code == 503
+        assert res.json()["error"]["code"] == "MAINTENANCE_MODE"
+
+        # admin namespace + auth are exempt so admins can still work
+        res2 = await client.get("/api/v1/auth/me")
+        assert res2.status_code != 503
+
+    async def test_passes_when_disabled(self, client, monkeypatch):
+        from app.main import MaintenanceModeMiddleware
+
+        async def _off(self):
+            return False
+
+        monkeypatch.setattr(MaintenanceModeMiddleware, "_maintenance_on", _off)
+        # Not 503'd by the gate — 401/200/etc. depending on auth state
+        res = await client.get("/api/v1/notifications")
+        assert res.status_code != 503
+
+
+class TestPlatformSettingsService:
+    async def test_get_setting_reads_row(self, db: AsyncSession):
+        import uuid as _uuid
+        from app.models.platform_setting import PlatformSetting
+        from app.services import platform_settings
+
+        db.add(
+            PlatformSetting(
+                id=_uuid.uuid4(), key="maintenance_mode",
+                value={"enabled": True},
+            )
+        )
+        await db.commit()
+        assert await platform_settings.get_setting(db, "maintenance_mode") == {
+            "enabled": True
+        }
+        assert await platform_settings.get_setting(db, "nonexistent") is None
