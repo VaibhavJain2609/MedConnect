@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "@/components/layout/providers";
 import { PWARegister } from "@/components/pwa-register";
+import { SentryInit } from "@/components/sentry-init";
 
 export const metadata: Metadata = {
   title: "MedConnect India",
@@ -33,6 +34,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen bg-gray-50 text-gray-900 antialiased">
         <PWARegister />
+        <SentryInit />
         <Providers>{children}</Providers>
       </body>
     </html>

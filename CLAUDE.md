@@ -350,6 +350,8 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 NEXT_PUBLIC_KEYCLOAK_URL=http://localhost:8080
 NEXT_PUBLIC_KEYCLOAK_REALM=medconnect
 NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=medconnect-frontend
+NEXT_PUBLIC_SENTRY_DSN=   # optional — all Sentry code is a no-op when unset
+NEXT_PUBLIC_APP_ENV=development   # environment tag sent to Sentry
 ```
 
 ## graphify

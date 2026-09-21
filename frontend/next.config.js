@@ -14,6 +14,17 @@ function cspOrigin(url) {
 const nextConfig = {
   output: "standalone",
   poweredByHeader: false,
+  experimental: {
+    // Loads src/instrumentation.ts (Sentry server/edge init). Required on
+    // Next 14 — the hook is stable without the flag on Next 15+.
+    // NOTE: we intentionally do NOT wrap this config in Sentry's
+    // withSentryConfig — its webpack plugin exists mainly for sourcemap
+    // upload (needs SENTRY_AUTH_TOKEN, which CI doesn't have) and it also
+    // auto-instruments route handlers/server functions. Manual init via
+    // instrumentation.ts + the sentry.*.config.ts files is the less
+    // fragile path for this codebase.
+    instrumentationHook: true,
+  },
   async rewrites() {
     // k8s exposes the backend service on port 80 — allow override via env
     const apiInternalUrl = process.env.API_INTERNAL_URL || 'http://backend:8000';
@@ -38,6 +49,9 @@ const nextConfig = {
       "'self'",
       cspOrigin(process.env.NEXT_PUBLIC_API_URL),
       cspOrigin(process.env.NEXT_PUBLIC_KEYCLOAK_URL),
+      // Sentry ingest origin (derived from the DSN's host) so the browser
+      // SDK can POST error envelopes — silently dropped by CSP otherwise.
+      cspOrigin(process.env.NEXT_PUBLIC_SENTRY_DSN),
       // Next.js HMR websockets — dev only; bare ws:/wss: schemes in prod CSP
       // would let injected scripts exfiltrate over arbitrary websockets.
       ...(process.env.NODE_ENV !== 'production' ? ['ws:', 'wss:'] : []),

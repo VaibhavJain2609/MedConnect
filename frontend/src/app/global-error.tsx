@@ -11,6 +11,14 @@ export default function GlobalError({
 }) {
   useEffect(() => {
     console.error("Global error:", error);
+    // Next convention: global-error.tsx catches root-layout failures and is
+    // the last-resort Sentry capture point. Dynamic import keeps this a
+    // no-op when NEXT_PUBLIC_SENTRY_DSN is unset.
+    if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
+      import("@sentry/nextjs")
+        .then((Sentry) => Sentry.captureException(error))
+        .catch(() => {});
+    }
   }, [error]);
 
   return (
