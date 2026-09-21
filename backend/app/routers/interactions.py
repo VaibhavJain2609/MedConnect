@@ -1,13 +1,17 @@
 """Drug interaction API endpoints for MD-18."""
 
+from typing import Literal
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
-from app.database import get_medicine_db
+from app.database import get_db, get_medicine_db
 from app.dependencies import get_current_user, require_admin
+from app.models.doctor import Doctor
 from app.models.user import User
+from app.services import access_service, allergy_service
 from app.services.interaction_service import InteractionService
 
 
@@ -29,6 +33,26 @@ class InteractionResponse(BaseModel):
 class CheckInteractionsRequest(BaseModel):
     """Request model for checking interactions between multiple salts."""
     salt_ids: list[UUID]  # List of salt UUIDs
+
+
+class CheckAllergiesRequest(BaseModel):
+    """Request model for checking a patient's allergies against salts."""
+    patient_id: UUID
+    salt_ids: list[UUID]  # List of salt UUIDs (e.g. resolved from selected brands)
+
+
+class AllergyConflict(BaseModel):
+    """One allergy↔salt conflict."""
+    salt_id: str
+    salt_name: str
+    allergy: str
+    match: Literal["exact", "partial"]
+
+
+class CheckAllergiesResponse(BaseModel):
+    """Structured allergy check result."""
+    conflicts: list[AllergyConflict]
+    checked_allergies: list[str]  # patient allergy terms that produced NO match
 
 
 class CreateInteractionRequest(BaseModel):
@@ -58,6 +82,74 @@ async def check_interactions(
     """
     interactions = await InteractionService.check_interactions(db, request.salt_ids)
     return interactions
+
+
+@router.post("/check-allergies", response_model=CheckAllergiesResponse)
+async def check_allergies(
+    request: CheckAllergiesRequest,
+    db: AsyncSession = Depends(get_db),
+    medicine_db: AsyncSession = Depends(get_medicine_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    Check a patient's recorded allergies against a set of catalog salts.
+
+    Replaces client-side fuzzy substring matching on the Rx page: the
+    backend matches each free-text allergy term against salt names
+    (normalized exact match, or length-guarded containment reported as
+    ``match="partial"``).
+
+    Authorization:
+    - patients may only check their own record (``patient_id`` == caller)
+    - doctors must be verified/onboarded and have a relationship with the
+      patient (authored record or approved/revoked clinic link — same rule
+      as doctors.py prescription endpoints)
+    """
+    if user.role == "patient":
+        if user.id != request.patient_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "FORBIDDEN", "message": "Patients may only check their own allergies"}},
+            )
+    elif user.role == "doctor":
+        result = await db.execute(
+            select(Doctor).where(
+                Doctor.user_id == user.id, Doctor.deleted_at.is_(None)
+            )
+        )
+        doctor = result.scalar_one_or_none()
+        if (
+            doctor is None
+            or not doctor.verified
+            or doctor.onboarding_step != "completed"
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "ONBOARDING_INCOMPLETE", "message": "Doctor verification not complete"}},
+            )
+        if not await access_service.doctor_patient_relationship_exists(
+            db, doctor.user_id, doctor.id, request.patient_id, allow_revoked=True
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": {"code": "FORBIDDEN", "message": "No relationship with this patient"}},
+            )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": {"code": "FORBIDDEN", "message": "Patient or doctor access required"}},
+        )
+
+    patient = await db.get(User, request.patient_id)
+    if patient is None or patient.deleted_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "NOT_FOUND", "message": "Patient not found"}},
+        )
+
+    return await allergy_service.check_allergies(
+        medicine_db, patient.allergies, request.salt_ids
+    )
 
 
 @router.get("/salts/{salt_id}", response_model=list[InteractionResponse])
