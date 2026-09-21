@@ -14,6 +14,12 @@ class Settings(BaseSettings):
     MEDICINE_DB_URL: str = "postgresql+asyncpg://medconnect:medconnect@postgres:5432/medconnect_medicines"
     MEDICINE_DB_URL_SYNC: str = "postgresql://medconnect:medconnect@postgres:5432/medconnect_medicines"
 
+    # Set true when DATABASE_URL / MEDICINE_DB_URL point at PgBouncer in
+    # pool_mode=transaction: disables asyncpg's client-side prepared-statement
+    # cache, which breaks when server connections are recycled per transaction.
+    # See docs/pgbouncer.md.
+    DB_TRANSACTION_POOLING: bool = False
+
     REDIS_URL: str = "redis://redis:6379/0"
 
     KEYCLOAK_URL: str = "http://keycloak:8080"
