@@ -16,7 +16,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import require_active_clinic
+from app.dependencies import require_active_clinic, require_patient
+from app.models.clinic import Clinic
 from app.models.doctor import Doctor
 from app.models.queue import QueueEntry
 from app.models.user import User
@@ -25,6 +26,14 @@ from app.schemas.queue import QueueEntryCreate, QueueEntryResponse, QueueStatusU
 router = APIRouter(prefix="/api/v1/queue", tags=["queue"])
 
 VALID_STATUSES = {"waiting", "in_consultation", "completed", "cancelled"}
+
+# Statuses that still hold a place in line — completed/cancelled entries no
+# longer count when computing a patient's position.
+ACTIVE_STATUSES = {"waiting", "in_consultation"}
+
+# Fallback per-patient consultation time used for wait estimates when the
+# clinic has no completed consultations today to average.
+DEFAULT_CONSULT_MINUTES = 15
 
 # Status transition map: current_status -> allowed_next_statuses
 STATUS_TRANSITIONS: dict[str, set[str]] = {
@@ -239,6 +248,119 @@ async def get_queue(
         for e in entries
     ]
     return {"data": data, "total": len(data)}
+
+
+@router.get("/my-position")
+async def get_my_queue_position(
+    user: User = Depends(require_patient),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Patient-facing: the caller's own queue entry for today, with live position.
+
+    PHI-safe — returns only the authenticated patient's row; no other
+    patients' data is exposed. When the patient has no queue entry today,
+    returns a 200 with a null-position payload (the frontend treats this as
+    "not checked in") rather than a 404.
+    """
+    today = datetime.now(tz=timezone.utc).date()
+    day_start = datetime(today.year, today.month, today.day, 0, 0, 0, tzinfo=timezone.utc)
+    day_end = day_start + timedelta(days=1)
+
+    # Latest live entry for this patient today (any clinic).
+    result = await db.execute(
+        select(QueueEntry)
+        .where(
+            QueueEntry.patient_id == user.id,
+            QueueEntry.deleted_at.is_(None),
+            QueueEntry.created_at >= day_start,
+            QueueEntry.created_at < day_end,
+        )
+        .order_by(QueueEntry.created_at.desc())
+        .limit(1)
+    )
+    entry = result.scalar_one_or_none()
+
+    empty = {
+        "queue_entry_id": None,
+        "clinic_id": None,
+        "clinic_name": None,
+        "doctor_name": None,
+        "queue_number": None,
+        "position": None,
+        "status": None,
+        "ahead_count": 0,
+        "estimated_wait_minutes": None,
+    }
+    if not entry:
+        return empty
+
+    clinic_res = await db.execute(
+        select(Clinic.name).where(Clinic.id == entry.clinic_id)
+    )
+    clinic_name = clinic_res.scalar_one_or_none()
+
+    doctor_name = None
+    if entry.doctor_id:
+        dr = await db.execute(
+            select(User.full_name)
+            .join(Doctor, Doctor.user_id == User.id)
+            .where(Doctor.id == entry.doctor_id)
+        )
+        doctor_name = dr.scalar_one_or_none()
+
+    ahead_count = 0
+    position: int | None = None
+    estimated_wait: int | None = None
+
+    if entry.status in ACTIVE_STATUSES:
+        # Entries still holding a place in line ahead of this one, same
+        # clinic + day, ordered by queue_number.
+        ahead_res = await db.execute(
+            select(func.count(QueueEntry.id)).where(
+                QueueEntry.clinic_id == entry.clinic_id,
+                QueueEntry.deleted_at.is_(None),
+                QueueEntry.created_at >= day_start,
+                QueueEntry.created_at < day_end,
+                QueueEntry.status.in_(ACTIVE_STATUSES),
+                QueueEntry.queue_number < entry.queue_number,
+            )
+        )
+        ahead_count = ahead_res.scalar_one()
+        position = ahead_count + 1
+
+        # Estimated wait = people ahead * average consultation length today
+        # (completed entries with both called_at and completed_at), falling
+        # back to a flat default when no data exists yet.
+        avg_res = await db.execute(
+            select(
+                func.avg(
+                    func.extract("epoch", QueueEntry.completed_at - QueueEntry.called_at) / 60
+                )
+            ).where(
+                QueueEntry.clinic_id == entry.clinic_id,
+                QueueEntry.deleted_at.is_(None),
+                QueueEntry.created_at >= day_start,
+                QueueEntry.created_at < day_end,
+                QueueEntry.status == "completed",
+                QueueEntry.called_at.isnot(None),
+                QueueEntry.completed_at.isnot(None),
+            )
+        )
+        avg_minutes = avg_res.scalar_one_or_none() or DEFAULT_CONSULT_MINUTES
+        estimated_wait = int(round(ahead_count * float(avg_minutes)))
+
+    return {
+        "queue_entry_id": str(entry.id),
+        "clinic_id": str(entry.clinic_id),
+        "clinic_name": clinic_name,
+        "doctor_name": doctor_name,
+        "queue_number": entry.queue_number,
+        "position": position,
+        "status": entry.status,
+        "ahead_count": ahead_count,
+        "estimated_wait_minutes": estimated_wait,
+    }
 
 
 @router.get("/{entry_id}")
