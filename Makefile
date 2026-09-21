@@ -34,7 +34,7 @@ TEST_DB_MAIN := postgresql+asyncpg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@local
 TEST_DB_MEDICINE := postgresql+asyncpg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@localhost:5432/medicine_db_test
 
 .PHONY: help up up-build down down-v restart ps logs health \
-        migrate migrate-new migrate-down \
+        migrate migrate-new migrate-down seed \
         psql psql-medicine redis-cli \
         test-backend test-frontend lint lint-backend lint-frontend typecheck \
         backend-install frontend-install build clean \
@@ -81,6 +81,9 @@ migrate-new: ## Autogenerate a new revision — NAME="add foo" required
 
 migrate-down: ## Roll back the last main-DB migration
 	$(COMPOSE) exec backend alembic downgrade -1
+
+seed: ## Seed demo data into the main DB (idempotent; pass ARGS="--drop" to remove it — see docs/seed.md)
+	$(COMPOSE) exec backend python scripts/seed_demo_data.py $(ARGS)
 
 psql: ## psql into the medconnect database
 	$(COMPOSE) exec postgres psql -U $(POSTGRES_USER) -d medconnect
