@@ -26,6 +26,7 @@ from app.routers.admin import users as admin_users
 from app.routers.admin import clinics as admin_clinics
 from app.routers.admin import audit as admin_audit
 from app.routers.admin import lab_results as admin_lab_results
+from app.routers.admin import exports as admin_exports
 from app.routers.admin import broadcast as admin_broadcast
 from app.routers.admin import patients as admin_patients
 from app.routers import clinics
@@ -302,6 +303,7 @@ app.include_router(admin_clinics.router)
 app.include_router(admin_audit.router)
 app.include_router(admin_audit.reports_router)
 app.include_router(admin_lab_results.router)
+app.include_router(admin_exports.router)
 app.include_router(admin_broadcast.router)
 app.include_router(admin_patients.router)
 app.include_router(clinics.router)
