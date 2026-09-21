@@ -25,7 +25,12 @@ async def startup(ctx: dict) -> None:
 
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-    engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True)
+    # statement_cache_size=0 is required when DATABASE_URL goes through
+    # PgBouncer transaction pooling — mirrors app/database.py.
+    connect_args = (
+        {"statement_cache_size": 0} if settings.DB_TRANSACTION_POOLING else {}
+    )
+    engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True, connect_args=connect_args)
     ctx["db_engine"] = engine
     ctx["db_session_factory"] = async_sessionmaker(engine, expire_on_commit=False)
     logger.info("reminder_worker_started")

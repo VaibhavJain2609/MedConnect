@@ -3,6 +3,15 @@ from sqlalchemy.orm import DeclarativeBase
 
 from app.config import settings
 
+# asyncpg connect args shared by both engines. Under PgBouncer
+# pool_mode=transaction, server connections are recycled per transaction so
+# asyncpg's client-side prepared-statement cache must be disabled
+# (statement_cache_size=0), or queries fail with "prepared statement does not
+# exist". Toggled by the DB_TRANSACTION_POOLING env var — see docs/pgbouncer.md.
+_asyncpg_connect_args: dict = {"timeout": 10}
+if settings.DB_TRANSACTION_POOLING:
+    _asyncpg_connect_args["statement_cache_size"] = 0
+
 # Main application database (users, doctors, prescriptions, medical records)
 engine = create_async_engine(
     settings.DATABASE_URL,
@@ -11,7 +20,7 @@ engine = create_async_engine(
     max_overflow=20,
     pool_pre_ping=True,
     pool_recycle=3600,
-    connect_args={"timeout": 10},
+    connect_args=_asyncpg_connect_args,
 )
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
@@ -23,7 +32,7 @@ medicine_engine = create_async_engine(
     max_overflow=20,
     pool_pre_ping=True,
     pool_recycle=3600,
-    connect_args={"timeout": 10},
+    connect_args=_asyncpg_connect_args,
 )
 medicine_async_session = async_sessionmaker(medicine_engine, class_=AsyncSession, expire_on_commit=False)
 

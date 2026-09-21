@@ -34,6 +34,38 @@ services:
       timeout: 5s
       retries: 5
 
+  # PgBouncer — transaction-mode connection pooler in front of postgres for
+  # production-like parity. The edoburu image generates pgbouncer.ini +
+  # userlist.txt at container start from env vars: a DATABASE_URL with no
+  # database name produces a wildcard `* = host=postgres port=5432` entry that
+  # routes BOTH medconnect and medconnect_medicines through one pooler, and
+  # AUTH_TYPE=scram-sha-256 stores the plaintext password in userlist.txt so
+  # SCRAM works end-to-end (PG16's default password_encryption).
+  # App async URLs point here (:6432); the *_SYNC URLs intentionally bypass
+  # it so alembic migrations keep working — see docs/pgbouncer.md.
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.24.1-p1
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432
+      LISTEN_PORT: 6432
+      POOL_MODE: transaction
+      AUTH_TYPE: scram-sha-256
+      ADMIN_USERS: ${POSTGRES_USER}
+      DEFAULT_POOL_SIZE: 20
+      MAX_CLIENT_CONN: 200
+      SERVER_IDLE_TIMEOUT: 600
+    ports:
+      - "127.0.0.1:6432:6432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -h 127.0.0.1 -p 6432 -U ${POSTGRES_USER} -d medconnect" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   redis:
     image: redis:7.4.6-alpine
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD} --maxmemory 256mb --maxmemory-policy allkeys-lru
@@ -82,9 +114,16 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/medconnect
+      # Async app traffic goes through PgBouncer (transaction pooling) for
+      # production parity; DB_TRANSACTION_POOLING disables asyncpg's prepared
+      # statement cache — required in transaction mode.
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:6432/medconnect
+      MEDICINE_DB_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:6432/medconnect_medicines
+      DB_TRANSACTION_POOLING: "true"
+      # Sync URLs deliberately bypass PgBouncer — alembic migrations break
+      # under transaction pooling (advisory locks span statements). The
+      # `alembic upgrade head` calls in `command:` below use these.
       DATABASE_URL_SYNC: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/medconnect
-      MEDICINE_DB_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/medconnect_medicines
       MEDICINE_DB_URL_SYNC: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/medconnect_medicines
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       KEYCLOAK_URL: http://keycloak:8080
@@ -93,10 +132,15 @@ services:
       KEYCLOAK_CLIENT_ID: medconnect-backend
       APP_ENV: development
       DEBUG: "false"
+      # Multi-worker uvicorn — set UVICORN_WORKERS=2 in .env for prod parity.
+      # With >1 worker each process exposes its own /metrics.
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-1}
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
       postgres:
+        condition: service_healthy
+      pgbouncer:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -112,7 +156,7 @@ services:
     command: >
       sh -c "alembic upgrade head &&
              alembic -c alembic_medicine.ini upgrade head &&
-             uvicorn app.main:app --host 0.0.0.0 --port 8000"
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers $${UVICORN_WORKERS:-1}"
 
   reminder-worker:
     build:
@@ -120,9 +164,12 @@ services:
       dockerfile: Dockerfile
     command: arq app.workers.reminder_worker.WorkerSettings
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/medconnect
+      # Same PgBouncer topology as `backend` — async URLs via :6432 with the
+      # prepared-statement cache off; *_SYNC stay direct (see docs/pgbouncer.md).
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:6432/medconnect
+      MEDICINE_DB_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:6432/medconnect_medicines
+      DB_TRANSACTION_POOLING: "true"
       DATABASE_URL_SYNC: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/medconnect
-      MEDICINE_DB_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/medconnect_medicines
       MEDICINE_DB_URL_SYNC: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/medconnect_medicines
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       KEYCLOAK_URL: http://keycloak:8080
@@ -131,6 +178,8 @@ services:
       APP_ENV: development
     depends_on:
       postgres:
+        condition: service_healthy
+      pgbouncer:
         condition: service_healthy
       redis:
         condition: service_healthy
