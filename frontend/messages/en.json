@@ -263,6 +263,19 @@
     "tryAgain": "Try again",
     "retrying": "Retrying…"
   },
+  "clinicHolidays": {
+    "title": "Clinic Holidays",
+    "description": "Days the clinic is closed — no appointment slots are bookable on these dates.",
+    "dateLabel": "Holiday date",
+    "namePlaceholder": "Holiday name (optional)",
+    "add": "Add",
+    "adding": "Adding…",
+    "remove": "Remove holiday",
+    "empty": "No holidays added yet.",
+    "loading": "Loading…",
+    "loadFailed": "Failed to load holidays",
+    "addFailed": "Could not add the holiday — this date may already exist."
+  },
   "pagination": {
     "pageOf": "Page {page} of {totalPages}",
     "totalSuffix": "· {count} total",

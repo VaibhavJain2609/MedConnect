@@ -17,6 +17,7 @@ from app.dependencies import (
 )
 from app.models.appointment import Appointment
 from app.models.clinic import Clinic, ClinicBranch, ClinicMembership
+from app.models.clinic_holiday import ClinicHoliday
 from app.models.doctor import Doctor
 from app.models.doctor_availability import DoctorAvailability, DoctorLeave
 from app.models.user import User
@@ -456,6 +457,24 @@ async def get_doctor_slots(
             except Exception:
                 clinic_tz[cid] = ZoneInfo("Asia/Kolkata")
     default_tz = ZoneInfo("Asia/Kolkata")
+
+    # Clinic closure days: drop windows whose clinic is on holiday on the
+    # target date. Holiday dates are clinic-local, matching the convention
+    # that window wall-times + target_date are interpreted in the clinic's
+    # zone — so every slot from such a window would land on the holiday.
+    if clinic_ids:
+        holiday_res = await db.execute(
+            select(ClinicHoliday.clinic_id).where(
+                ClinicHoliday.clinic_id.in_(clinic_ids),
+                ClinicHoliday.date == target_date,
+                ClinicHoliday.deleted_at.is_(None),
+            )
+        )
+        holiday_clinics = set(holiday_res.scalars().all())
+        if holiday_clinics:
+            windows = [w for w in windows if w.clinic_id not in holiday_clinics]
+            if not windows:
+                return empty
 
     def _tz_for(window) -> ZoneInfo:
         return clinic_tz.get(window.clinic_id, default_tz)
