@@ -51,6 +51,37 @@
     "loadMore": "Load more",
     "loading": "Loading..."
   },
+  "records": {
+    "breadcrumb": "My Records",
+    "title": "My Records",
+    "subtitle": "All your medical records in one place",
+    "addRecord": "Add Record",
+    "export": "Export All (FHIR)",
+    "exporting": "Exporting…",
+    "exportError": "Export failed. Please try again.",
+    "searchPlaceholder": "Search records...",
+    "filters": {
+      "all": "All",
+      "from": "From",
+      "to": "To",
+      "reset": "Reset filters",
+      "prescription": "Prescriptions",
+      "opd_note": "OPD Notes",
+      "lab_report": "Lab Reports",
+      "diagnostic_report": "Diagnostic Reports",
+      "discharge_summary": "Discharge Summaries",
+      "imaging": "Imaging",
+      "immunization": "Immunization",
+      "other": "Other"
+    },
+    "emptyTitle": "No records found.",
+    "emptyHint": "Your medical records will appear here once added.",
+    "emptyFilteredTitle": "No records match your filters.",
+    "emptyFilteredHint": "Try changing or resetting your filters.",
+    "loadError": "Failed to load records.",
+    "loadErrorHint": "Please refresh the page or try again later.",
+    "doctorPrefix": "Dr. {name}"
+  },
   "appointments": {
     "title": "My Appointments",
     "bookAppointment": "Book Appointment",

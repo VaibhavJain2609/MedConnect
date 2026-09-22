@@ -1,3 +1,4 @@
+from datetime import date, datetime, time, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import and_, func, or_, select, tuple_
@@ -77,6 +78,8 @@ async def get_patient_timeline(
     limit: int = 20,
     doctor_id: UUID | None = None,
     created_before=None,  # datetime | None — only return records created at or before this timestamp
+    from_date: date | None = None,  # inclusive lower bound on created_at (UTC day)
+    to_date: date | None = None,  # inclusive upper bound on created_at (UTC day)
 ) -> tuple[list[dict], str | None, bool]:
     from app.models.prescription import Prescription
 
@@ -99,6 +102,19 @@ async def get_patient_timeline(
 
     if created_before is not None:
         stmt = stmt.where(MedicalRecord.created_at <= created_before)
+
+    # Date-range filters are inclusive of the whole UTC day on both ends:
+    # from_date → created_at >= from_date 00:00 UTC; to_date → created_at
+    # before (to_date + 1) 00:00 UTC.
+    if from_date is not None:
+        stmt = stmt.where(
+            MedicalRecord.created_at >= datetime.combine(from_date, time.min, tzinfo=timezone.utc)
+        )
+    if to_date is not None:
+        stmt = stmt.where(
+            MedicalRecord.created_at
+            < datetime.combine(to_date + timedelta(days=1), time.min, tzinfo=timezone.utc)
+        )
 
     if record_type:
         stmt = stmt.where(MedicalRecord.record_type == record_type)

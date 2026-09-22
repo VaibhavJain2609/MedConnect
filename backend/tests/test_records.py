@@ -1,4 +1,5 @@
 import uuid
+from datetime import date, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -181,3 +182,155 @@ async def test_patient_cannot_access_other_record_versions(client: AsyncClient, 
         headers={"Authorization": f"Bearer {other_token}"},
     )
     assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/patients/records — list filters (type / q / from_date / to_date)
+# ---------------------------------------------------------------------------
+
+
+async def _seed_records(client: AsyncClient, doctor_token: str, patient_id: str):
+    """Create two records of different types/titles for `patient_id`."""
+    r1 = await client.post(
+        "/api/v1/doctors/records",
+        json={"patient_id": patient_id, "record_type": "opd_note", "title": "General Checkup"},
+        headers={"Authorization": f"Bearer {doctor_token}"},
+    )
+    assert r1.status_code == 201
+    r2 = await client.post(
+        "/api/v1/doctors/records",
+        json={"patient_id": patient_id, "record_type": "lab_report", "title": "Blood Work Panel"},
+        headers={"Authorization": f"Bearer {doctor_token}"},
+    )
+    assert r2.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_patient_records_filter_by_type(client: AsyncClient, db):
+    doctor_token, patient_token, patient_id = await create_doctor_and_patient(client, db)
+    await _seed_records(client, doctor_token, patient_id)
+
+    # New record_type param
+    resp = await client.get(
+        "/api/v1/patients/records?record_type=lab_report",
+        headers={"Authorization": f"Bearer {patient_token}"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert len(data) == 1
+    assert data[0]["record_type"] == "lab_report"
+    assert data[0]["title"] == "Blood Work Panel"
+
+    # Legacy `type` param still works — opd_note matches both the seeded
+    # "General Checkup" and the relationship-seed record from
+    # grant_doctor_patient_relationship.
+    resp = await client.get(
+        "/api/v1/patients/records?type=opd_note",
+        headers={"Authorization": f"Bearer {patient_token}"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert len(data) == 2
+    assert {r["record_type"] for r in data} == {"opd_note"}
+
+
+@pytest.mark.asyncio
+async def test_patient_records_filter_by_query(client: AsyncClient, db):
+    doctor_token, patient_token, patient_id = await create_doctor_and_patient(client, db)
+    await _seed_records(client, doctor_token, patient_id)
+
+    resp = await client.get(
+        "/api/v1/patients/records?q=blood",
+        headers={"Authorization": f"Bearer {patient_token}"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert len(data) == 1
+    assert data[0]["title"] == "Blood Work Panel"
+
+
+@pytest.mark.asyncio
+async def test_patient_records_filter_by_date_range(client: AsyncClient, db):
+    doctor_token, patient_token, patient_id = await create_doctor_and_patient(client, db)
+    await _seed_records(client, doctor_token, patient_id)
+
+    today = date.today()
+    yesterday = (today - timedelta(days=1)).isoformat()
+    tomorrow = (today + timedelta(days=1)).isoformat()
+
+    auth = {"Authorization": f"Bearer {patient_token}"}
+
+    # All records (2 seeded + relationship-seed opd_note) were created today —
+    # a range ending yesterday excludes them
+    resp = await client.get(f"/api/v1/patients/records?to_date={yesterday}", headers=auth)
+    assert resp.status_code == 200
+    assert resp.json()["data"] == []
+
+    # A range starting tomorrow excludes them
+    resp = await client.get(f"/api/v1/patients/records?from_date={tomorrow}", headers=auth)
+    assert resp.status_code == 200
+    assert resp.json()["data"] == []
+
+    # A range spanning today includes all 3 (to_date is inclusive of the day)
+    resp = await client.get(
+        f"/api/v1/patients/records?from_date={today.isoformat()}&to_date={today.isoformat()}",
+        headers=auth,
+    )
+    assert resp.status_code == 200
+    assert len(resp.json()["data"]) == 3
+
+    # Wide range sanity check
+    resp = await client.get(
+        "/api/v1/patients/records?from_date=2000-01-01&to_date=2099-12-31",
+        headers=auth,
+    )
+    assert resp.status_code == 200
+    assert len(resp.json()["data"]) == 3
+
+
+@pytest.mark.asyncio
+async def test_patient_records_filters_do_not_leak_other_patients(client: AsyncClient, db):
+    doctor_token, patient_token, patient_id = await create_doctor_and_patient(client, db)
+    await _seed_records(client, doctor_token, patient_id)
+
+    # Second patient with no records — filters must not widen the scope
+    other_sub = str(uuid.uuid4())
+    other_token = create_test_token(
+        sub=other_sub, email="other3@records.com", name="Other", roles=["patient"]
+    )
+    await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {other_token}"})
+
+    for qs in ("record_type=lab_report", "q=blood", "from_date=2000-01-01&to_date=2099-12-31"):
+        resp = await client.get(
+            f"/api/v1/patients/records?{qs}",
+            headers={"Authorization": f"Bearer {other_token}"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["data"] == []
+
+
+@pytest.mark.asyncio
+async def test_patient_records_combined_filters(client: AsyncClient, db):
+    doctor_token, patient_token, patient_id = await create_doctor_and_patient(client, db)
+    await _seed_records(client, doctor_token, patient_id)
+
+    today = date.today().isoformat()
+    auth = {"Authorization": f"Bearer {patient_token}"}
+
+    # type + q + date range together
+    resp = await client.get(
+        f"/api/v1/patients/records?record_type=lab_report&q=blood&from_date={today}&to_date={today}",
+        headers=auth,
+    )
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert len(data) == 1
+    assert data[0]["title"] == "Blood Work Panel"
+
+    # Matching type but non-matching query → empty
+    resp = await client.get(
+        "/api/v1/patients/records?record_type=lab_report&q=checkup",
+        headers=auth,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["data"] == []
