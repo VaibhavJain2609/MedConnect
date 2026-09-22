@@ -24,7 +24,8 @@
     "logout": "Logout",
     "collapseSidebar": "Collapse sidebar",
     "expandSidebar": "Expand sidebar",
-    "closeMenu": "Close menu"
+    "closeMenu": "Close menu",
+    "familyMembers": "Family Members"
   },
   "timeline": {
     "breadcrumb": "Health Timeline",
@@ -72,7 +73,8 @@
       "discharge_summary": "Discharge Summaries",
       "imaging": "Imaging",
       "immunization": "Immunization",
-      "other": "Other"
+      "other": "Other",
+      "everyone": "Everyone"
     },
     "emptyTitle": "No records found.",
     "emptyHint": "Your medical records will appear here once added.",
@@ -80,7 +82,8 @@
     "emptyFilteredHint": "Try changing or resetting your filters.",
     "loadError": "Failed to load records.",
     "loadErrorHint": "Please refresh the page or try again later.",
-    "doctorPrefix": "Dr. {name}"
+    "doctorPrefix": "Dr. {name}",
+    "forMember": "For {name}"
   },
   "appointments": {
     "title": "My Appointments",
@@ -364,5 +367,49 @@
     "tableCaption": "Data table for {label} readings",
     "colDate": "Date & time",
     "colValue": "Value"
+    },
+  "family": {
+    "breadcrumb": "Family Members",
+    "title": "Family Members",
+    "subtitle": "Manage health profiles for your children, parents, and other dependents",
+    "addMember": "Add Member",
+    "editMember": "Edit Member",
+    "deleteMember": "Remove member",
+    "dialogDescription": "Add a dependent profile to keep their health records organized under your account.",
+    "emptyTitle": "No family members yet.",
+    "emptyHint": "Add children, parents, or other dependents to manage their records.",
+    "loadError": "Failed to load family members.",
+    "loadErrorHint": "Please refresh the page or try again later.",
+    "requiredFields": "Name and date of birth are required.",
+    "saveError": "Failed to save. Please try again.",
+    "deleteError": "Failed to remove. Please try again.",
+    "deleteTitle": "Remove family member?",
+    "deleteDescription": "Records for {name} will stay on your timeline but will no longer be linked to this profile.",
+    "deleteAction": "Remove",
+    "deleting": "Removing…",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving…",
+    "ageYears": "{age} yrs",
+    "fields": {
+      "fullName": "Full name",
+      "dob": "Date of birth",
+      "relationship": "Relationship",
+      "gender": "Gender",
+      "bloodGroup": "Blood group",
+      "notes": "Notes"
+    },
+    "relationships": {
+      "child": "Child",
+      "spouse": "Spouse",
+      "parent": "Parent",
+      "sibling": "Sibling",
+      "other": "Other"
+    },
+    "genders": {
+      "male": "Male",
+      "female": "Female",
+      "other": "Other"
+    }
   }
 }

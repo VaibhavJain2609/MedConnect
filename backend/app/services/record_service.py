@@ -22,12 +22,26 @@ async def create_record(
     clinic_id: UUID | None = None,
     document_url: str | None = None,
     source: str = "doctor",
+    family_member_id: UUID | None = None,
 ) -> MedicalRecord:
     patient = await db.execute(
         select(User).where(User.id == patient_id, User.role == "patient", User.deleted_at.is_(None))
     )
     if not patient.scalar_one_or_none():
         raise ValueError("Patient not found")
+
+    if family_member_id is not None:
+        from app.models.family import FamilyMember
+
+        member = await db.execute(
+            select(FamilyMember).where(
+                FamilyMember.id == family_member_id,
+                FamilyMember.owner_user_id == patient_id,
+                FamilyMember.deleted_at.is_(None),
+            )
+        )
+        if member.scalar_one_or_none() is None:
+            raise ValueError("Family member not found")
 
     if fhir_bundle is None:
         fhir_bundle = create_fhir_bundle(
@@ -47,6 +61,7 @@ async def create_record(
         source=source,
         clinic_id=clinic_id,
         document_url=document_url,
+        family_member_id=family_member_id,
     )
     db.add(record)
     await db.flush()
@@ -80,6 +95,7 @@ async def get_patient_timeline(
     created_before=None,  # datetime | None — only return records created at or before this timestamp
     from_date: date | None = None,  # inclusive lower bound on created_at (UTC day)
     to_date: date | None = None,  # inclusive upper bound on created_at (UTC day)
+    family_member_id: UUID | None = None,  # only records attached to this dependent
 ) -> tuple[list[dict], str | None, bool]:
     from app.models.prescription import Prescription
 
@@ -115,6 +131,9 @@ async def get_patient_timeline(
             MedicalRecord.created_at
             < datetime.combine(to_date + timedelta(days=1), time.min, tzinfo=timezone.utc)
         )
+
+    if family_member_id is not None:
+        stmt = stmt.where(MedicalRecord.family_member_id == family_member_id)
 
     if record_type:
         stmt = stmt.where(MedicalRecord.record_type == record_type)
@@ -158,6 +177,7 @@ async def get_patient_timeline(
             "doctor_id": str(record.doctor_id) if record.doctor_id else None,
             "doctor_name": doctor_name,
             "document_url": record.document_url,
+            "family_member_id": str(record.family_member_id) if record.family_member_id else None,
             "created_at": record.created_at.isoformat(),
         }
 

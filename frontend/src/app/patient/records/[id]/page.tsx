@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { downloadFile } from "@/lib/download";
+import { listFamilyMembers } from "@/lib/api/family";
 import { formatDate, recordTypeLabel, recordTypeColor } from "@/lib/utils";
 import { ArrowLeft, Download } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
@@ -24,6 +25,16 @@ export default function RecordDetailPage() {
       return res.data;
     },
   });
+
+  // Resolve family_member_id → display name for the dependent chip.
+  const { data: familyMembers = [] } = useQuery({
+    queryKey: ["family-members"],
+    queryFn: listFamilyMembers,
+  });
+  const memberName = record?.family_member_id
+    ? familyMembers.find((m) => m.member_id === record.family_member_id)
+        ?.full_name
+    : undefined;
 
   // document_url stores the uploads object key; the file endpoint requires
   // auth, so download via the axios-blob helper instead of a plain <a href>.
@@ -72,6 +83,11 @@ export default function RecordDetailPage() {
             >
               {recordTypeLabel(record.record_type)}
             </span>
+            {memberName && (
+              <span className="rounded-full px-3 py-1 text-xs font-medium bg-purple-50 text-purple-700">
+                For {memberName}
+              </span>
+            )}
             <span className="text-sm text-dreams-textSecondary">
               {formatDate(record.created_at)}
             </span>

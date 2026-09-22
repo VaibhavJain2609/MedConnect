@@ -76,6 +76,7 @@ class RecordResponse(BaseModel):
     document_url: str | None = None
     source: str
     amended_from_id: Optional[UUID] = None
+    family_member_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
 

@@ -26,6 +26,11 @@ class MedicalRecord(Base):
     amended_from_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("medical_records.id"), nullable=True
     )
+    # Dependent profile this record belongs to (NULL = the patient themselves).
+    # SET NULL on member removal keeps the record attached to the owner.
+    family_member_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("family_members.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -47,4 +52,5 @@ class MedicalRecord(Base):
         Index("idx_records_created", "created_at", postgresql_where=(deleted_at.is_(None))),
         Index("idx_records_clinic", "clinic_id", postgresql_where=(deleted_at.is_(None))),
         Index("idx_records_amended_from", "amended_from_id", postgresql_where=(amended_from_id.isnot(None))),
+        Index("idx_records_family_member", "family_member_id", postgresql_where=(family_member_id.isnot(None))),
     )

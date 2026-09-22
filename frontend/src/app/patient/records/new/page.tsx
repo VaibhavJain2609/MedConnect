@@ -3,7 +3,9 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
+import { listFamilyMembers } from "@/lib/api/family";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 
 const RECORD_TYPES = [
@@ -22,6 +24,7 @@ export default function PatientNewRecordPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [recordType, setRecordType] = useState("lab_report");
+  const [familyMemberId, setFamilyMemberId] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -29,6 +32,13 @@ export default function PatientNewRecordPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+
+  // Dependent profiles — the record can optionally be filed under a family
+  // member rather than the patient themselves.
+  const { data: familyMembers = [] } = useQuery({
+    queryKey: ["family-members"],
+    queryFn: listFamilyMembers,
+  });
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0] ?? null;
@@ -80,6 +90,7 @@ export default function PatientNewRecordPage() {
         title,
         description: description || undefined,
         document_url: documentUrl,
+        family_member_id: familyMemberId || undefined,
       });
 
       setSuccess(true);
@@ -162,6 +173,27 @@ export default function PatientNewRecordPage() {
             ))}
           </select>
         </div>
+
+        {/* Family member selector — only when dependents exist */}
+        {familyMembers.length > 0 && (
+          <div className="mb-4">
+            <label className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+              Who is this record for?
+            </label>
+            <select
+              value={familyMemberId}
+              onChange={(e) => setFamilyMemberId(e.target.value)}
+              className="h-10 w-full rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+            >
+              <option value="">Me</option>
+              {familyMembers.map((m) => (
+                <option key={m.member_id} value={m.member_id}>
+                  {m.full_name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Title */}
         <div className="mb-4">

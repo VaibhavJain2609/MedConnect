@@ -30,6 +30,7 @@ async def timeline(
     q: str | None = Query(None, description="Search query"),
     from_date: date | None = Query(None, description="Only records created on/after this date (UTC)"),
     to_date: date | None = Query(None, description="Only records created on/before this date (UTC)"),
+    family_member_id: UUID | None = Query(None, description="Only records attached to this dependent"),
     cursor: UUID | None = Query(None, description="Pagination cursor"),
     limit: int = Query(20, ge=1, le=100),
     user: User = Depends(require_patient),
@@ -37,7 +38,7 @@ async def timeline(
 ):
     records, next_cursor, has_more = await get_patient_timeline(
         db=db, patient_id=user.id, record_type=type, query=q, cursor=cursor, limit=limit,
-        from_date=from_date, to_date=to_date,
+        from_date=from_date, to_date=to_date, family_member_id=family_member_id,
     )
     return PaginatedResponse(
         data=records,
@@ -52,6 +53,7 @@ async def list_records(
     q: str | None = Query(None, description="Search query"),
     from_date: date | None = Query(None, description="Only records created on/after this date (UTC)"),
     to_date: date | None = Query(None, description="Only records created on/before this date (UTC)"),
+    family_member_id: UUID | None = Query(None, description="Only records attached to this dependent"),
     cursor: UUID | None = Query(None, description="Pagination cursor"),
     limit: int = Query(20, ge=1, le=100),
     user: User = Depends(require_patient),
@@ -59,7 +61,7 @@ async def list_records(
 ):
     records, next_cursor, has_more = await get_patient_timeline(
         db=db, patient_id=user.id, record_type=record_type or type, query=q, cursor=cursor,
-        limit=limit, from_date=from_date, to_date=to_date,
+        limit=limit, from_date=from_date, to_date=to_date, family_member_id=family_member_id,
     )
     return PaginatedResponse(
         data=records,
@@ -456,6 +458,9 @@ class PatientRecordCreate(BaseModel):
     title: str
     description: str | None = None
     document_url: str | None = None
+    # Optional dependent profile this record belongs to (must be owned by the
+    # caller — enforced in create_record).
+    family_member_id: UUID | None = None
 
     @field_validator("record_type")
     @classmethod
@@ -489,6 +494,7 @@ async def create_patient_record(
             description=body.description,
             document_url=body.document_url,
             source="patient_uploaded",
+            family_member_id=body.family_member_id,
         )
     except ValueError as e:
         raise HTTPException(
