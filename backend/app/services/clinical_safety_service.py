@@ -119,70 +119,161 @@ class SafetyGateResult:
     unresolved_items: list[str] = field(default_factory=list)
 
 
-async def _resolve_brand(medicine_db: AsyncSession, item: dict) -> Brand | None:
-    """Resolve a medicine item to a catalog Brand via brand_id or brand_name."""
-    brand_id = item.get("brand_id")
-    if brand_id:
+async def _resolve_brands_batched(
+    medicine_db: AsyncSession, items: list[dict]
+) -> list[Brand | None]:
+    """Resolve every item to a catalog Brand in a constant number of queries.
+
+    Same matching rules as the former per-item ``_resolve_brand``:
+    brand_id (exact PK) -> exact normalized brand_name -> prefix match with
+    the shortest name winning. Batched to one query per phase instead of up
+    to three queries per item (R12 N+1 fix).
+    """
+    n = len(items)
+    brands: list[Brand | None] = [None] * n
+
+    # Phase 1: brand_id lookups — one IN() query for all parseable ids.
+    id_by_idx: dict[int, UUID] = {}
+    for idx, item in enumerate(items):
+        raw = item.get("brand_id")
+        if not raw:
+            continue
         try:
-            brand = await medicine_db.get(Brand, uuid.UUID(str(brand_id)))
+            id_by_idx[idx] = uuid.UUID(str(raw))
         except (ValueError, TypeError):
-            brand = None
-        if brand is not None:
-            return brand
+            pass  # unparseable id falls through to the name paths
+    if id_by_idx:
+        rows = await medicine_db.execute(
+            select(Brand).where(Brand.brand_id.in_(set(id_by_idx.values())))
+        )
+        by_id = {b.brand_id: b for b in rows.scalars()}
+        for idx, bid in id_by_idx.items():
+            brands[idx] = by_id.get(bid)
 
-    brand_name = item.get("brand_name") or item.get("name")
-    if not brand_name:
-        return None
+    # Phase 2: exact normalized brand_name — one IN() on lower(brand_name).
+    name_by_idx: dict[int, str] = {}  # idx -> raw display name
+    for idx, item in enumerate(items):
+        if brands[idx] is not None:
+            continue
+        raw_name = item.get("brand_name") or item.get("name")
+        if raw_name:
+            name_by_idx[idx] = str(raw_name)
+    normed_to_idx: dict[str, list[int]] = {}
+    for idx, raw_name in name_by_idx.items():
+        normed_to_idx.setdefault(_norm(raw_name), []).append(idx)
+    if normed_to_idx:
+        rows = await medicine_db.execute(
+            select(Brand).where(
+                func.lower(Brand.brand_name).in_(list(normed_to_idx))
+            )
+        )
+        for b in rows.scalars():
+            for idx in normed_to_idx.get(b.brand_name.lower(), []):
+                if brands[idx] is None:
+                    brands[idx] = b
 
-    # Exact case-insensitive match first
-    result = await medicine_db.execute(
-        select(Brand).where(func.lower(Brand.brand_name) == _norm(brand_name)).limit(1)
-    )
-    brand = result.scalar_one_or_none()
-    if brand is not None:
-        return brand
+    # Phase 3: prefix fallback for items still unresolved. A literal
+    # ``ilike(f"{name}%")`` treats %/_/\ in the raw name as wildcards — those
+    # items keep the original per-item query so semantics are unchanged.
+    prefix_idxs = [
+        idx
+        for idx, raw_name in name_by_idx.items()
+        if brands[idx] is None
+        and not any(c in raw_name for c in ("%", "_", "\\"))
+    ]
+    wildcard_idxs = [
+        idx
+        for idx, raw_name in name_by_idx.items()
+        if brands[idx] is None
+        and any(c in raw_name for c in ("%", "_", "\\"))
+    ]
+    if prefix_idxs:
+        rows = await medicine_db.execute(
+            select(Brand).where(
+                or_(*(Brand.brand_name.ilike(f"{name_by_idx[idx]}%") for idx in prefix_idxs))
+            )
+        )
+        candidates = list(rows.scalars())
+        for idx in prefix_idxs:
+            prefix = name_by_idx[idx].lower()
+            matches = [b for b in candidates if b.brand_name.lower().startswith(prefix)]
+            if matches:
+                # "shortest name wins" — same as ORDER BY length LIMIT 1
+                brands[idx] = min(matches, key=lambda b: len(b.brand_name))
+    for idx in wildcard_idxs:
+        rows = await medicine_db.execute(
+            select(Brand)
+            .where(Brand.brand_name.ilike(f"{name_by_idx[idx]}%"))
+            .order_by(func.length(Brand.brand_name))
+            .limit(1)
+        )
+        brands[idx] = rows.scalar_one_or_none()
 
-    # Fallback: prefix match ("Crocin" -> "Crocin 500mg"), shortest name wins
-    result = await medicine_db.execute(
-        select(Brand)
-        .where(Brand.brand_name.ilike(f"{brand_name}%"))
-        .order_by(func.length(Brand.brand_name))
-        .limit(1)
-    )
-    return result.scalar_one_or_none()
+    return brands
 
 
-async def _brand_salts(medicine_db: AsyncSession, brand_id: UUID) -> list[Salt]:
+async def _brands_salts_batched(
+    medicine_db: AsyncSession, brand_ids: list[UUID]
+) -> dict[UUID, list[Salt]]:
+    """One query for all brands' salts (ordered by composition sequence),
+    grouped by brand_id — replaces per-brand ``_brand_salts`` round-trips."""
     stmt = (
-        select(Salt)
-        .join(SaltStrength, Salt.salt_id == SaltStrength.salt_id)
-        .join(BrandComposition, BrandComposition.salt_strength_id == SaltStrength.salt_strength_id)
-        .where(BrandComposition.brand_id == brand_id)
-        .order_by(BrandComposition.sequence)
+        select(BrandComposition.brand_id, Salt)
+        .join(SaltStrength, BrandComposition.salt_strength_id == SaltStrength.salt_strength_id)
+        .join(Salt, Salt.salt_id == SaltStrength.salt_id)
+        .where(BrandComposition.brand_id.in_(brand_ids))
+        .order_by(BrandComposition.brand_id, BrandComposition.sequence)
     )
     result = await medicine_db.execute(stmt)
-    return list(result.scalars().all())
+    salts_by_brand: dict[UUID, list[Salt]] = {}
+    for brand_id, salt in result.all():
+        salts_by_brand.setdefault(brand_id, []).append(salt)
+    return salts_by_brand
 
 
 async def resolve_items(medicine_db: AsyncSession, medicines: list[dict]) -> list[ResolvedItem]:
-    """Resolve each prescribed item -> brand -> salt list."""
-    resolved: list[ResolvedItem] = []
-    for item in medicines:
-        brand = await _resolve_brand(medicine_db, item)
-        salts: list[Salt] = []
-        if brand is not None:
-            salts = await _brand_salts(medicine_db, brand.brand_id)
+    """Resolve each prescribed item -> brand -> salt list.
 
-        # An explicit salt_id on the item is additive (covers cases where the
-        # brand is absent from the catalog but the salt is known).
+    Batched (R12 N+1 fix): the whole medicines list resolves in at most 5
+    queries — brand ids, exact names, prefix fallback, brand salts, explicit
+    salt ids — regardless of item count.
+    """
+    brands = await _resolve_brands_batched(medicine_db, medicines)
+
+    # Batch brand -> salts for every resolved brand (one query).
+    resolved_brand_ids = [b.brand_id for b in brands if b is not None]
+    salts_by_brand = (
+        await _brands_salts_batched(medicine_db, resolved_brand_ids)
+        if resolved_brand_ids
+        else {}
+    )
+
+    # Batch explicit salt_id lookups (one query). An explicit salt_id is
+    # additive — covers items whose brand is absent from the catalog.
+    salt_id_by_idx: dict[int, UUID] = {}
+    for idx, item in enumerate(medicines):
         raw_salt_id = item.get("salt_id")
-        if raw_salt_id:
-            try:
-                salt = await medicine_db.get(Salt, uuid.UUID(str(raw_salt_id)))
-            except (ValueError, TypeError):
-                salt = None
-            if salt is not None and all(s.salt_id != salt.salt_id for s in salts):
-                salts.append(salt)
+        if not raw_salt_id:
+            continue
+        try:
+            salt_id_by_idx[idx] = uuid.UUID(str(raw_salt_id))
+        except (ValueError, TypeError):
+            pass
+    salts_by_id: dict[UUID, Salt] = {}
+    if salt_id_by_idx:
+        rows = await medicine_db.execute(
+            select(Salt).where(Salt.salt_id.in_(set(salt_id_by_idx.values())))
+        )
+        salts_by_id = {s.salt_id: s for s in rows.scalars()}
+
+    resolved: list[ResolvedItem] = []
+    for idx, item in enumerate(medicines):
+        brand = brands[idx]
+        salts: list[Salt] = list(salts_by_brand.get(brand.brand_id, [])) if brand else []
+
+        extra_salt = salts_by_id.get(salt_id_by_idx.get(idx)) if idx in salt_id_by_idx else None
+        if extra_salt is not None and all(s.salt_id != extra_salt.salt_id for s in salts):
+            salts.append(extra_salt)
 
         resolved.append(ResolvedItem(item=item, brand=brand, salts=salts))
     return resolved
