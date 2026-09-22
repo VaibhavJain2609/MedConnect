@@ -617,6 +617,8 @@ async def list_appointments(
     status_filter: str | None = Query(None, alias="status"),
     upcoming: bool | None = Query(None),
     all_appointments: bool | None = Query(None, alias="all"),
+    date_from: str | None = Query(None, alias="from"),
+    date_to: str | None = Query(None, alias="to"),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
@@ -625,11 +627,16 @@ async def list_appointments(
 ):
     """
     List appointments.
-    - doctor role: returns their own appointments; default today unless date/upcoming param provided
+    - doctor role: returns their own appointments; default today unless
+      date/upcoming/from+to params provided
     - clinic staff (any active membership incl. receptionist) with X-Clinic-Id:
-      the clinic's full schedule, same date/upcoming filtering as doctors
+      the clinic's full schedule, same date/upcoming/from+to filtering as doctors
     - patient role: returns their own appointments
     - admin with all=true: returns all appointments
+
+    `from`/`to` are inclusive YYYY-MM-DD bounds on scheduled_at (UTC days) —
+    used by the doctor week-calendar view. Both must be supplied; they are
+    ignored when `date` or `upcoming` is also present.
     """
     now = datetime.now(tz=timezone.utc)
 
@@ -677,6 +684,25 @@ async def list_appointments(
             day_start = datetime(target_date.year, target_date.month, target_date.day, 0, 0, 0, tzinfo=timezone.utc)
             day_end = datetime(target_date.year, target_date.month, target_date.day, 23, 59, 59, tzinfo=timezone.utc)
             stmt = stmt.where(Appointment.scheduled_at >= day_start, Appointment.scheduled_at <= day_end)
+        elif date_from and date_to:
+            # Inclusive date range (UTC day bounds) — powers the doctor
+            # week-calendar view.
+            try:
+                range_start = date.fromisoformat(date_from)
+                range_end = date.fromisoformat(date_to)
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={"error": {"code": "INVALID_DATE", "message": "from/to must be YYYY-MM-DD"}},
+                )
+            if range_start > range_end:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={"error": {"code": "INVALID_DATE_RANGE", "message": "from must be on or before to"}},
+                )
+            range_start_dt = datetime(range_start.year, range_start.month, range_start.day, 0, 0, 0, tzinfo=timezone.utc)
+            range_end_dt = datetime(range_end.year, range_end.month, range_end.day, 23, 59, 59, tzinfo=timezone.utc)
+            stmt = stmt.where(Appointment.scheduled_at >= range_start_dt, Appointment.scheduled_at <= range_end_dt)
         else:
             # Default: today
             today = now.date()

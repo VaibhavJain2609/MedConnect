@@ -37,6 +37,9 @@ export interface Appointment {
 
 export interface AppointmentsListParams {
   date?: string;
+  /** Inclusive YYYY-MM-DD range bounds (doctor/clinic schedules). */
+  from?: string;
+  to?: string;
   status?: string;
   upcoming?: boolean;
   all?: boolean;
@@ -98,6 +101,8 @@ export async function getAppointments(
   const queryParams = new URLSearchParams();
 
   if (params.date) queryParams.append("date", params.date);
+  if (params.from) queryParams.append("from", params.from);
+  if (params.to) queryParams.append("to", params.to);
   if (params.status) queryParams.append("status", params.status);
   if (params.upcoming) queryParams.append("upcoming", "true");
   if (params.all) queryParams.append("all", "true");

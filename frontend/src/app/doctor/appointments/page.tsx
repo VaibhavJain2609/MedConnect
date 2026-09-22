@@ -2,7 +2,8 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Calendar, Clock, User, FileText, FilePlus, CheckCircle, XCircle, UserCheck, Plus, X, Pencil, Video } from "lucide-react";
+import { useFormatter, useTranslations } from "next-intl";
+import { Calendar, CalendarDays, ChevronLeft, ChevronRight, Clock, List, User, FileText, FilePlus, CheckCircle, XCircle, UserCheck, Plus, X, Pencil, Video } from "lucide-react";
 import Link from "next/link";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
@@ -45,6 +46,39 @@ const STATUS_LABELS: Record<string, string> = {
   "no-show": "No Show",
 };
 
+// Keys into messages/en.json — en.json is the source of truth; keep the
+// `doctorAppointments` / `appointments` namespaces in sync with hi.json.
+type EnMessages = typeof import("../../../../messages/en.json");
+type AppointmentTypeKey = keyof EnMessages["appointments"]["types"];
+type AppointmentStatusKey = keyof EnMessages["appointments"]["status"];
+
+const TYPE_KEYS: Record<string, AppointmentTypeKey> = {
+  "in-person": "in-person",
+  "teleconsult": "teleconsult",
+  "follow-up": "follow-up",
+};
+
+const STATUS_KEYS: Record<string, AppointmentStatusKey> = {
+  scheduled: "scheduled",
+  arrived: "arrived",
+  "in-progress": "in-progress",
+  completed: "completed",
+  cancelled: "cancelled",
+  "no-show": "no-show",
+};
+
+// Appointment status → tailwind `status-*` accent token for the calendar
+// card's left border. Full class names are spelled out so Tailwind's static
+// scanner emits them (dynamic `border-l-status-${x}` would be purged).
+const STATUS_ACCENT_CLASSES: Record<string, string> = {
+  scheduled: "border-l-status-upcoming",
+  arrived: "border-l-status-inProgress",
+  "in-progress": "border-l-status-inProgress",
+  completed: "border-l-status-completed",
+  cancelled: "border-l-status-overdue",
+  "no-show": "border-l-status-pending",
+};
+
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("en-IN", {
     hour: "2-digit",
@@ -55,6 +89,31 @@ function formatTime(iso: string) {
 
 function formatDateInput(d: Date) {
   return d.toISOString().slice(0, 10);
+}
+
+// ---------------------------------------------------------------------------
+// Week calendar helpers (local-time Monday-start weeks)
+// ---------------------------------------------------------------------------
+
+function startOfWeekMonday(d: Date): Date {
+  const copy = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const dow = (copy.getDay() + 6) % 7; // Monday = 0
+  copy.setDate(copy.getDate() - dow);
+  return copy;
+}
+
+function addDays(d: Date, n: number): Date {
+  const copy = new Date(d);
+  copy.setDate(copy.getDate() + n);
+  return copy;
+}
+
+/** Local YYYY-MM-DD — toISOString() is UTC and rolls back a day in IST. */
+function formatLocalDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -968,6 +1027,364 @@ function StatusActionButtons({ appt, onAction, isPending }: StatusActionButtonPr
 }
 
 // ---------------------------------------------------------------------------
+// Week calendar view
+// ---------------------------------------------------------------------------
+
+interface WeekCalendarViewProps {
+  weekStart: Date; // Monday, local time
+  appointments: Appointment[];
+  isLoading: boolean;
+  onPrevWeek: () => void;
+  onNextWeek: () => void;
+  onToday: () => void;
+  onSelectAppointment: (appt: Appointment) => void;
+}
+
+function WeekCalendarView({
+  weekStart,
+  appointments,
+  isLoading,
+  onPrevWeek,
+  onNextWeek,
+  onToday,
+  onSelectAppointment,
+}: WeekCalendarViewProps) {
+  const t = useTranslations("doctorAppointments.calendar");
+  const tAppt = useTranslations("appointments");
+  const format = useFormatter();
+
+  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const todayStr = formatLocalDate(new Date());
+  const weekEnd = addDays(weekStart, 6);
+
+  // Group by the appointment's local calendar day so cards land in the column
+  // the doctor expects. The query fetches a ±1-day buffer around the week, so
+  // anything outside these seven columns is simply not rendered.
+  const byDay = new Map<string, Appointment[]>();
+  for (const appt of appointments) {
+    const key = formatLocalDate(new Date(appt.scheduled_at));
+    const list = byDay.get(key) ?? [];
+    list.push(appt);
+    byDay.set(key, list);
+  }
+  byDay.forEach((list) =>
+    list.sort((a: Appointment, b: Appointment) => a.scheduled_at.localeCompare(b.scheduled_at))
+  );
+
+  const rangeLabel = `${format.dateTime(weekStart, { day: "numeric", month: "short" })} – ${format.dateTime(weekEnd, { day: "numeric", month: "short", year: "numeric" })}`;
+
+  const navButtonClass =
+    "flex h-9 w-9 items-center justify-center rounded-lg border border-dreams-border bg-white text-dreams-textSecondary hover:bg-gray-50 hover:text-dreams-textPrimary transition-colors";
+
+  const dayHeader = (day: Date) => {
+    const key = formatLocalDate(day);
+    const isTodayCol = key === todayStr;
+    return (
+      <div key={key} className="border-b border-dreams-border px-2 py-2 text-center">
+        <p className="text-xs font-medium uppercase text-dreams-textSecondary">
+          {format.dateTime(day, { weekday: "short" })}
+        </p>
+        <p
+          className={`mx-auto mt-0.5 flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold ${
+            isTodayCol ? "bg-dreams-blue text-white" : "text-dreams-textPrimary"
+          }`}
+        >
+          {format.dateTime(day, { day: "numeric" })}
+        </p>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Week navigation */}
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={onPrevWeek} aria-label={t("prevWeek")} className={navButtonClass}>
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <button type="button" onClick={onNextWeek} aria-label={t("nextWeek")} className={navButtonClass}>
+          <ChevronRight className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={onToday}
+          className="rounded-lg border border-dreams-border bg-white px-3 py-2 text-sm text-dreams-textSecondary hover:bg-gray-50"
+        >
+          {t("today")}
+        </button>
+        <span className="text-sm font-medium text-dreams-textPrimary">{rangeLabel}</span>
+      </div>
+
+      {isLoading ? (
+        /* Loading skeleton — preserves the 7-column shape while fetching */
+        <div
+          className="overflow-x-auto rounded-xl border border-dreams-border bg-white shadow-card"
+          role="status"
+          aria-label={t("loading")}
+        >
+          <div className="grid min-w-[840px] grid-cols-7 divide-x divide-dreams-border">
+            {Array.from({ length: 7 }).map((_, i) => (
+              <div key={i} className="animate-pulse">
+                <div className="border-b border-dreams-border px-2 py-3">
+                  <div className="mx-auto h-3 w-10 rounded bg-gray-200" />
+                  <div className="mx-auto mt-2 h-6 w-6 rounded-full bg-gray-200" />
+                </div>
+                <div className="space-y-2 p-2">
+                  <div className="h-12 rounded-md bg-gray-100" />
+                  <div className="h-12 rounded-md bg-gray-100" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-dreams-border bg-white shadow-card">
+          <div className="min-w-[840px]">
+            {/* Day-of-week header */}
+            <div className="grid grid-cols-7 divide-x divide-dreams-border">
+              {days.map(dayHeader)}
+            </div>
+            {appointments.length === 0 ? (
+              <div className="p-12 text-center">
+                <Calendar className="mx-auto h-10 w-10 text-dreams-textSecondary opacity-50" />
+                <p className="mt-3 font-medium text-dreams-textPrimary">{t("emptyTitle")}</p>
+                <p className="mt-1 text-sm text-dreams-textSecondary">{t("emptyHint")}</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-7 divide-x divide-dreams-border">
+                {days.map((day) => {
+                  const key = formatLocalDate(day);
+                  const dayAppts = byDay.get(key) ?? [];
+                  return (
+                    <div key={key} className="min-h-[160px] space-y-1.5 p-1.5">
+                      {dayAppts.map((appt) => {
+                        const statusKey = STATUS_KEYS[appt.status];
+                        return (
+                          <button
+                            key={appt.id}
+                            type="button"
+                            onClick={() => onSelectAppointment(appt)}
+                            className={`w-full rounded-md border border-dreams-border border-l-4 bg-white p-2 text-left transition-colors hover:bg-dreams-lightBg ${
+                              STATUS_ACCENT_CLASSES[appt.status] ?? "border-l-dreams-border"
+                            }`}
+                          >
+                            <p className="text-xs font-semibold text-dreams-textPrimary">
+                              {formatTime(appt.scheduled_at)}
+                            </p>
+                            <p className="mt-0.5 truncate text-xs text-dreams-textPrimary">
+                              {appt.patient_name ?? t("unknownPatient")}
+                            </p>
+                            <div className="mt-1">
+                              <Badge
+                                variant={(STATUS_VARIANT_MAP[appt.status] as any) ?? "pending"}
+                                className="px-1.5 py-0 text-[10px]"
+                              >
+                                {statusKey ? tAppt(`status.${statusKey}`) : appt.status}
+                              </Badge>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Appointment detail modal (calendar card click-through)
+// ---------------------------------------------------------------------------
+
+interface AppointmentDetailModalProps {
+  appointment: Appointment;
+  onClose: () => void;
+  onStatusAction: (apptId: string, newStatus: string) => void;
+  statusPending: boolean;
+  onGenerateLink: (apptId: string) => void;
+  linkPending: boolean;
+  onEdit: () => void;
+  onCancel: () => void;
+  onLinkAccount?: () => void;
+}
+
+function AppointmentDetailModal({
+  appointment: appt,
+  onClose,
+  onStatusAction,
+  statusPending,
+  onGenerateLink,
+  linkPending,
+  onEdit,
+  onCancel,
+  onLinkAccount,
+}: AppointmentDetailModalProps) {
+  const t = useTranslations("doctorAppointments.calendar.detail");
+  const tAppt = useTranslations("appointments");
+  const format = useFormatter();
+
+  const typeKey = TYPE_KEYS[appt.type];
+  const statusKey = STATUS_KEYS[appt.status];
+  const isActive = ["scheduled", "arrived", "in-progress"].includes(appt.status);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("ariaLabel")}
+        className="w-[calc(100%-2rem)] sm:w-full sm:max-w-md rounded-xl bg-white shadow-xl"
+      >
+        <div className="flex items-center justify-between border-b border-dreams-border px-6 py-4">
+          <h2 className="text-lg font-semibold text-dreams-textPrimary">{t("title")}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t("close")}
+            className="text-dreams-textSecondary hover:text-dreams-textPrimary"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="px-6 py-4 space-y-4">
+          {/* Patient */}
+          <div className="flex flex-wrap items-center gap-2">
+            <User className="h-4 w-4 text-dreams-textSecondary flex-shrink-0" />
+            <span className="font-semibold text-dreams-textPrimary">
+              {appt.patient_name ?? t("unknownPatient")}
+            </span>
+            {appt.is_provisional && (
+              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                {t("walkIn")}
+              </span>
+            )}
+            <Badge variant={(STATUS_VARIANT_MAP[appt.status] as any) ?? "pending"}>
+              {statusKey ? tAppt(`status.${statusKey}`) : appt.status}
+            </Badge>
+          </div>
+          {appt.is_provisional && appt.patient_phone && (
+            <p className="-mt-2 text-xs text-dreams-textSecondary">{appt.patient_phone}</p>
+          )}
+
+          {/* Details grid */}
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+            <div>
+              <dt className="text-xs font-medium uppercase text-dreams-textSecondary">{t("date")}</dt>
+              <dd className="mt-0.5 text-dreams-textPrimary">
+                {format.dateTime(new Date(appt.scheduled_at), {
+                  weekday: "short",
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                })}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium uppercase text-dreams-textSecondary">{t("time")}</dt>
+              <dd className="mt-0.5 text-dreams-textPrimary">{formatTime(appt.scheduled_at)}</dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium uppercase text-dreams-textSecondary">{t("duration")}</dt>
+              <dd className="mt-0.5 text-dreams-textPrimary">
+                {t("durationMinutes", { count: appt.duration_minutes })}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium uppercase text-dreams-textSecondary">{t("type")}</dt>
+              <dd className="mt-0.5 text-dreams-textPrimary">
+                {typeKey ? tAppt(`types.${typeKey}`) : appt.type}
+              </dd>
+            </div>
+            {appt.clinic_name && (
+              <div className="col-span-2">
+                <dt className="text-xs font-medium uppercase text-dreams-textSecondary">{t("clinic")}</dt>
+                <dd className="mt-0.5 text-dreams-textPrimary">
+                  {appt.clinic_name}
+                  {appt.branch_name ? ` — ${appt.branch_name}` : ""}
+                </dd>
+              </div>
+            )}
+            {appt.chief_complaint && (
+              <div className="col-span-2">
+                <dt className="text-xs font-medium uppercase text-dreams-textSecondary">
+                  {t("chiefComplaint")}
+                </dt>
+                <dd className="mt-0.5 text-dreams-textPrimary">{appt.chief_complaint}</dd>
+              </div>
+            )}
+          </dl>
+
+          {/* Status transitions — same rule set as the list cards */}
+          <StatusActionButtons appt={appt} onAction={onStatusAction} isPending={statusPending} />
+
+          {/* Footer actions */}
+          <div className="flex flex-wrap items-center gap-1.5 border-t border-dreams-border pt-4">
+            {appt.type === "teleconsult" && isActive &&
+              (appt.meeting_url ? (
+                <a
+                  href={appt.meeting_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 rounded-md bg-dreams-blue px-2.5 py-1.5 text-xs font-medium text-white hover:opacity-90 transition-opacity"
+                >
+                  <Video className="h-3 w-3" />
+                  {t("joinCall")}
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onGenerateLink(appt.id)}
+                  disabled={linkPending}
+                  className="flex items-center gap-1 rounded-md border border-dreams-blue px-2.5 py-1.5 text-xs text-dreams-blue hover:bg-dreams-blue/10 transition-colors disabled:opacity-50"
+                >
+                  <Video className="h-3 w-3" />
+                  {linkPending ? t("generatingLink") : t("getCallLink")}
+                </button>
+              ))}
+            {appt.is_provisional && onLinkAccount && (
+              <button
+                type="button"
+                onClick={onLinkAccount}
+                className="flex items-center gap-1 rounded-md border border-dreams-blue px-2.5 py-1.5 text-xs text-dreams-blue hover:bg-dreams-blue/10 transition-colors"
+              >
+                <UserCheck className="h-3 w-3" />
+                {t("linkAccount")}
+              </button>
+            )}
+            {appt.status === "scheduled" && (
+              <>
+                <button
+                  type="button"
+                  onClick={onEdit}
+                  className="flex items-center gap-1 rounded-md border border-dreams-border px-2.5 py-1.5 text-xs text-dreams-textSecondary hover:bg-dreams-lightBg transition-colors"
+                >
+                  <Pencil className="h-3 w-3" />
+                  {t("edit")}
+                </button>
+                <button
+                  type="button"
+                  onClick={onCancel}
+                  className="flex items-center gap-1 rounded-md border border-red-200 px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors"
+                >
+                  <XCircle className="h-3 w-3" />
+                  {t("cancel")}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main page
 // ---------------------------------------------------------------------------
 
@@ -983,6 +1400,9 @@ interface LinkingAppt {
 export default function DoctorAppointmentsPage() {
   const today = formatDateInput(new Date());
   const [selectedDate, setSelectedDate] = useState(today);
+  const [view, setView] = useState<"list" | "calendar">("list");
+  const [weekAnchor, setWeekAnchor] = useState<Date>(() => new Date());
+  const [detailAppt, setDetailAppt] = useState<Appointment | null>(null);
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [cancellingAppointment, setCancellingAppointment] = useState<Appointment | null>(null);
@@ -990,6 +1410,7 @@ export default function DoctorAppointmentsPage() {
   const [doctorId, setDoctorId] = useState<string | null>(null);
   const [activeClinics, setActiveClinics] = useState<{ id: string; name: string }[]>([]);
   const queryClient = useQueryClient();
+  const tCal = useTranslations("doctorAppointments");
 
   // Fetch doctor profile to get doctor ID for appointment creation
   useEffect(() => {
@@ -1011,18 +1432,32 @@ export default function DoctorAppointmentsPage() {
     queryFn: () => getAppointments({ date: selectedDate }),
   });
 
+  // Week range (local Mon–Sun). Fetch a ±1-day buffer: the backend filters on
+  // UTC day bounds, so an early-morning IST appointment would otherwise fall
+  // just outside the requested window.
+  const weekStart = startOfWeekMonday(weekAnchor);
+  const weekFrom = formatLocalDate(addDays(weekStart, -1));
+  const weekTo = formatLocalDate(addDays(weekStart, 7));
+
+  const { data: weekData, isLoading: weekLoading } = useQuery({
+    queryKey: ["doctor-appointments", "week", weekFrom],
+    queryFn: () => getAppointments({ from: weekFrom, to: weekTo, limit: 100 }),
+    enabled: view === "calendar",
+  });
+  const weekAppointments = weekData?.data ?? [];
+
   const statusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       updateAppointmentStatus(id, { status: status as any }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["doctor-appointments", selectedDate] });
+      queryClient.invalidateQueries({ queryKey: ["doctor-appointments"] });
     },
   });
 
   const meetingLinkMutation = useMutation({
     mutationFn: (id: string) => generateMeetingLink(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["doctor-appointments", selectedDate] });
+      queryClient.invalidateQueries({ queryKey: ["doctor-appointments"] });
     },
   });
 
@@ -1036,7 +1471,7 @@ export default function DoctorAppointmentsPage() {
     year: "numeric",
   });
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["doctor-appointments", selectedDate] });
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["doctor-appointments"] });
 
   // Use the first clinic as the active context for guest/link actions, if available
   const primaryClinicId = activeClinics[0]?.id ?? "";
@@ -1073,6 +1508,32 @@ export default function DoctorAppointmentsPage() {
           onSuccess={() => { invalidate(); setLinkingAppt(null); }}
         />
       )}
+      {detailAppt && (
+        <AppointmentDetailModal
+          appointment={detailAppt}
+          onClose={() => setDetailAppt(null)}
+          onStatusAction={(id, status) => {
+            statusMutation.mutate({ id, status });
+            setDetailAppt(null);
+          }}
+          statusPending={statusMutation.isPending}
+          onGenerateLink={(id) => meetingLinkMutation.mutate(id)}
+          linkPending={meetingLinkMutation.isPending}
+          onEdit={() => { setEditingAppointment(detailAppt); setDetailAppt(null); }}
+          onCancel={() => { setCancellingAppointment(detailAppt); setDetailAppt(null); }}
+          onLinkAccount={
+            primaryClinicId && detailAppt.is_provisional
+              ? () => {
+                  setLinkingAppt({
+                    provisionalPatientId: detailAppt.patient_id,
+                    patientName: detailAppt.patient_name ?? "Patient",
+                  });
+                  setDetailAppt(null);
+                }
+              : undefined
+          }
+        />
+      )}
 
       <Breadcrumb
         items={[
@@ -1084,28 +1545,66 @@ export default function DoctorAppointmentsPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-dreams-textPrimary">Appointments</h1>
-          <p className="text-sm text-dreams-textSecondary mt-0.5">
-            {isToday ? "Today's schedule" : displayDate}
-          </p>
+          {view === "list" && (
+            <p className="text-sm text-dreams-textSecondary mt-0.5">
+              {isToday ? "Today's schedule" : displayDate}
+            </p>
+          )}
         </div>
 
-        {/* Date picker + New Appointment button */}
+        {/* View toggle + date picker + New Appointment button */}
         <div className="flex items-center gap-2 flex-wrap">
-          <Calendar className="h-4 w-4 text-dreams-textSecondary" aria-hidden="true" />
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            aria-label="Appointments date"
-            className="rounded-lg border border-dreams-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
-          />
-          {!isToday && (
+          <div
+            role="group"
+            aria-label={tCal("view.label")}
+            className="flex rounded-lg border border-dreams-border bg-white p-0.5"
+          >
             <button
-              onClick={() => setSelectedDate(today)}
-              className="rounded-lg border border-dreams-border bg-white px-3 py-2 text-sm text-dreams-textSecondary hover:bg-gray-50"
+              type="button"
+              onClick={() => setView("list")}
+              aria-pressed={view === "list"}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                view === "list"
+                  ? "bg-dreams-blue text-white"
+                  : "text-dreams-textSecondary hover:text-dreams-textPrimary"
+              }`}
             >
-              Today
+              <List className="h-4 w-4" />
+              {tCal("view.list")}
             </button>
+            <button
+              type="button"
+              onClick={() => setView("calendar")}
+              aria-pressed={view === "calendar"}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                view === "calendar"
+                  ? "bg-dreams-blue text-white"
+                  : "text-dreams-textSecondary hover:text-dreams-textPrimary"
+              }`}
+            >
+              <CalendarDays className="h-4 w-4" />
+              {tCal("view.calendar")}
+            </button>
+          </div>
+          {view === "list" && (
+            <>
+              <Calendar className="h-4 w-4 text-dreams-textSecondary" aria-hidden="true" />
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                aria-label="Appointments date"
+                className="rounded-lg border border-dreams-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
+              />
+              {!isToday && (
+                <button
+                  onClick={() => setSelectedDate(today)}
+                  className="rounded-lg border border-dreams-border bg-white px-3 py-2 text-sm text-dreams-textSecondary hover:bg-gray-50"
+                >
+                  Today
+                </button>
+              )}
+            </>
           )}
           <button
             onClick={() => setShowBookingModal(true)}
@@ -1117,8 +1616,20 @@ export default function DoctorAppointmentsPage() {
         </div>
       </div>
 
+      {view === "calendar" && (
+        <WeekCalendarView
+          weekStart={weekStart}
+          appointments={weekAppointments}
+          isLoading={weekLoading}
+          onPrevWeek={() => setWeekAnchor((d) => addDays(d, -7))}
+          onNextWeek={() => setWeekAnchor((d) => addDays(d, 7))}
+          onToday={() => setWeekAnchor(new Date())}
+          onSelectAppointment={setDetailAppt}
+        />
+      )}
+
       {/* Summary */}
-      {!isLoading && (
+      {view === "list" && !isLoading && (
         <div className="flex items-center gap-2 text-sm text-dreams-textSecondary">
           <span className="font-medium text-dreams-textPrimary">{appointments.length}</span>
           {appointments.length === 1 ? " appointment" : " appointments"} scheduled
@@ -1126,14 +1637,14 @@ export default function DoctorAppointmentsPage() {
       )}
 
       {/* Loading */}
-      {isLoading && (
+      {view === "list" && isLoading && (
         <div className="flex justify-center py-12">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-dreams-blue" />
         </div>
       )}
 
       {/* Empty state */}
-      {!isLoading && appointments.length === 0 && (
+      {view === "list" && !isLoading && appointments.length === 0 && (
         <div className="rounded-xl border border-dreams-border bg-white p-12 text-center shadow-card">
           <Calendar className="mx-auto h-10 w-10 text-dreams-textSecondary opacity-50" />
           <p className="mt-3 font-medium text-dreams-textPrimary">No appointments</p>
@@ -1144,7 +1655,7 @@ export default function DoctorAppointmentsPage() {
       )}
 
       {/* Appointment cards */}
-      {!isLoading && appointments.length > 0 && (
+      {view === "list" && !isLoading && appointments.length > 0 && (
         <div className="space-y-3">
           {appointments.map((appt) => (
             <div
