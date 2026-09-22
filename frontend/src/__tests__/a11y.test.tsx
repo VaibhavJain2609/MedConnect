@@ -93,6 +93,7 @@ const patientAppointments: Appointment[] = [
     notes: null,
     cancelled_reason: null,
     meeting_url: null,
+    teleconsult_url: null,
     created_by: 'user-patient-1',
     created_at: PAST_ISO,
     updated_at: PAST_ISO,

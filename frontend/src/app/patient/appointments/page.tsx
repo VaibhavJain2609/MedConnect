@@ -683,16 +683,16 @@ function AppointmentCard({
 
             {/* Teleconsult join */}
             {isTeleconsult &&
-              (appt.meeting_url ? (
+              ((appt.teleconsult_url ?? appt.meeting_url) ? (
                 joinable ? (
                   <a
-                    href={appt.meeting_url}
+                    href={(appt.teleconsult_url ?? appt.meeting_url)!}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="mt-2 inline-flex items-center gap-1 rounded-md bg-dreams-blue px-2.5 py-1 text-xs font-medium text-white hover:opacity-90 transition-opacity"
                   >
                     <Video className="h-3.5 w-3.5" />
-                    {t("joinCall")}
+                    {t("joinVideoConsult")}
                   </a>
                 ) : (
                   <span

@@ -1,4 +1,3 @@
-import secrets
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
@@ -138,6 +137,7 @@ def _serialize_appointment(
         "notes": appt.notes,
         "cancelled_reason": appt.cancelled_reason,
         "meeting_url": appt.meeting_url,
+        "teleconsult_url": appt.meeting_url,
         "is_provisional": is_provisional,
         "patient_phone": patient_phone,
         "created_by": str(appt.created_by),
@@ -318,14 +318,30 @@ async def _validate_clinic_and_branch(
     return effective_clinic_id
 
 
-def _generate_meeting_url() -> str:
-    """Random unguessable Jitsi room URL for a teleconsult appointment.
+def _generate_meeting_url(appt: Appointment) -> str | None:
+    """Deterministic Jitsi room URL for a teleconsult appointment.
 
-    The appointment UUID must NOT be used: it is exposed on queue, admin,
-    search, and audit surfaces — a deterministic room name would let anyone
-    holding the UUID join a live consult on public Jitsi.
+    Room name is derived from the appointment UUID — one room per
+    appointment, so repeated calls (create, status transitions,
+    meeting-link regeneration) always yield the same URL (idempotent).
+    Returns None when teleconsult is not configured (JITSI_BASE_URL unset).
+
+    Access is enforced at the API layer: ``meeting_url``/``teleconsult_url``
+    only ride out on appointment responses scoped to the patient, the
+    doctor, the appointment's clinic members, and admins.
     """
-    return f"{settings.JITSI_BASE_URL.rstrip('/')}/medconnect-{secrets.token_urlsafe(24)}"
+    base = (settings.JITSI_BASE_URL or "").strip().rstrip("/")
+    if not base:
+        return None
+    return f"{base}/mc-{appt.id.hex}"
+
+
+def _ensure_meeting_url(appt: Appointment) -> None:
+    """Populate ``appt.meeting_url`` if this is a teleconsult appointment
+    without one. Called on create and on the arrived/in-progress status
+    transitions so late-configured JITSI_BASE_URL still yields a room."""
+    if appt.type == "teleconsult" and not appt.meeting_url:
+        appt.meeting_url = _generate_meeting_url(appt)
 
 
 async def _enqueue_appointment_reminders(appt: Appointment) -> None:
@@ -586,8 +602,7 @@ async def create_appointment(
         notes=req.notes,
         created_by=current_user.id,
     )
-    if appt.type == "teleconsult":
-        appt.meeting_url = _generate_meeting_url()
+    _ensure_meeting_url(appt)
     db.add(appt)
     try:
         await db.flush()
@@ -931,9 +946,9 @@ async def update_appointment(
         appt.notes = req.notes
 
     # Keep meeting_url in sync with the (possibly updated) appointment type
-    if appt.type == "teleconsult" and not appt.meeting_url:
-        appt.meeting_url = _generate_meeting_url()
-    elif appt.type != "teleconsult":
+    if appt.type == "teleconsult":
+        _ensure_meeting_url(appt)
+    else:
         appt.meeting_url = None
 
     try:
@@ -1045,6 +1060,11 @@ async def update_appointment_status(
     appt.status = req.status
     if req.cancelled_reason is not None:
         appt.cancelled_reason = req.cancelled_reason
+    # Backfill the teleconsult room when the consult actually starts — covers
+    # appointments created while JITSI_BASE_URL was unset. Deterministic and
+    # idempotent, so an already-set URL is untouched.
+    if req.status in {"arrived", "in-progress"}:
+        _ensure_meeting_url(appt)
     await db.flush()
     await db.refresh(appt)
 
@@ -1225,8 +1245,7 @@ async def create_guest_appointment(
         notes=body.notes,
         created_by=current_user.id,
     )
-    if appt.type == "teleconsult":
-        appt.meeting_url = _generate_meeting_url()
+    _ensure_meeting_url(appt)
     db.add(appt)
     try:
         await db.flush()
@@ -1293,7 +1312,7 @@ async def generate_meeting_link(
             detail={"error": {"code": "NOT_TELECONSULT", "message": "Meeting links are only available for teleconsult appointments"}},
         )
 
-    appt.meeting_url = _generate_meeting_url()
+    appt.meeting_url = _generate_meeting_url(appt)
     await db.flush()
     await db.refresh(appt)
     return await _load_appointment_with_names(db, appt)

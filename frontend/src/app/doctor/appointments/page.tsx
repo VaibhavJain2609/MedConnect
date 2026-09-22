@@ -1232,15 +1232,15 @@ export default function DoctorAppointmentsPage() {
                   <div className="flex flex-wrap items-center justify-end gap-1.5">
                     {appt.type === "teleconsult" &&
                       ["scheduled", "arrived", "in-progress"].includes(appt.status) &&
-                      (appt.meeting_url ? (
+                      ((appt.teleconsult_url ?? appt.meeting_url) ? (
                         <a
-                          href={appt.meeting_url}
+                          href={(appt.teleconsult_url ?? appt.meeting_url)!}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center gap-1 rounded-md bg-dreams-blue px-2 py-1 text-xs font-medium text-white hover:opacity-90 transition-opacity"
                         >
                           <Video className="h-3 w-3" />
-                          Join Call
+                          Join video consult
                         </a>
                       ) : (
                         <button
