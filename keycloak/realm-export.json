@@ -36,6 +36,7 @@
     {
       "clientId": "medconnect-frontend",
       "name": "MedConnect Frontend",
+      "description": "directAccessGrants is enabled so the Playwright e2e suite can mint real tokens via the password grant (frontend/e2e/fixtures/auth.ts). This realm file is compose-local-dev only — the k8s realm ConfigMap does not enable it.",
       "enabled": true,
       "publicClient": true,
       "redirectUris": [
@@ -50,7 +51,7 @@
       "rootUrl": "http://localhost:3000/",
       "standardFlowEnabled": true,
       "implicitFlowEnabled": false,
-      "directAccessGrantsEnabled": false,
+      "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": false,
       "frontchannelLogout": true,
       "protocol": "openid-connect",
@@ -164,6 +165,90 @@
           "manage-users"
         ]
       }
+    },
+    {
+      "id": "5eed0000-0000-4000-8000-000000000001",
+      "username": "admin@medconnect.demo",
+      "email": "admin@medconnect.demo",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Demo",
+      "lastName": "Admin",
+      "credentials": [
+        { "type": "password", "value": "demo-password", "temporary": false }
+      ],
+      "realmRoles": ["admin"],
+      "requiredActions": []
+    },
+    {
+      "id": "5eed0000-0000-4000-8000-000000000002",
+      "username": "dr.priya@medconnect.demo",
+      "email": "dr.priya@medconnect.demo",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Priya",
+      "lastName": "Sharma",
+      "credentials": [
+        { "type": "password", "value": "demo-password", "temporary": false }
+      ],
+      "realmRoles": ["doctor"],
+      "requiredActions": []
+    },
+    {
+      "id": "5eed0000-0000-4000-8000-000000000003",
+      "username": "dr.arjun@medconnect.demo",
+      "email": "dr.arjun@medconnect.demo",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Arjun",
+      "lastName": "Mehta",
+      "credentials": [
+        { "type": "password", "value": "demo-password", "temporary": false }
+      ],
+      "realmRoles": ["doctor"],
+      "requiredActions": []
+    },
+    {
+      "id": "5eed0000-0000-4000-8000-000000000004",
+      "username": "rohan.verma@medconnect.demo",
+      "email": "rohan.verma@medconnect.demo",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Rohan",
+      "lastName": "Verma",
+      "credentials": [
+        { "type": "password", "value": "demo-password", "temporary": false }
+      ],
+      "realmRoles": ["patient"],
+      "requiredActions": []
+    },
+    {
+      "id": "5eed0000-0000-4000-8000-000000000005",
+      "username": "ananya.iyer@medconnect.demo",
+      "email": "ananya.iyer@medconnect.demo",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Ananya",
+      "lastName": "Iyer",
+      "credentials": [
+        { "type": "password", "value": "demo-password", "temporary": false }
+      ],
+      "realmRoles": ["patient"],
+      "requiredActions": []
+    },
+    {
+      "id": "5eed0000-0000-4000-8000-000000000006",
+      "username": "kabir.singh@medconnect.demo",
+      "email": "kabir.singh@medconnect.demo",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Kabir",
+      "lastName": "Singh",
+      "credentials": [
+        { "type": "password", "value": "demo-password", "temporary": false }
+      ],
+      "realmRoles": ["patient"],
+      "requiredActions": []
     }
   ]
 }

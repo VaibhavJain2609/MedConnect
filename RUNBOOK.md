@@ -387,3 +387,47 @@ Failure modes: rows stuck `pending` → enqueue failed or worker down (check
 `last_error` → receiver 4xx/5xx or network error. Re-delivery is not
 implemented — create a new endpoint or replay manually.
 
+## 12. Running e2e locally
+
+The Playwright suite (`frontend/e2e`, docs/e2e.md) needs the backend on
+:8000, Keycloak on :8080 with the imported realm's demo users, seeded demo
+data, and the frontend on :3000 (Playwright boots it itself).
+
+```bash
+# 1. Stack — on a fresh volume the realm import creates the demo Keycloak
+#    users (all passwords: demo-password). Pre-existing volumes skip the
+#    import; `docker compose down -v` first if the users are missing.
+docker compose up -d --build
+# wait for Keycloak (~60–90s first boot) + backend health:
+curl -sf http://localhost:8080/realms/medconnect/.well-known/openid-configuration
+curl -sf http://localhost:8000/health
+
+# 2. Seed demo data (idempotent)
+make seed
+
+# 3. Playwright — installs browsers once, then runs the suite
+cd frontend
+npm ci
+npx playwright install chromium        # first time only
+
+# Public specs only (no credentials needed):
+npm run test:e2e
+
+# Full suite incl. @auth-tagged specs — point at the seeded demo users:
+E2E_TEST_EMAIL=kabir.singh@medconnect.demo  E2E_TEST_PASSWORD=demo-password \
+E2E_DOCTOR_EMAIL=dr.priya@medconnect.demo   E2E_DOCTOR_PASSWORD=demo-password \
+E2E_ADMIN_EMAIL=admin@medconnect.demo       E2E_ADMIN_PASSWORD=demo-password \
+npm run test:e2e
+```
+
+- `@auth` specs mint real tokens via Keycloak's direct-grant endpoint
+  (`e2e/fixtures/auth.ts`) — no mocks. Skip them wholesale with
+  `npm run test:e2e -- --grep-invert @auth`.
+- `queue.spec.ts` and the patient-journey appointments test assert on
+  seeded rows — they fail with a "run `make seed`" hint if the dataset is
+  missing.
+- Target a remote env instead: `PLAYWRIGHT_BASE_URL=https://staging…
+  npm run test:e2e` (skips the local server; set `E2E_KEYCLOAK_URL` to
+  that env's Keycloak for @auth specs).
+- Failure triage: `npm run test:e2e:report` opens the HTML report with
+  traces/screenshots; backend logs via `make logs SERVICE=backend`.

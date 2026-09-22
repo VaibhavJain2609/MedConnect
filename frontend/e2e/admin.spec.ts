@@ -1,26 +1,23 @@
-import { test, expect } from "@playwright/test";
-import { adminAuthFile } from "./auth-file";
+import { test, expect } from "./fixtures/auth";
 
 /**
- * Admin portal e2e — SKIPPED BY DEFAULT.
+ * Admin portal e2e — @auth.
  *
  * Runs as the admin test account (E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD);
- * auth.admin.setup.ts writes the session to e2e/.auth/admin.json first.
+ * `loginAs` mints a real token via Keycloak direct grant and injects it
+ * before app boot — the tests skip when those env vars are unset. The
+ * realm's imported demo admin works as-is: admin@medconnect.demo /
+ * demo-password (docs/seed.md).
  *
  * The dashboard KPI assertions pass against any database — but pair them
- * with `make seed` + a Keycloak user mapped to admin@medconnect.demo (see
- * docs/seed.md) for meaningful counts.
+ * with `make seed` for meaningful counts.
  */
 
-test.skip(
-  !process.env.E2E_ADMIN_EMAIL || !process.env.E2E_ADMIN_PASSWORD,
-  "Set E2E_ADMIN_EMAIL and E2E_ADMIN_PASSWORD to run admin e2e tests"
-);
+test.describe("admin portal", { tag: "@auth" }, () => {
+  test.beforeEach(async ({ loginAs }) => {
+    await loginAs("admin");
+  });
 
-// Every test in this file starts already logged in as the E2E admin user.
-test.use({ storageState: adminAuthFile });
-
-test.describe("admin portal", () => {
   test("dashboard shows KPI stat cards", async ({ page }) => {
     await page.goto("/admin/dashboard");
 

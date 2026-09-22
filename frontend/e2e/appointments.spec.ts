@@ -1,17 +1,18 @@
-import { test, expect } from "@playwright/test";
-import { authFile } from "./auth-file";
+import { test, expect } from "./fixtures/auth";
 
 /**
- * Authenticated appointments template — SKIPPED BY DEFAULT.
+ * Authenticated appointments template — @auth.
  *
- * This whole file is skipped unless E2E_TEST_EMAIL and E2E_TEST_PASSWORD are
- * set. When they are, the `setup` project (auth.setup.ts) runs first, writes
- * `e2e/.auth/user.json`, and every test here starts with that session
- * already loaded — no per-test login.
+ * `loginAs("patient")` mints a real Keycloak token via direct grant and
+ * injects it before app boot (see fixtures/auth.ts). The test skips
+ * itself unless E2E_TEST_EMAIL and E2E_TEST_PASSWORD are set — in CI the
+ * seeded demo users (docs/seed.md, password "demo-password") are wired
+ * up by the workflow.
  *
- * To enable:
- *   E2E_TEST_EMAIL=patient@example.com \
- *   E2E_TEST_PASSWORD=secret \
+ * To run locally:
+ *   make seed
+ *   E2E_TEST_EMAIL=kabir.singh@medconnect.demo \
+ *   E2E_TEST_PASSWORD=demo-password \
  *   npm run test:e2e -- appointments.spec.ts
  *
  * When adding real tests, replace the placeholder below and target stable
@@ -19,15 +20,11 @@ import { authFile } from "./auth-file";
  * components over coupling to Tailwind classes.
  */
 
-test.skip(
-  !process.env.E2E_TEST_EMAIL || !process.env.E2E_TEST_PASSWORD,
-  "Set E2E_TEST_EMAIL and E2E_TEST_PASSWORD to run authenticated e2e tests"
-);
+test.describe("patient appointments", { tag: "@auth" }, () => {
+  test.beforeEach(async ({ loginAs }) => {
+    await loginAs("patient");
+  });
 
-// Every test in this file starts already logged in as the E2E test user.
-test.use({ storageState: authFile });
-
-test.describe("patient appointments", () => {
   test("appointments page loads for the test user", async ({ page }) => {
     // Assumes the E2E test account has the patient role — change the route
     // (e.g. /doctor/appointments) if pointing at a doctor account.

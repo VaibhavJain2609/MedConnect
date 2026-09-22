@@ -1,8 +1,8 @@
-import { test, expect, type Request } from "@playwright/test";
-import { doctorAuthFile } from "./auth-file";
+import { type Request } from "@playwright/test";
+import { test, expect } from "./fixtures/auth";
 
 /**
- * Doctor queue e2e — SKIPPED BY DEFAULT, and REQUIRES seeded demo data.
+ * Doctor queue e2e — @auth, and REQUIRES seeded demo data.
  *
  * Prerequisites:
  *   1. `make seed` — creates the demo clinic, doctors, patients, and two
@@ -11,9 +11,10 @@ import { doctorAuthFile } from "./auth-file";
  *        - Kabir Singh  — waiting
  *      Rohan Verma (the third seeded patient) is deliberately NOT in the
  *      queue so the check-in test can add him.
- *   2. A doctor account in Keycloak whose sub maps to a seeded doctor —
- *      see docs/seed.md. Set E2E_DOCTOR_EMAIL / E2E_DOCTOR_PASSWORD; the
- *      doctor auth.setup runs first and writes e2e/.auth/doctor.json.
+ *   2. A doctor account in Keycloak whose sub maps to a seeded doctor.
+ *      Set E2E_DOCTOR_EMAIL / E2E_DOCTOR_PASSWORD — the realm's imported
+ *      demo users work as-is: dr.priya@medconnect.demo / demo-password
+ *      (docs/seed.md).
  *
  * Check-in has no UI yet (the queue page is read/operate-only), so the
  * check-in test drives POST /api/v1/queue directly through page.request,
@@ -21,14 +22,6 @@ import { doctorAuthFile } from "./auth-file";
  * own GET /api/v1/queue call. This also makes the API base URL immune to
  * environment differences — it's whatever origin the app actually used.
  */
-
-test.skip(
-  !process.env.E2E_DOCTOR_EMAIL || !process.env.E2E_DOCTOR_PASSWORD,
-  "Set E2E_DOCTOR_EMAIL and E2E_DOCTOR_PASSWORD to run doctor e2e tests"
-);
-
-// Every test in this file starts already logged in as the E2E doctor user.
-test.use({ storageState: doctorAuthFile });
 
 /** Extract the API origin + auth/clinic headers the app itself used. */
 async function captureApiContext(request: Request) {
@@ -40,7 +33,11 @@ async function captureApiContext(request: Request) {
   };
 }
 
-test.describe("doctor queue", () => {
+test.describe("doctor queue", { tag: "@auth" }, () => {
+  test.beforeEach(async ({ loginAs }) => {
+    await loginAs("doctor");
+  });
+
   test("today's queue shows the seeded patients", async ({ page }) => {
     await page.goto("/doctor/queue");
 

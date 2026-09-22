@@ -61,33 +61,47 @@ Keycloak is down; when it answers, they also check the hosted login form.
 
 ## Authenticated tests
 
-Each portal role has its own `*.setup.ts` file in the `setup` project —
-they all perform one real Keycloak login (via the shared helper in
-`e2e/auth-helpers.ts`) and save the session to `e2e/.auth/` (gitignored).
-Specs reuse the matching file via `test.use({ storageState })`.
+Specs that need a logged-in session are tagged `@auth` and import `test`
+from `e2e/fixtures/auth.ts`. That fixture's `loginAs(role)` mints **real**
+Keycloak tokens via the realm's direct-grant (password) endpoint and
+injects them into the page via `addInitScript` — `initKeycloak()`
+(`src/lib/auth.ts`) picks them up and hands them to `keycloak.init()`.
+Nothing is mocked: the backend validates the real JWT against the realm's
+JWKS, and token refresh hits the real token endpoint.
 
-| Setup file | Env vars | Session file | Consumed by |
-|---|---|---|---|
-| `auth.setup.ts` | `E2E_TEST_EMAIL` / `E2E_TEST_PASSWORD` | `e2e/.auth/user.json` | `appointments.spec.ts`, `patient-journey.spec.ts` |
-| `auth.doctor.setup.ts` | `E2E_DOCTOR_EMAIL` / `E2E_DOCTOR_PASSWORD` | `e2e/.auth/doctor.json` | `queue.spec.ts` |
-| `auth.admin.setup.ts` | `E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD` | `e2e/.auth/admin.json` | `admin.spec.ts` |
+| Role | Env vars | Used by |
+|---|---|---|
+| `patient` | `E2E_TEST_EMAIL` / `E2E_TEST_PASSWORD` | `appointments.spec.ts`, `patient-journey.spec.ts`, `a11y.spec.ts` |
+| `doctor` | `E2E_DOCTOR_EMAIL` / `E2E_DOCTOR_PASSWORD` | `queue.spec.ts`, `a11y.spec.ts` |
+| `admin` | `E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD` | `admin.spec.ts`, `a11y.spec.ts` |
 
-Every setup is **skipped by default** and only runs when its credential
-pair is set — set only the roles you have accounts for:
+Every `loginAs` call **skips its test** when the role's credential pair is
+unset — set only the roles you have accounts for. To exclude all
+authenticated coverage regardless of env vars:
 
 ```bash
-E2E_TEST_EMAIL=patient@example.com \
-E2E_TEST_PASSWORD=secret \
-E2E_DOCTOR_EMAIL=doctor@example.com \
-E2E_DOCTOR_PASSWORD=secret \
-E2E_ADMIN_EMAIL=admin@example.com \
-E2E_ADMIN_PASSWORD=secret \
+npm run test:e2e -- --grep-invert @auth
+```
+
+Example — full suite against the local stack's seeded demo users (all
+share password `demo-password`; they ship with `keycloak/realm-export.json`,
+see docs/seed.md):
+
+```bash
+E2E_TEST_EMAIL=kabir.singh@medconnect.demo \
+E2E_TEST_PASSWORD=demo-password \
+E2E_DOCTOR_EMAIL=dr.priya@medconnect.demo \
+E2E_DOCTOR_PASSWORD=demo-password \
+E2E_ADMIN_EMAIL=admin@medconnect.demo \
+E2E_ADMIN_PASSWORD=demo-password \
 npm run test:e2e
 ```
 
-Each account must already exist in the Keycloak realm the app points at
-(`NEXT_PUBLIC_KEYCLOAK_*`) and have the matching realm role — the
-doctor/admin setups fail fast if the account lands on the wrong portal.
+Direct grant requires a Keycloak where the `medconnect-frontend` client
+has **Direct Access Grants enabled** — the bundled dev realm already does
+(this is also why `E2E_KEYCLOAK_CLIENT_ID` must stay `medconnect-frontend`:
+the refresh token is bound to the client that issued it, and the backend's
+audience check relies on that client's protocol mappers).
 
 ### Seeded demo data
 
@@ -97,10 +111,10 @@ Some authenticated specs assert on the demo dataset — run it **first**:
 make seed   # idempotent; see docs/seed.md
 ```
 
-The seeded users can't log in directly: the seeder writes placeholder
-`keycloak_sub` values. Create a Keycloak user for each role you want to
-test and update the seeded row's `keycloak_sub` to the `sub` Keycloak
-assigns (docs/seed.md). Expected pairings:
+The seeded users' `keycloak_sub` values match the demo users imported by
+`keycloak/realm-export.json` (password `demo-password`), so on a fresh
+compose stack they log in directly — on a pre-existing Keycloak volume,
+recreate it or map the subs manually (docs/seed.md). Expected pairings:
 
 | Env vars | Seeded account |
 |---|---|
@@ -128,45 +142,51 @@ API credentials needed.
 | Variable | Purpose | Where set |
 |---|---|---|
 | `PLAYWRIGHT_BASE_URL` | Target URL; skips local `webServer` when set | shell / `vars.E2E_BASE_URL` in CI |
-| `E2E_TEST_EMAIL` | Patient test user email — enables auth.setup + patient specs | shell / `secrets.E2E_TEST_EMAIL` |
+| `E2E_TEST_EMAIL` | Patient test user email — enables `loginAs("patient")` | shell / `secrets.E2E_TEST_EMAIL` (staging mode); seeded creds in full-stack CI |
 | `E2E_TEST_PASSWORD` | Patient test user password | shell / `secrets.E2E_TEST_PASSWORD` |
-| `E2E_DOCTOR_EMAIL` | Doctor test user email — enables auth.doctor.setup + `queue.spec.ts` | shell / `secrets.E2E_DOCTOR_EMAIL` |
+| `E2E_DOCTOR_EMAIL` | Doctor test user email — enables `loginAs("doctor")` | shell / `secrets.E2E_DOCTOR_EMAIL` |
 | `E2E_DOCTOR_PASSWORD` | Doctor test user password | shell / `secrets.E2E_DOCTOR_PASSWORD` |
-| `E2E_ADMIN_EMAIL` | Admin test user email — enables auth.admin.setup + `admin.spec.ts` | shell / `secrets.E2E_ADMIN_EMAIL` |
+| `E2E_ADMIN_EMAIL` | Admin test user email — enables `loginAs("admin")` | shell / `secrets.E2E_ADMIN_EMAIL` |
 | `E2E_ADMIN_PASSWORD` | Admin test user password | shell / `secrets.E2E_ADMIN_PASSWORD` |
-| `CI` | Set automatically in GitHub Actions: retries=2, workers=1, no server reuse | — |
+| `E2E_KEYCLOAK_URL` | Keycloak base URL for token minting | shell / `vars.E2E_KEYCLOAK_URL` in CI (default `http://localhost:8080`) |
+| `E2E_KEYCLOAK_REALM` | Realm for token minting | default `medconnect` |
+| `E2E_KEYCLOAK_CLIENT_ID` | Client for token minting | default `medconnect-frontend` |
+| `CI` | Set automatically in GitHub Actions: retries=2, workers=1, no server reuse, `next start` webServer | — |
 
 ## Adding tests
 
 1. Create `e2e/<feature>.spec.ts` — it runs in the `chromium` project
-   automatically (`*.setup.ts` files run in the `setup` project instead).
+   automatically.
 2. Prefer `getByRole` / `getByLabel` / `getByText` selectors; add
    `data-testid` to components rather than coupling to Tailwind classes.
 3. For authenticated specs, copy the pattern from `appointments.spec.ts`:
-   file-level `test.skip(...)` on the role's env vars plus
-   `test.use({ storageState })` pointing at that role's session file
-   (`authFile` / `doctorAuthFile` / `adminAuthFile` from
-   `e2e/auth-file.ts`). A new role needs a new `auth.<role>.setup.ts`
-   (see `auth.doctor.setup.ts`) plus its own env-var pair.
-4. Keep public and authenticated coverage in separate files — the
-   `chromium` project has **no** global storage state, so anything without
-   `test.use({ storageState })` runs logged out.
+   import `test`/`expect` from `./fixtures/auth`, tag the describe
+   `@auth`, and call `await loginAs("<role>")` in `test.beforeEach`
+   before any `page.goto`. A new role needs a new env-var pair in
+   `ROLE_ENV` (`e2e/fixtures/auth.ts`) plus a Keycloak account.
+4. Keep public and authenticated coverage in separate describes — only
+   describes that call `loginAs` run logged in; everything else runs
+   logged out.
 5. Jest ignores `e2e/` (`testPathIgnorePatterns` in `jest.config.js`) —
    unit-test discovery is unaffected.
 
 ## CI behavior (`.github/workflows/e2e.yml`)
 
 - Triggers: every PR, nightly (`17 2 * * *`), and `workflow_dispatch`.
-- Steps: checkout → setup-node 20 → `npm ci` →
-  `npx playwright install --with-deps chromium` → `npx playwright test` →
-  upload `frontend/playwright-report/` as an artifact (always, 14 days).
-- **Default mode is staging-URL**: the job reads `vars.E2E_BASE_URL`. A
-  docker-compose step is included but commented out — the base compose file
-  has no test profile and builds four custom images, too heavy for per-PR
-  runs. To enable it, uncomment the step in the workflow and leave
-  `E2E_BASE_URL` unset.
-- Set the `E2E_TEST_*`, `E2E_DOCTOR_*`, and/or `E2E_ADMIN_*` repo secrets
-  to light up the authenticated specs — each pair is independent, and
-  whatever isn't set skips cleanly. `queue.spec.ts` additionally needs the
-  staging environment to carry the seeded demo dataset (`make seed`); the
-  spec fails with a clear "run `make seed`" message if it's missing.
+- **Default mode is full-stack**: `docker compose up -d postgres redis
+  keycloak` (the realm import creates the demo users) → `pip install` +
+  alembic migrations + `seed_demo_data.py` on the runner → uvicorn on
+  :8000 → `npm ci` + `npm run build` → `playwright install --with-deps
+  chromium` → `npx playwright test`. The seeded demo users
+  (`…@medconnect.demo` / `demo-password`) are exported as the `E2E_*`
+  credentials, so the whole suite including `@auth` runs with no secrets
+  configured.
+- **Staging-URL mode**: set repo variable `E2E_BASE_URL` — every stack
+  step skips and the suite points at that URL. Authenticated specs then
+  need the `E2E_*_EMAIL`/`E2E_*_PASSWORD` secrets (users must exist in
+  that realm, its frontend client must allow direct grants, and
+  `vars.E2E_KEYCLOAK_URL` should point at that env's Keycloak). Whatever
+  isn't set skips cleanly.
+- On failure the workflow dumps the postgres/redis/keycloak compose logs
+  plus `backend-e2e.log`, and always uploads `frontend/playwright-report/`
+  (traces included) for 14 days.

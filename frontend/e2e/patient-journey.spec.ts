@@ -1,12 +1,12 @@
-import { test, expect } from "@playwright/test";
-import { authFile } from "./auth-file";
+import { test, expect } from "./fixtures/auth";
 
 /**
- * Patient portal journey — SKIPPED BY DEFAULT.
+ * Patient portal journey — @auth.
  *
  * Runs as the generic E2E test user (E2E_TEST_EMAIL / E2E_TEST_PASSWORD),
- * which must be a *patient* account — auth.setup.ts writes the shared
- * session to e2e/.auth/user.json first.
+ * which must be a *patient* account. `loginAs` mints a real token via
+ * Keycloak direct grant and injects it before app boot — the test skips
+ * when those env vars are unset.
  *
  * The appointments test additionally expects seeded demo data (`make
  * seed`): each seeded patient has ≥1 appointment with Dr. Priya Sharma or
@@ -14,15 +14,11 @@ import { authFile } from "./auth-file";
  * and render their expected states, so they pass with or without seed.
  */
 
-test.skip(
-  !process.env.E2E_TEST_EMAIL || !process.env.E2E_TEST_PASSWORD,
-  "Set E2E_TEST_EMAIL and E2E_TEST_PASSWORD to run authenticated e2e tests"
-);
+test.describe("patient journey", { tag: "@auth" }, () => {
+  test.beforeEach(async ({ loginAs }) => {
+    await loginAs("patient");
+  });
 
-// Every test in this file starts already logged in as the E2E test user.
-test.use({ storageState: authFile });
-
-test.describe("patient journey", () => {
   test("appointments page lists the patient's appointments", async ({
     page,
   }) => {
