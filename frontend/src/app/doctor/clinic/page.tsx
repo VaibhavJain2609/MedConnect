@@ -20,11 +20,14 @@ import {
   type ClinicMember,
 } from "@/lib/api/clinics";
 import { useClinicStore } from "@/stores/clinic-store";
+import { useAuthStore } from "@/stores/auth-store";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
+import { ClinicHolidaysCard } from "@/components/clinic/clinic-holidays-card";
 
 export default function DoctorClinicPage() {
   const { activeClinicId } = useClinicStore();
+  const { user } = useAuthStore();
   const queryClient = useQueryClient();
   const [showBranchForm, setShowBranchForm] = useState(false);
   const [branchName, setBranchName] = useState("");
@@ -83,6 +86,10 @@ export default function DoctorClinicPage() {
 
   const members: ClinicMember[] = membersData?.data ?? [];
   const roleBadge: Record<string, string> = { owner: "overdue", admin: "inProgress", doctor: "completed", receptionist: "pending" };
+  // Holiday management is restricted to clinic admins (owner|admin) —
+  // mirrors the backend membership-role check on /holidays endpoints.
+  const myRole = members.find((m) => m.user_id === user?.id)?.role;
+  const canManageHolidays = myRole === "owner" || myRole === "admin";
 
   return (
     <div className="space-y-6">
@@ -230,6 +237,9 @@ export default function DoctorClinicPage() {
               Branches are managed via clinic settings.
             </p>
           </div>
+
+          {/* Holidays — closure days that block slot booking */}
+          {canManageHolidays && <ClinicHolidaysCard clinicId={activeClinicId} />}
         </div>
       </div>
     </div>

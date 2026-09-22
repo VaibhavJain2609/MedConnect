@@ -7,6 +7,7 @@ from app.models.prescription_template import PrescriptionTemplate
 from app.models.notification import Notification, NotificationPreferences, NotificationType
 from app.models.push_subscription import PushSubscription
 from app.models.clinic import Clinic, ClinicBranch, ClinicMembership
+from app.models.clinic_holiday import ClinicHoliday
 from app.models.clinic_invite import ClinicInvite, ClinicJoinRequest
 from app.models.patient_link import PatientClinicLink, PatientLinkCode
 from app.models.record_access import RecordAccessConsent
@@ -71,6 +72,7 @@ __all__ = [
     "Clinic",
     "ClinicBranch",
     "ClinicMembership",
+    "ClinicHoliday",
     "ClinicInvite",
     "ClinicJoinRequest",
     "PatientClinicLink",

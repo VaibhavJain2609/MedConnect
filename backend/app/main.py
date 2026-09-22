@@ -33,6 +33,7 @@ from app.routers.admin import broadcast as admin_broadcast
 from app.routers.admin import patients as admin_patients
 from app.routers import clinics
 from app.routers import clinic_webhooks
+from app.routers import clinic_holidays
 from app.routers import onboarding
 from app.routers import clinic_invites
 from app.routers import patient_links
@@ -316,6 +317,7 @@ app.include_router(admin_patients.router)
 app.include_router(clinic_invites.router)
 app.include_router(clinics.router)
 app.include_router(clinic_webhooks.router)
+app.include_router(clinic_holidays.router)
 app.include_router(onboarding.router)
 app.include_router(patient_links.router)
 app.include_router(record_access.router)

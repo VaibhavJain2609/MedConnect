@@ -140,6 +140,41 @@ export async function getClinicBranches(clinicId: string): Promise<ClinicBranch[
   return res.data.data ?? []
 }
 
+// ── Clinic holidays (closure days that block slot booking) ────────────────
+
+export interface ClinicHoliday {
+  id: string
+  clinic_id: string
+  date: string // YYYY-MM-DD, clinic-local
+  name: string | null
+  created_at: string
+}
+
+export async function getClinicHolidays(
+  clinicId: string,
+  year?: number
+): Promise<ClinicHoliday[]> {
+  const res = await api.get(`/api/v1/clinics/${clinicId}/holidays`, {
+    params: year ? { year } : {},
+  })
+  return res.data.data ?? []
+}
+
+export async function createClinicHoliday(
+  clinicId: string,
+  data: { date: string; name?: string }
+): Promise<ClinicHoliday> {
+  const res = await api.post(`/api/v1/clinics/${clinicId}/holidays`, data)
+  return res.data
+}
+
+export async function deleteClinicHoliday(
+  clinicId: string,
+  holidayId: string
+): Promise<void> {
+  await api.delete(`/api/v1/clinics/${clinicId}/holidays/${holidayId}`)
+}
+
 // ── Admin API ─────────────────────────────────────────────────────────────
 
 export interface ClinicCreatePayload {
