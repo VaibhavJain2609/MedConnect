@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { ArrowRight, CalendarDays } from "lucide-react";
 
 import { getAppointments, type Appointment } from "@/lib/api/appointments";
@@ -15,12 +16,6 @@ const ACTIVE_STATUSES = new Set<Appointment["status"]>([
   "arrived",
   "in-progress",
 ]);
-
-const TYPE_LABELS: Record<Appointment["type"], string> = {
-  "in-person": "In-person",
-  teleconsult: "Teleconsult",
-  "follow-up": "Follow-up",
-};
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("en-IN", {
@@ -54,6 +49,10 @@ function ScheduleSkeleton() {
  * GET /api/v1/appointments?date=YYYY-MM-DD.
  */
 export function TodaySchedule() {
+  const t = useTranslations("doctorDashboard.schedule");
+  const tTypes = useTranslations("appointments.types");
+  const tStatus = useTranslations("appointments.status");
+  const tCommon = useTranslations("common");
   // Same convention as /doctor/appointments: UTC date string for the date filter.
   const today = new Date().toISOString().slice(0, 10);
 
@@ -78,28 +77,28 @@ export function TodaySchedule() {
 
   return (
     <DashboardWidget
-      title="Today's Schedule"
+      title={t("title")}
       icon={CalendarDays}
       headerAction={
         <Link
           href="/doctor/appointments"
           className="inline-flex items-center gap-1 text-sm font-medium text-dreams-blue hover:underline"
         >
-          View all
+          {t("viewAll")}
           <ArrowRight className="h-3.5 w-3.5" aria-hidden />
         </Link>
       }
       isLoading={query.isLoading}
       isError={query.isError}
       onRetry={() => query.refetch()}
-      errorMessage="Couldn't load today's schedule."
+      errorMessage={t("loadError")}
       skeleton={<ScheduleSkeleton />}
     >
       {appointments.length === 0 ? (
         <EmptyState
           icon={CalendarDays}
-          title="No appointments today"
-          description="Your schedule is clear. New bookings will appear here."
+          title={t("emptyTitle")}
+          description={t("emptyHint")}
           className="py-8"
         />
       ) : (
@@ -108,7 +107,7 @@ export function TodaySchedule() {
             <span className="text-2xl font-bold text-dreams-textPrimary">
               {total}
             </span>{" "}
-            appointment{total === 1 ? "" : "s"} today
+            {t("countSuffix", { count: total })}
           </p>
 
           {nextUp.length > 0 ? (
@@ -123,24 +122,24 @@ export function TodaySchedule() {
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-dreams-textPrimary">
-                      {appt.patient_name ?? "Unknown patient"}
+                      {appt.patient_name ?? tCommon("unknownPatient")}
                       {appt.is_provisional && (
                         <span className="ml-1.5 text-xs text-amber-700">
-                          (walk-in)
+                          {t("walkIn")}
                         </span>
                       )}
                     </p>
                     <p className="text-xs text-dreams-textSecondary">
-                      {TYPE_LABELS[appt.type] ?? appt.type}
+                      {tTypes(appt.type)}
                     </p>
                   </div>
-                  <StatusBadge status={appt.status} />
+                  <StatusBadge status={appt.status} label={tStatus(appt.status)} />
                 </li>
               ))}
             </ul>
           ) : (
             <p className="mt-3 text-sm text-dreams-textSecondary">
-              No upcoming appointments left today.
+              {t("noneLeft")}
             </p>
           )}
         </div>

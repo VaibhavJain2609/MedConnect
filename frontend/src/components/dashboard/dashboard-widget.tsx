@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useTranslations } from "next-intl";
 import { AlertCircle, RefreshCw, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -36,11 +37,13 @@ export function DashboardWidget({
   isLoading = false,
   isError = false,
   onRetry,
-  errorMessage = "Failed to load. Please try again.",
+  errorMessage,
   skeleton,
   className,
   children,
 }: DashboardWidgetProps) {
+  const t = useTranslations("common");
+  const resolvedErrorMessage = errorMessage ?? t("loadFailed");
   return (
     <section
       className={cn("bg-white rounded-lg shadow-card p-6", className)}
@@ -67,7 +70,7 @@ export function DashboardWidget({
         <div className="flex flex-col items-center justify-center py-10 text-center">
           <AlertCircle className="h-8 w-8 text-status-overdue mb-3" aria-hidden />
           <p className="text-sm font-medium text-dreams-textPrimary">
-            {errorMessage}
+            {resolvedErrorMessage}
           </p>
           {onRetry && (
             <Button
@@ -77,7 +80,7 @@ export function DashboardWidget({
               onClick={onRetry}
             >
               <RefreshCw className="h-4 w-4" />
-              Retry
+              {t("retry")}
             </Button>
           )}
         </div>

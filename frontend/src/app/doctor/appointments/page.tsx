@@ -22,11 +22,9 @@ import {
 import { getClinicBranches } from "@/lib/api/clinics";
 import api from "@/lib/api";
 
-const TYPE_LABELS: Record<string, string> = {
-  "in-person": "In Person",
-  "teleconsult": "Teleconsult",
-  "follow-up": "Follow-up",
-};
+// Type and status labels come from the shared "appointments.types" /
+// "appointments.status" message namespaces (see docs/i18n.md).
+const KNOWN_TYPES = new Set<string>(["in-person", "teleconsult", "follow-up"]);
 
 const STATUS_VARIANT_MAP: Record<string, string> = {
   scheduled: "upcoming",
@@ -35,15 +33,6 @@ const STATUS_VARIANT_MAP: Record<string, string> = {
   completed: "completed",
   cancelled: "overdue",
   "no-show": "pending",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  scheduled: "Scheduled",
-  arrived: "Arrived",
-  "in-progress": "In Progress",
-  completed: "Completed",
-  cancelled: "Cancelled",
-  "no-show": "No Show",
 };
 
 // Keys into messages/en.json — en.json is the source of truth; keep the
@@ -134,6 +123,7 @@ function PatientSearchInput({
   onSelect: (p: PatientSuggestion) => void;
   id?: string;
 }) {
+  const t = useTranslations("doctorAppointments.search");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PatientSuggestion[]>([]);
   const [open, setOpen] = useState(false);
@@ -171,7 +161,7 @@ function PatientSearchInput({
         type="text"
         value={query}
         onChange={handleChange}
-        placeholder="Search patient by name or phone..."
+        placeholder={t("placeholder")}
         className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
         onFocus={() => results.length > 0 && setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
@@ -204,7 +194,7 @@ function PatientSearchInput({
       )}
       {open && results.length === 0 && !loading && query.length >= 2 && (
         <div className="absolute z-50 mt-1 w-full rounded-lg border border-dreams-border bg-white px-4 py-3 text-sm text-dreams-textSecondary shadow-lg">
-          No patients found.
+          {t("empty")}
         </div>
       )}
     </div>
@@ -228,6 +218,8 @@ function LinkAccountModal({
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const t = useTranslations("doctorAppointments.linkModal");
+  const tCommon = useTranslations("common");
   const [code, setCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -235,7 +227,7 @@ function LinkAccountModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!code.trim()) { setError("Please enter the link code"); return; }
+    if (!code.trim()) { setError(t("errorCode")); return; }
     setSubmitting(true);
     try {
       await linkProvisionalPatient(clinicId, {
@@ -245,7 +237,7 @@ function LinkAccountModal({
       onSuccess();
       onClose();
     } catch (err: any) {
-      const msg = err.response?.data?.detail?.error?.message || err.response?.data?.detail || "Failed to link account";
+      const msg = err.response?.data?.detail?.error?.message || err.response?.data?.detail || t("errorFailed");
       setError(typeof msg === "string" ? msg : JSON.stringify(msg));
     } finally {
       setSubmitting(false);
@@ -257,21 +249,24 @@ function LinkAccountModal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Link patient account"
+        aria-label={t("ariaLabel")}
         className="w-[calc(100%-2rem)] sm:w-full sm:max-w-md rounded-xl bg-white shadow-xl"
       >
         <div className="flex items-center justify-between border-b border-dreams-border px-6 py-4">
-          <h2 className="text-lg font-semibold text-dreams-textPrimary">Link patient account</h2>
-          <button type="button" onClick={onClose} aria-label="Close" className="text-dreams-textSecondary hover:text-dreams-textPrimary">
+          <h2 className="text-lg font-semibold text-dreams-textPrimary">{t("title")}</h2>
+          <button type="button" onClick={onClose} aria-label={tCommon("close")} className="text-dreams-textSecondary hover:text-dreams-textPrimary">
             <X className="h-5 w-5" />
           </button>
         </div>
         <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
           <p className="text-sm text-dreams-textSecondary">
-            Linking walk-in record for{" "}
-            <span className="font-medium text-dreams-textPrimary">{patientName}</span>. Ask the
-            patient to open MedConnect, go to{" "}
-            <span className="font-medium">My Clinics</span>, and share their link code.
+            {t.rich("body", {
+              name: patientName,
+              strong: (chunks) => (
+                <span className="font-medium text-dreams-textPrimary">{chunks}</span>
+              ),
+              b: (chunks) => <span className="font-medium">{chunks}</span>,
+            })}
           </p>
           {error && (
             <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">{error}</div>
@@ -281,14 +276,14 @@ function LinkAccountModal({
               htmlFor="link-code"
               className="mb-1 block text-sm font-medium text-dreams-textPrimary"
             >
-              Patient&apos;s link code
+              {t("codeLabel")}
             </label>
             <input
               id="link-code"
               type="text"
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
-              placeholder="e.g., ABC1234567"
+              placeholder={t("codePlaceholder")}
               maxLength={10}
               className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm font-mono tracking-widest focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
             />
@@ -299,11 +294,11 @@ function LinkAccountModal({
               disabled={submitting}
               className="flex-1 rounded-lg bg-dreams-blue px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
-              {submitting ? "Linking..." : "Link Account"}
+              {submitting ? t("submitting") : t("submit")}
             </button>
             <button type="button" onClick={onClose}
               className="rounded-lg border border-dreams-border px-4 py-2.5 text-sm font-medium text-dreams-textPrimary hover:bg-dreams-lightBg transition-colors">
-              Cancel
+              {tCommon("cancel")}
             </button>
           </div>
         </form>
@@ -328,6 +323,9 @@ interface BookAppointmentModalProps {
 }
 
 function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentModalProps) {
+  const t = useTranslations("doctorAppointments.booking");
+  const tTypes = useTranslations("appointments.types");
+  const tCommon = useTranslations("common");
   const [tab, setTab] = useState<"existing" | "walkin">("existing");
   // Existing patient state
   const [selectedPatient, setSelectedPatient] = useState<PatientSuggestion | null>(null);
@@ -383,10 +381,10 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
     const scheduledAt = new Date(`${date}T${time}:00`).toISOString();
 
     if (tab === "walkin") {
-      if (!walkinName.trim()) { setError("Patient name is required"); return; }
-      if (!walkinPhone.trim()) { setError("Phone number is required"); return; }
-      if (!clinicId) { setError("A clinic must be selected for walk-in bookings"); return; }
-      if (!doctorId && !pickedDoctorId) { setError("Please select a doctor"); return; }
+      if (!walkinName.trim()) { setError(t("errorName")); return; }
+      if (!walkinPhone.trim()) { setError(t("errorPhone")); return; }
+      if (!clinicId) { setError(t("errorClinic")); return; }
+      if (!doctorId && !pickedDoctorId) { setError(t("errorDoctor")); return; }
       setSubmitting(true);
       try {
         await createGuestAppointment(clinicId, {
@@ -402,7 +400,7 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
         onSuccess();
         onClose();
       } catch (err: any) {
-        const msg = err.response?.data?.detail?.error?.message || err.response?.data?.detail || "Failed to create appointment";
+        const msg = err.response?.data?.detail?.error?.message || err.response?.data?.detail || t("errorFailed");
         setError(typeof msg === "string" ? msg : JSON.stringify(msg));
       } finally {
         setSubmitting(false);
@@ -410,7 +408,7 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
       return;
     }
 
-    if (!selectedPatient) { setError("Please select a patient"); return; }
+    if (!selectedPatient) { setError(t("errorPatient")); return; }
     setSubmitting(true);
     try {
       await createAppointment({
@@ -429,7 +427,7 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
       const msg =
         err.response?.data?.detail?.error?.message ||
         err.response?.data?.detail ||
-        "Failed to create appointment";
+        t("errorFailed");
       setError(typeof msg === "string" ? msg : JSON.stringify(msg));
     } finally {
       setSubmitting(false);
@@ -441,7 +439,7 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
       {/* Date + Time */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <label htmlFor="booking-date" className="mb-1 block text-sm font-medium text-dreams-textPrimary">Date *</label>
+          <label htmlFor="booking-date" className="mb-1 block text-sm font-medium text-dreams-textPrimary">{t("date")}</label>
           <input
             id="booking-date"
             type="date"
@@ -453,7 +451,7 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
           />
         </div>
         <div>
-          <label htmlFor="booking-time" className="mb-1 block text-sm font-medium text-dreams-textPrimary">Time *</label>
+          <label htmlFor="booking-time" className="mb-1 block text-sm font-medium text-dreams-textPrimary">{t("time")}</label>
           <input
             id="booking-time"
             type="time"
@@ -468,43 +466,42 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
       {/* Duration + Type */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <label htmlFor="booking-duration" className="mb-1 block text-sm font-medium text-dreams-textPrimary">Duration</label>
+          <label htmlFor="booking-duration" className="mb-1 block text-sm font-medium text-dreams-textPrimary">{t("duration")}</label>
           <select
             id="booking-duration"
             value={duration}
             onChange={(e) => setDuration(Number(e.target.value))}
             className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
           >
-            <option value={15}>15 min</option>
-            <option value={30}>30 min</option>
-            <option value={45}>45 min</option>
-            <option value={60}>60 min</option>
+            {[15, 30, 45, 60].map((m) => (
+              <option key={m} value={m}>{t("durationOption", { count: m })}</option>
+            ))}
           </select>
         </div>
         <div>
-          <label htmlFor="booking-type" className="mb-1 block text-sm font-medium text-dreams-textPrimary">Type *</label>
+          <label htmlFor="booking-type" className="mb-1 block text-sm font-medium text-dreams-textPrimary">{t("type")}</label>
           <select
             id="booking-type"
             value={type}
             onChange={(e) => setType(e.target.value as typeof type)}
             className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
           >
-            <option value="in-person">In Person</option>
-            <option value="teleconsult">Teleconsult</option>
-            <option value="follow-up">Follow-up</option>
+            <option value="in-person">{tTypes("in-person")}</option>
+            <option value="teleconsult">{tTypes("teleconsult")}</option>
+            <option value="follow-up">{tTypes("follow-up")}</option>
           </select>
         </div>
       </div>
 
       {/* Chief Complaint */}
       <div>
-        <label htmlFor="booking-complaint" className="mb-1 block text-sm font-medium text-dreams-textPrimary">Chief Complaint</label>
+        <label htmlFor="booking-complaint" className="mb-1 block text-sm font-medium text-dreams-textPrimary">{t("chiefComplaint")}</label>
         <input
           id="booking-complaint"
           type="text"
           value={chiefComplaint}
           onChange={(e) => setChiefComplaint(e.target.value)}
-          placeholder="e.g., Fever, headache for 2 days"
+          placeholder={t("chiefComplaintPlaceholder")}
           className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
         />
       </div>
@@ -513,7 +510,7 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
       {clinics.length > 0 && (
         <div>
           <label htmlFor="booking-clinic" className="mb-1 block text-sm font-medium text-dreams-textPrimary">
-            Clinic{tab === "walkin" ? " *" : ""}
+            {tab === "walkin" ? t("clinicRequired") : t("clinic")}
           </label>
           <select
             id="booking-clinic"
@@ -521,7 +518,7 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
             onChange={(e) => { setClinicId(e.target.value); setBranchId(""); }}
             className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
           >
-            <option value="">{tab === "walkin" ? "Select clinic" : "No clinic (private)"}</option>
+            <option value="">{tab === "walkin" ? t("selectClinic") : t("noClinic")}</option>
             {clinics.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
@@ -532,14 +529,14 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
       {/* Doctor — only for staff without a Doctor profile (e.g. receptionists) */}
       {!doctorId && clinicId && (
         <div>
-          <label htmlFor="booking-doctor" className="mb-1 block text-sm font-medium text-dreams-textPrimary">Doctor *</label>
+          <label htmlFor="booking-doctor" className="mb-1 block text-sm font-medium text-dreams-textPrimary">{t("doctor")}</label>
           <select
             id="booking-doctor"
             value={pickedDoctorId}
             onChange={(e) => setPickedDoctorId(e.target.value)}
             className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
           >
-            <option value="">Select doctor</option>
+            <option value="">{t("selectDoctor")}</option>
             {clinicDoctors.map((d) => (
               <option key={d.id} value={d.id}>
                 {d.full_name}{d.specialization ? ` — ${d.specialization}` : ""}
@@ -552,11 +549,11 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
       {/* Branch */}
       {clinicId && (branchesLoading || branches.length > 0) && (
         <div>
-          <label htmlFor="booking-branch" className="mb-1 block text-sm font-medium text-dreams-textPrimary">Branch</label>
+          <label htmlFor="booking-branch" className="mb-1 block text-sm font-medium text-dreams-textPrimary">{t("branch")}</label>
           {branchesLoading ? (
             <div className="h-10 rounded-lg border border-dreams-border bg-gray-50 flex items-center px-3">
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-dreams-blue border-t-transparent" />
-              <span className="ml-2 text-sm text-dreams-textSecondary">Loading branches...</span>
+              <span className="ml-2 text-sm text-dreams-textSecondary">{t("loadingBranches")}</span>
             </div>
           ) : (
             <select
@@ -565,7 +562,7 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
               onChange={(e) => setBranchId(e.target.value)}
               className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
             >
-              <option value="">Any branch</option>
+              <option value="">{t("anyBranch")}</option>
               {branches.map((b) => (
                 <option key={b.id} value={b.id}>{b.name}{b.city ? ` — ${b.city}` : ""}</option>
               ))}
@@ -581,13 +578,13 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="New appointment"
+        aria-label={t("ariaLabel")}
         className="w-[calc(100%-2rem)] sm:w-full sm:max-w-lg rounded-xl bg-white shadow-xl"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-dreams-border px-6 py-4">
-          <h2 className="text-lg font-semibold text-dreams-textPrimary">New Appointment</h2>
-          <button type="button" onClick={onClose} aria-label="Close" className="text-dreams-textSecondary hover:text-dreams-textPrimary">
+          <h2 className="text-lg font-semibold text-dreams-textPrimary">{t("title")}</h2>
+          <button type="button" onClick={onClose} aria-label={tCommon("close")} className="text-dreams-textSecondary hover:text-dreams-textPrimary">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -603,7 +600,7 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
                 : "border-transparent text-dreams-textSecondary hover:text-dreams-textPrimary"
             }`}
           >
-            Existing Patient
+            {t("tabExisting")}
           </button>
           <button
             type="button"
@@ -614,7 +611,7 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
                 : "border-transparent text-dreams-textSecondary hover:text-dreams-textPrimary"
             }`}
           >
-            Walk-in / Call-in
+            {t("tabWalkin")}
           </button>
         </div>
 
@@ -625,7 +622,7 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
 
           {tab === "existing" ? (
             <div>
-              <label htmlFor="booking-patient" className="mb-1 block text-sm font-medium text-dreams-textPrimary">Patient *</label>
+              <label htmlFor="booking-patient" className="mb-1 block text-sm font-medium text-dreams-textPrimary">{t("patient")}</label>
               {selectedPatient ? (
                 <div className="flex items-center gap-3 rounded-lg border border-dreams-blue bg-dreams-blue/5 px-4 py-2.5">
                   <div className="flex-1">
@@ -635,7 +632,7 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
                     )}
                   </div>
                   <button type="button" onClick={() => setSelectedPatient(null)}
-                    aria-label="Clear selected patient"
+                    aria-label={t("clearPatient")}
                     className="text-dreams-textSecondary hover:text-red-500 transition-colors">
                     <X className="h-4 w-4" />
                   </button>
@@ -647,18 +644,18 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
           ) : (
             <div className="space-y-3">
               <div>
-                <label htmlFor="walkin-name" className="mb-1 block text-sm font-medium text-dreams-textPrimary">Patient Name *</label>
+                <label htmlFor="walkin-name" className="mb-1 block text-sm font-medium text-dreams-textPrimary">{t("patientName")}</label>
                 <input
                   id="walkin-name"
                   type="text"
                   value={walkinName}
                   onChange={(e) => setWalkinName(e.target.value)}
-                  placeholder="Full name"
+                  placeholder={t("patientNamePlaceholder")}
                   className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
                 />
               </div>
               <div>
-                <label htmlFor="walkin-phone" className="mb-1 block text-sm font-medium text-dreams-textPrimary">Phone Number *</label>
+                <label htmlFor="walkin-phone" className="mb-1 block text-sm font-medium text-dreams-textPrimary">{t("phone")}</label>
                 <input
                   id="walkin-phone"
                   type="tel"
@@ -680,11 +677,11 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
               disabled={submitting || (tab === "existing" && !selectedPatient)}
               className="flex-1 rounded-lg bg-dreams-blue px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
-              {submitting ? "Booking..." : "Book Appointment"}
+              {submitting ? t("submitting") : t("submit")}
             </button>
             <button type="button" onClick={onClose}
               className="rounded-lg border border-dreams-border px-4 py-2.5 text-sm font-medium text-dreams-textPrimary hover:bg-dreams-lightBg transition-colors">
-              Cancel
+              {tCommon("cancel")}
             </button>
           </div>
         </form>
@@ -706,6 +703,10 @@ function EditAppointmentModal({
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const t = useTranslations("doctorAppointments.editModal");
+  const tBooking = useTranslations("doctorAppointments.booking");
+  const tTypes = useTranslations("appointments.types");
+  const tCommon = useTranslations("common");
   const initialDate = appointment.scheduled_at.slice(0, 10);
   const initialTime = new Date(appointment.scheduled_at).toTimeString().slice(0, 5);
 
@@ -752,7 +753,7 @@ function EditAppointmentModal({
       onSuccess();
       onClose();
     } catch (err: any) {
-      const msg = err.response?.data?.detail?.error?.message || err.response?.data?.detail || "Failed to update appointment";
+      const msg = err.response?.data?.detail?.error?.message || err.response?.data?.detail || t("errorFailed");
       setError(typeof msg === "string" ? msg : JSON.stringify(msg));
     } finally {
       setSubmitting(false);
@@ -764,12 +765,12 @@ function EditAppointmentModal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Edit appointment"
+        aria-label={t("ariaLabel")}
         className="w-[calc(100%-2rem)] sm:w-full sm:max-w-lg rounded-xl bg-white shadow-xl"
       >
         <div className="flex items-center justify-between border-b border-dreams-border px-6 py-4">
-          <h2 className="text-lg font-semibold text-dreams-textPrimary">Edit Appointment</h2>
-          <button type="button" onClick={onClose} aria-label="Close" className="text-dreams-textSecondary hover:text-dreams-textPrimary">
+          <h2 className="text-lg font-semibold text-dreams-textPrimary">{t("title")}</h2>
+          <button type="button" onClick={onClose} aria-label={tCommon("close")} className="text-dreams-textSecondary hover:text-dreams-textPrimary">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -781,7 +782,7 @@ function EditAppointmentModal({
 
           {/* Patient (read-only) */}
           <div>
-            <span className="mb-1 block text-sm font-medium text-dreams-textPrimary">Patient</span>
+            <span className="mb-1 block text-sm font-medium text-dreams-textPrimary">{t("patient")}</span>
             <div className="h-10 rounded-lg border border-dreams-border bg-dreams-lightBg px-3 flex items-center text-sm text-dreams-textSecondary">
               {appointment.patient_name ?? "—"}
             </div>
@@ -790,12 +791,12 @@ function EditAppointmentModal({
           {/* Date + Time */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label htmlFor="edit-appt-date" className="mb-1 block text-sm font-medium text-dreams-textPrimary">Date *</label>
+              <label htmlFor="edit-appt-date" className="mb-1 block text-sm font-medium text-dreams-textPrimary">{tBooking("date")}</label>
               <input id="edit-appt-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} required
                 className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20" />
             </div>
             <div>
-              <label htmlFor="edit-appt-time" className="mb-1 block text-sm font-medium text-dreams-textPrimary">Time *</label>
+              <label htmlFor="edit-appt-time" className="mb-1 block text-sm font-medium text-dreams-textPrimary">{tBooking("time")}</label>
               <input id="edit-appt-time" type="time" value={time} onChange={(e) => setTime(e.target.value)} required
                 className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20" />
             </div>
@@ -804,41 +805,40 @@ function EditAppointmentModal({
           {/* Duration + Type */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label htmlFor="edit-appt-duration" className="mb-1 block text-sm font-medium text-dreams-textPrimary">Duration</label>
+              <label htmlFor="edit-appt-duration" className="mb-1 block text-sm font-medium text-dreams-textPrimary">{tBooking("duration")}</label>
               <select id="edit-appt-duration" value={duration} onChange={(e) => setDuration(Number(e.target.value))}
                 className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20">
-                <option value={15}>15 min</option>
-                <option value={30}>30 min</option>
-                <option value={45}>45 min</option>
-                <option value={60}>60 min</option>
+                {[15, 30, 45, 60].map((m) => (
+                  <option key={m} value={m}>{tBooking("durationOption", { count: m })}</option>
+                ))}
               </select>
             </div>
             <div>
-              <label htmlFor="edit-appt-type" className="mb-1 block text-sm font-medium text-dreams-textPrimary">Type *</label>
+              <label htmlFor="edit-appt-type" className="mb-1 block text-sm font-medium text-dreams-textPrimary">{tBooking("type")}</label>
               <select id="edit-appt-type" value={type} onChange={(e) => setType(e.target.value as typeof type)}
                 className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20">
-                <option value="in-person">In Person</option>
-                <option value="teleconsult">Teleconsult</option>
-                <option value="follow-up">Follow-up</option>
+                <option value="in-person">{tTypes("in-person")}</option>
+                <option value="teleconsult">{tTypes("teleconsult")}</option>
+                <option value="follow-up">{tTypes("follow-up")}</option>
               </select>
             </div>
           </div>
 
           {/* Chief Complaint */}
           <div>
-            <label htmlFor="edit-appt-complaint" className="mb-1 block text-sm font-medium text-dreams-textPrimary">Chief Complaint</label>
+            <label htmlFor="edit-appt-complaint" className="mb-1 block text-sm font-medium text-dreams-textPrimary">{tBooking("chiefComplaint")}</label>
             <input id="edit-appt-complaint" type="text" value={chiefComplaint} onChange={(e) => setChiefComplaint(e.target.value)}
-              placeholder="e.g., Fever, headache for 2 days"
+              placeholder={tBooking("chiefComplaintPlaceholder")}
               className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20" />
           </div>
 
           {/* Clinic */}
           {clinics.length > 0 && (
             <div>
-              <label htmlFor="edit-appt-clinic" className="mb-1 block text-sm font-medium text-dreams-textPrimary">Clinic</label>
+              <label htmlFor="edit-appt-clinic" className="mb-1 block text-sm font-medium text-dreams-textPrimary">{tBooking("clinic")}</label>
               <select id="edit-appt-clinic" value={clinicId} onChange={(e) => { setClinicId(e.target.value); setBranchId(""); }}
                 className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20">
-                <option value="">No clinic (private)</option>
+                <option value="">{tBooking("noClinic")}</option>
                 {clinics.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
@@ -847,16 +847,16 @@ function EditAppointmentModal({
           {/* Branch */}
           {clinicId && (branchesLoading || branches.length > 0) && (
             <div>
-              <label htmlFor="edit-appt-branch" className="mb-1 block text-sm font-medium text-dreams-textPrimary">Branch</label>
+              <label htmlFor="edit-appt-branch" className="mb-1 block text-sm font-medium text-dreams-textPrimary">{tBooking("branch")}</label>
               {branchesLoading ? (
                 <div className="h-10 rounded-lg border border-dreams-border bg-gray-50 flex items-center px-3">
                   <div className="h-4 w-4 animate-spin rounded-full border-2 border-dreams-blue border-t-transparent" />
-                  <span className="ml-2 text-sm text-dreams-textSecondary">Loading branches...</span>
+                  <span className="ml-2 text-sm text-dreams-textSecondary">{tBooking("loadingBranches")}</span>
                 </div>
               ) : (
                 <select id="edit-appt-branch" value={branchId} onChange={(e) => setBranchId(e.target.value)}
                   className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20">
-                  <option value="">Any branch</option>
+                  <option value="">{tBooking("anyBranch")}</option>
                   {branches.map((b) => <option key={b.id} value={b.id}>{b.name}{b.city ? ` — ${b.city}` : ""}</option>)}
                 </select>
               )}
@@ -867,11 +867,11 @@ function EditAppointmentModal({
           <div className="flex gap-3 pt-2">
             <button type="submit" disabled={submitting}
               className="flex-1 rounded-lg bg-dreams-blue px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity">
-              {submitting ? "Saving..." : "Save Changes"}
+              {submitting ? t("saving") : t("submit")}
             </button>
             <button type="button" onClick={onClose}
               className="rounded-lg border border-dreams-border px-4 py-2.5 text-sm font-medium text-dreams-textPrimary hover:bg-dreams-lightBg transition-colors">
-              Cancel
+              {tCommon("cancel")}
             </button>
           </div>
         </form>
@@ -893,6 +893,8 @@ function CancelAppointmentModal({
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const t = useTranslations("doctorAppointments.cancelModal");
+  const tCommon = useTranslations("common");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -905,7 +907,7 @@ function CancelAppointmentModal({
       onSuccess();
       onClose();
     } catch (err: any) {
-      const msg = err.response?.data?.detail?.error?.message || "Failed to cancel appointment";
+      const msg = err.response?.data?.detail?.error?.message || t("errorFailed");
       setError(typeof msg === "string" ? msg : JSON.stringify(msg));
     } finally {
       setSubmitting(false);
@@ -917,30 +919,35 @@ function CancelAppointmentModal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Cancel appointment"
+        aria-label={t("ariaLabel")}
         className="w-[calc(100%-2rem)] sm:w-full sm:max-w-md rounded-xl bg-white shadow-xl"
       >
         <div className="flex items-center justify-between border-b border-dreams-border px-6 py-4">
-          <h2 className="text-lg font-semibold text-dreams-textPrimary">Cancel Appointment</h2>
-          <button type="button" onClick={onClose} aria-label="Close" className="text-dreams-textSecondary hover:text-dreams-textPrimary">
+          <h2 className="text-lg font-semibold text-dreams-textPrimary">{t("title")}</h2>
+          <button type="button" onClick={onClose} aria-label={tCommon("close")} className="text-dreams-textSecondary hover:text-dreams-textPrimary">
             <X className="h-5 w-5" />
           </button>
         </div>
         <div className="px-6 py-4 space-y-4">
           <p className="text-sm text-dreams-textSecondary">
-            Cancel appointment for <span className="font-medium text-dreams-textPrimary">{appointment.patient_name}</span>?
+            {t.rich("body", {
+              name: appointment.patient_name ?? "",
+              strong: (chunks) => (
+                <span className="font-medium text-dreams-textPrimary">{chunks}</span>
+              ),
+            })}
           </p>
           {error && (
             <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">{error}</div>
           )}
           <div>
-            <label htmlFor="cancel-reason" className="mb-1 block text-sm font-medium text-dreams-textPrimary">Reason (optional)</label>
+            <label htmlFor="cancel-reason" className="mb-1 block text-sm font-medium text-dreams-textPrimary">{t("reason")}</label>
             <input
               id="cancel-reason"
               type="text"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="e.g., Doctor unavailable, patient requested..."
+              placeholder={t("reasonPlaceholder")}
               className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
             />
           </div>
@@ -950,11 +957,11 @@ function CancelAppointmentModal({
               disabled={submitting}
               className="flex-1 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
             >
-              {submitting ? "Cancelling..." : "Cancel Appointment"}
+              {submitting ? t("cancelling") : t("confirm")}
             </button>
             <button type="button" onClick={onClose}
               className="rounded-lg border border-dreams-border px-4 py-2.5 text-sm font-medium text-dreams-textPrimary hover:bg-dreams-lightBg transition-colors">
-              Keep
+              {t("keep")}
             </button>
           </div>
         </div>
@@ -974,17 +981,18 @@ interface StatusActionButtonProps {
 }
 
 function StatusActionButtons({ appt, onAction, isPending }: StatusActionButtonProps) {
-  const actions: { label: string; nextStatus: string; icon: React.ReactNode; className: string }[] = [];
+  const t = useTranslations("doctorAppointments.actions");
+  const actions: { labelKey: "markArrived" | "noShow" | "start" | "complete"; nextStatus: string; icon: React.ReactNode; className: string }[] = [];
 
   if (appt.status === "scheduled") {
     actions.push({
-      label: "Mark Arrived",
+      labelKey: "markArrived",
       nextStatus: "arrived",
       icon: <UserCheck className="h-3.5 w-3.5" />,
       className: "bg-blue-50 text-blue-700 hover:bg-blue-100",
     });
     actions.push({
-      label: "No Show",
+      labelKey: "noShow",
       nextStatus: "no-show",
       icon: <XCircle className="h-3.5 w-3.5" />,
       className: "bg-gray-50 text-gray-600 hover:bg-gray-100",
@@ -992,7 +1000,7 @@ function StatusActionButtons({ appt, onAction, isPending }: StatusActionButtonPr
   }
   if (appt.status === "arrived") {
     actions.push({
-      label: "Start",
+      labelKey: "start",
       nextStatus: "in-progress",
       icon: <Clock className="h-3.5 w-3.5" />,
       className: "bg-yellow-50 text-yellow-700 hover:bg-yellow-100",
@@ -1000,7 +1008,7 @@ function StatusActionButtons({ appt, onAction, isPending }: StatusActionButtonPr
   }
   if (appt.status === "in-progress") {
     actions.push({
-      label: "Complete",
+      labelKey: "complete",
       nextStatus: "completed",
       icon: <CheckCircle className="h-3.5 w-3.5" />,
       className: "bg-green-50 text-green-700 hover:bg-green-100",
@@ -1019,7 +1027,7 @@ function StatusActionButtons({ appt, onAction, isPending }: StatusActionButtonPr
           className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50 ${a.className}`}
         >
           {a.icon}
-          {a.label}
+          {t(a.labelKey)}
         </button>
       ))}
     </div>
@@ -1398,6 +1406,11 @@ interface LinkingAppt {
 }
 
 export default function DoctorAppointmentsPage() {
+  const t = useTranslations("doctorAppointments");
+  const tNav = useTranslations("nav");
+  const tTypes = useTranslations("appointments.types");
+  const tStatus = useTranslations("appointments.status");
+  const tCommon = useTranslations("common");
   const today = formatDateInput(new Date());
   const [selectedDate, setSelectedDate] = useState(today);
   const [view, setView] = useState<"list" | "calendar">("list");
@@ -1537,17 +1550,17 @@ export default function DoctorAppointmentsPage() {
 
       <Breadcrumb
         items={[
-          { label: "Dashboard", href: "/doctor/dashboard" },
-          { label: "Appointments" },
+          { label: tNav("doctorDashboard"), href: "/doctor/dashboard" },
+          { label: t("breadcrumb") },
         ]}
       />
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-dreams-textPrimary">Appointments</h1>
+          <h1 className="text-2xl font-bold text-dreams-textPrimary">{t("title")}</h1>
           {view === "list" && (
             <p className="text-sm text-dreams-textSecondary mt-0.5">
-              {isToday ? "Today's schedule" : displayDate}
+              {isToday ? t("todaysSchedule") : displayDate}
             </p>
           )}
         </div>
@@ -1593,7 +1606,7 @@ export default function DoctorAppointmentsPage() {
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                aria-label="Appointments date"
+                aria-label={t("dateAriaLabel")}
                 className="rounded-lg border border-dreams-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
               />
               {!isToday && (
@@ -1601,7 +1614,7 @@ export default function DoctorAppointmentsPage() {
                   onClick={() => setSelectedDate(today)}
                   className="rounded-lg border border-dreams-border bg-white px-3 py-2 text-sm text-dreams-textSecondary hover:bg-gray-50"
                 >
-                  Today
+                  {t("today")}
                 </button>
               )}
             </>
@@ -1611,7 +1624,7 @@ export default function DoctorAppointmentsPage() {
             className="flex items-center gap-2 rounded-lg bg-dreams-blue px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
           >
             <Plus className="h-4 w-4" />
-            New Appointment
+            {t("newAppointment")}
           </button>
         </div>
       </div>
@@ -1631,8 +1644,7 @@ export default function DoctorAppointmentsPage() {
       {/* Summary */}
       {view === "list" && !isLoading && (
         <div className="flex items-center gap-2 text-sm text-dreams-textSecondary">
-          <span className="font-medium text-dreams-textPrimary">{appointments.length}</span>
-          {appointments.length === 1 ? " appointment" : " appointments"} scheduled
+          {t("summary", { count: appointments.length })}
         </div>
       )}
 
@@ -1647,9 +1659,9 @@ export default function DoctorAppointmentsPage() {
       {view === "list" && !isLoading && appointments.length === 0 && (
         <div className="rounded-xl border border-dreams-border bg-white p-12 text-center shadow-card">
           <Calendar className="mx-auto h-10 w-10 text-dreams-textSecondary opacity-50" />
-          <p className="mt-3 font-medium text-dreams-textPrimary">No appointments</p>
+          <p className="mt-3 font-medium text-dreams-textPrimary">{t("emptyTitle")}</p>
           <p className="mt-1 text-sm text-dreams-textSecondary">
-            {isToday ? "You have no appointments scheduled for today." : `No appointments on ${displayDate}.`}
+            {isToday ? t("emptyToday") : t("emptyDate", { date: displayDate })}
           </p>
         </div>
       )}
@@ -1678,15 +1690,15 @@ export default function DoctorAppointmentsPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <User className="h-4 w-4 text-dreams-textSecondary flex-shrink-0" />
                       <span className="font-semibold text-dreams-textPrimary">
-                        {appt.patient_name ?? "Unknown Patient"}
+                        {appt.patient_name ?? tCommon("unknownPatient")}
                       </span>
                       {appt.is_provisional && (
                         <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
-                          Walk-in
+                          {t("walkIn")}
                         </span>
                       )}
-                      <Badge variant={TYPE_LABELS[appt.type] ? "upcoming" : "pending"} className="text-xs">
-                        {TYPE_LABELS[appt.type] ?? appt.type}
+                      <Badge variant={KNOWN_TYPES.has(appt.type) ? "upcoming" : "pending"} className="text-xs">
+                        {KNOWN_TYPES.has(appt.type) ? tTypes(appt.type) : appt.type}
                       </Badge>
                     </div>
                     {appt.is_provisional && appt.patient_phone && (
@@ -1695,7 +1707,7 @@ export default function DoctorAppointmentsPage() {
 
                     {appt.chief_complaint && (
                       <p className="mt-1 text-sm text-dreams-textSecondary">
-                        Chief complaint: {appt.chief_complaint}
+                        {t("chiefComplaint", { complaint: appt.chief_complaint })}
                       </p>
                     )}
 
@@ -1721,14 +1733,14 @@ export default function DoctorAppointmentsPage() {
                           className="flex items-center gap-1 text-xs text-dreams-blue hover:underline"
                         >
                           <FilePlus className="h-3.5 w-3.5" />
-                          New Prescription
+                          {t("newPrescription")}
                         </Link>
                         <Link
                           href="/doctor/records/new"
                           className="flex items-center gap-1 text-xs text-dreams-blue hover:underline"
                         >
                           <FileText className="h-3.5 w-3.5" />
-                          New Record
+                          {t("newRecord")}
                         </Link>
                       </div>
                     )}
@@ -1738,7 +1750,7 @@ export default function DoctorAppointmentsPage() {
                 {/* Right: status badge + actions */}
                 <div className="flex flex-col items-end gap-2 flex-shrink-0">
                   <Badge variant={STATUS_VARIANT_MAP[appt.status] as any}>
-                    {STATUS_LABELS[appt.status] ?? appt.status}
+                    {tStatus(appt.status)}
                   </Badge>
                   <div className="flex flex-wrap items-center justify-end gap-1.5">
                     {appt.type === "teleconsult" &&
@@ -1751,7 +1763,7 @@ export default function DoctorAppointmentsPage() {
                           className="flex items-center gap-1 rounded-md bg-dreams-blue px-2 py-1 text-xs font-medium text-white hover:opacity-90 transition-opacity"
                         >
                           <Video className="h-3 w-3" />
-                          Join video consult
+                          {t("joinCall")}
                         </a>
                       ) : (
                         <button
@@ -1760,16 +1772,16 @@ export default function DoctorAppointmentsPage() {
                           className="flex items-center gap-1 rounded-md border border-dreams-blue px-2 py-1 text-xs text-dreams-blue hover:bg-dreams-blue/10 transition-colors disabled:opacity-50"
                         >
                           <Video className="h-3 w-3" />
-                          {meetingLinkMutation.isPending ? "Generating…" : "Get Link"}
+                          {meetingLinkMutation.isPending ? t("generating") : t("getLink")}
                         </button>
                       ))}
                     {appt.is_provisional && (
                       <button
-                        onClick={() => setLinkingAppt({ provisionalPatientId: appt.patient_id, patientName: appt.patient_name ?? "Patient" })}
+                        onClick={() => setLinkingAppt({ provisionalPatientId: appt.patient_id, patientName: appt.patient_name ?? tCommon("unknownPatient") })}
                         className="flex items-center gap-1 rounded-md border border-dreams-blue px-2 py-1 text-xs text-dreams-blue hover:bg-dreams-blue/10 transition-colors"
                       >
                         <UserCheck className="h-3 w-3" />
-                        Link Account
+                        {t("linkAccount")}
                       </button>
                     )}
                     {appt.status === "scheduled" && (
@@ -1779,14 +1791,14 @@ export default function DoctorAppointmentsPage() {
                           className="flex items-center gap-1 rounded-md border border-dreams-border px-2 py-1 text-xs text-dreams-textSecondary hover:bg-dreams-lightBg transition-colors"
                         >
                           <Pencil className="h-3 w-3" />
-                          Edit
+                          {t("edit")}
                         </button>
                         <button
                           onClick={() => setCancellingAppointment(appt)}
                           className="flex items-center gap-1 rounded-md border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50 transition-colors"
                         >
                           <XCircle className="h-3 w-3" />
-                          Cancel
+                          {t("cancel")}
                         </button>
                       </>
                     )}

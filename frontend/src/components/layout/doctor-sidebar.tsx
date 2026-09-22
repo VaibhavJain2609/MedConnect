@@ -24,11 +24,20 @@ import {
   Link2,
   RefreshCcw,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/auth";
 import { useAuthStore } from "@/stores/auth-store";
 import { useClinicStore } from "@/stores/clinic-store";
 import { getClinicMembers } from "@/lib/api/clinics";
+import { LanguageSwitcher } from "@/components/layout/language-switcher";
+
+// Keys validated against messages/en.json — the source of truth for the
+// "nav" namespace. Adding a label: add the key to en.json + hi.json, then
+// reference it here (see docs/i18n.md).
+type EnMessages = typeof import("../../../messages/en.json");
+type NavLabelKey = Exclude<keyof EnMessages["nav"], "sections">;
+type NavSectionKey = keyof EnMessages["nav"]["sections"];
 
 interface DoctorSidebarProps {
   isOpen: boolean;
@@ -39,7 +48,7 @@ interface DoctorSidebarProps {
 
 interface NavItem {
   href: string;
-  label: string;
+  labelKey: NavLabelKey;
   icon: any;
   // Clinical-only items are hidden from receptionist memberships — they must
   // not reach records, prescriptions, templates or patient-linking screens.
@@ -47,39 +56,39 @@ interface NavItem {
 }
 
 interface NavSection {
-  label: string;
+  labelKey: NavSectionKey;
   items: NavItem[];
 }
 
 const navSections: NavSection[] = [
   {
-    label: "MAIN",
+    labelKey: "main",
     items: [
-      { href: "/doctor/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/doctor/appointments", label: "Appointments", icon: Calendar },
-      { href: "/doctor/notifications", label: "Notifications", icon: Bell },
+      { href: "/doctor/dashboard", labelKey: "doctorDashboard", icon: LayoutDashboard },
+      { href: "/doctor/appointments", labelKey: "appointments", icon: Calendar },
+      { href: "/doctor/notifications", labelKey: "notifications", icon: Bell },
     ],
   },
   {
-    label: "CLINICAL",
+    labelKey: "clinical",
     items: [
-      { href: "/doctor/patients", label: "My Patients", icon: Users },
-      { href: "/doctor/schedule", label: "Schedule", icon: CalendarClock, clinicalOnly: true },
-      { href: "/doctor/visits", label: "Encounters", icon: ClipboardList, clinicalOnly: true },
-      { href: "/doctor/prescriptions", label: "My Prescriptions", icon: Pill, clinicalOnly: true },
-      { href: "/doctor/refill-requests", label: "Refill Requests", icon: RefreshCcw, clinicalOnly: true },
-      { href: "/doctor/prescriptions/templates", label: "Templates", icon: BookOpen, clinicalOnly: true },
-      { href: "/doctor/queue", label: "Queue", icon: ListOrdered },
-      { href: "/doctor/clinic", label: "My Clinic", icon: Building2 },
-      { href: "/doctor/clinic/invites", label: "Staff & Invites", icon: UserPlus },
-      { href: "/doctor/patients/link", label: "Link Patient", icon: Link2, clinicalOnly: true },
+      { href: "/doctor/patients", labelKey: "doctorMyPatients", icon: Users },
+      { href: "/doctor/schedule", labelKey: "doctorSchedule", icon: CalendarClock, clinicalOnly: true },
+      { href: "/doctor/visits", labelKey: "doctorEncounters", icon: ClipboardList, clinicalOnly: true },
+      { href: "/doctor/prescriptions", labelKey: "doctorMyPrescriptions", icon: Pill, clinicalOnly: true },
+      { href: "/doctor/refill-requests", labelKey: "doctorRefillRequests", icon: RefreshCcw, clinicalOnly: true },
+      { href: "/doctor/prescriptions/templates", labelKey: "doctorTemplates", icon: BookOpen, clinicalOnly: true },
+      { href: "/doctor/queue", labelKey: "doctorQueue", icon: ListOrdered },
+      { href: "/doctor/clinic", labelKey: "doctorMyClinic", icon: Building2 },
+      { href: "/doctor/clinic/invites", labelKey: "doctorStaffInvites", icon: UserPlus },
+      { href: "/doctor/patients/link", labelKey: "doctorLinkPatient", icon: Link2, clinicalOnly: true },
     ],
   },
   {
-    label: "ACTIONS",
+    labelKey: "actions",
     items: [
-      { href: "/doctor/prescriptions/new", label: "New Prescription", icon: FilePlus, clinicalOnly: true },
-      { href: "/doctor/records/new", label: "New Record", icon: FileText, clinicalOnly: true },
+      { href: "/doctor/prescriptions/new", labelKey: "doctorNewPrescription", icon: FilePlus, clinicalOnly: true },
+      { href: "/doctor/records/new", labelKey: "doctorNewRecord", icon: FileText, clinicalOnly: true },
     ],
   },
 ];
@@ -95,7 +104,9 @@ function SidebarNavItem({
   pathname: string;
   onMobileClose?: () => void;
 }) {
+  const t = useTranslations("nav");
   const Icon = item.icon;
+  const label = t(item.labelKey);
   // Exact match for action pages to avoid highlighting "new" when on list page
   // Also avoid /doctor/patients matching /doctor/patients/link, and
   // /doctor/prescriptions matching /doctor/prescriptions/new or /templates
@@ -121,11 +132,11 @@ function SidebarNavItem({
           : "text-gray-300 hover:bg-white/10",
         !isOpen && "justify-center"
       )}
-      title={!isOpen ? item.label : undefined}
+      title={!isOpen ? label : undefined}
       onClick={onMobileClose}
     >
       <Icon className="h-5 w-5 flex-shrink-0" />
-      {isOpen && <span>{item.label}</span>}
+      {isOpen && <span>{label}</span>}
     </Link>
   );
 }
@@ -137,6 +148,7 @@ export function DoctorSidebar({
   onMobileClose,
 }: DoctorSidebarProps) {
   const pathname = usePathname();
+  const t = useTranslations("nav");
   const { user } = useAuthStore();
   const { activeClinicId } = useClinicStore();
 
@@ -183,7 +195,7 @@ export function DoctorSidebar({
             variant="ghost"
             size="icon"
             onClick={onToggle}
-            aria-label={isOpen ? "Collapse sidebar" : "Expand sidebar"}
+            aria-label={isOpen ? t("collapseSidebar") : t("expandSidebar")}
             className={cn(
               "text-gray-400 hover:text-white hover:bg-white/10",
               !isOpen && "mx-auto"
@@ -202,7 +214,7 @@ export function DoctorSidebar({
             variant="ghost"
             size="icon"
             onClick={onMobileClose}
-            aria-label="Close menu"
+            aria-label={t("closeMenu")}
             className="text-gray-400 hover:text-white hover:bg-white/10"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -213,10 +225,10 @@ export function DoctorSidebar({
       {/* Navigation */}
       <nav className="flex-1 space-y-6 p-4 overflow-y-auto">
         {visibleSections.map((section) => (
-          <div key={section.label}>
+          <div key={section.labelKey}>
             {(isOpen || mobile) && (
               <h3 className="mb-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                {section.label}
+                {t(`sections.${section.labelKey}`)}
               </h3>
             )}
             <div className="space-y-1">
@@ -234,8 +246,11 @@ export function DoctorSidebar({
         ))}
       </nav>
 
-      {/* Logout */}
-      <div className="p-4 border-t border-gray-800">
+      {/* Language + Logout */}
+      <div className="p-4 border-t border-gray-800 space-y-2">
+        {(isOpen || mobile) && (
+          <LanguageSwitcher className="px-1 pb-1" />
+        )}
         <Button
           variant="ghost"
           className={cn(
@@ -245,7 +260,7 @@ export function DoctorSidebar({
           onClick={logout}
         >
           <LogOut className="h-5 w-5" />
-          {(isOpen || mobile) && <span>Logout</span>}
+          {(isOpen || mobile) && <span>{t("logout")}</span>}
         </Button>
       </div>
     </>
