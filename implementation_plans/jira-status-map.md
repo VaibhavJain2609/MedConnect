@@ -143,7 +143,16 @@
   - Prescription refill flow — request → doctor approve(clones rx)/decline(notify), partial-unique dedup, cross-clinic deny
   - Outbound webhooks — endpoints CRUD + HMAC-signed ARQ delivery + deliveries log, flag-gated, PHI-minimal payloads
   - PWA — manifest+icons, install prompt (patient portal), /offline nav fallback, API never cached
-- **Round-12 queue:** ABDM (BLOCKED), real LLM-OCR provider when creds exist, first real e2e CI run validation, doctor calendar view, lab-result trend charts, family-member profiles, remaining react lint warnings
+- **Round-12 — ALL LANDED (1074 backend + 58 frontend tests green):**
+  - Doctor weekly calendar view (list/calendar toggle, Mon–Sun grid, from/to range params on GET /appointments)
+  - Vitals trend charts (recharts, normal-range bands, abnormal markers, aria summaries + sr-only tables)
+  - Family members — dependent profiles + records attach/filter (031→032_family_members)
+  - Teleconsult — deterministic Jitsi rooms on existing meeting_url, participant-scoped, idempotent
+  - Clinic holidays — table + owner/admin CRUD + slot-generation exclusion (clinic-local dates)
+  - Appointment waitlist — join on full days, notify on cancellation (never auto-books)
+  - Doctor portal i18n — dashboard/appointments/queue/patients/sidebar fully EN/HI
+  - N+1 audit — query-count harness + real fixes (uploads ACL 24→7 queries, clinical-safety batching ~30→5)
+- **Round-13 queue:** ABDM (BLOCKED), real LLM-OCR provider when creds exist, first real e2e CI run validation, remaining react lint warnings, admin portal i18n, webhook delivery replay UI
 - **BLOCKED — ABDM/ABHA: awaiting regulatory approval (user-confirmed)** — do not implement: ABHA creation/linking, NRCeS-conformant FHIR, HIP module (tickets 107–116)
 - **Blocked/external:** SMS/WhatsApp live provider accounts (code adapters anyway), OCR/AI features, load testing env, i18n assets, barcode data source, push VAPID/service
 
