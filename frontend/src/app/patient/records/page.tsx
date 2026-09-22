@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import api from "@/lib/api";
 import { downloadFile } from "@/lib/download";
+import { listFamilyMembers } from "@/lib/api/family";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { LoadMoreButton } from "@/components/ui/pagination";
 import { formatDate, recordTypeLabel, recordTypeColor } from "@/lib/utils";
@@ -42,6 +43,7 @@ function PatientRecordsContent() {
   );
   const [fromDate, setFromDate] = useState(searchParams.get("from") ?? "");
   const [toDate, setToDate] = useState(searchParams.get("to") ?? "");
+  const [memberFilter, setMemberFilter] = useState(searchParams.get("member") ?? "");
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
   const [page, setPage] = useState(1);
@@ -54,7 +56,23 @@ function PatientRecordsContent() {
     return () => clearTimeout(t);
   }, [search]);
 
-  const hasActiveFilters = !!(typeFilter || debouncedSearch || fromDate || toDate);
+  // Dependent profiles owned by this patient — used for the member filter
+  // chips and to label member-attached records.
+  const { data: familyMembers = [] } = useQuery({
+    queryKey: ["family-members"],
+    queryFn: listFamilyMembers,
+  });
+  const memberNameById = new Map(
+    familyMembers.map((m) => [m.member_id, m.full_name])
+  );
+
+  const hasActiveFilters = !!(
+    typeFilter ||
+    debouncedSearch ||
+    fromDate ||
+    toDate ||
+    memberFilter
+  );
 
   // Keep the URL in sync with the active filters so a refresh or shared link
   // restores the same view.
@@ -64,15 +82,16 @@ function PatientRecordsContent() {
     if (debouncedSearch) params.set("q", debouncedSearch);
     if (fromDate) params.set("from", fromDate);
     if (toDate) params.set("to", toDate);
+    if (memberFilter) params.set("member", memberFilter);
     const next = params.toString();
     if (next !== searchParams.toString()) {
       router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
     }
-  }, [typeFilter, debouncedSearch, fromDate, toDate, pathname, router, searchParams]);
+  }, [typeFilter, debouncedSearch, fromDate, toDate, memberFilter, pathname, router, searchParams]);
 
   // Reset to page 1 when filters change (adjusted during render). The endpoint
   // paginates by cursor, so each page's cursor is recorded as it is fetched.
-  const filterKey = `${typeFilter}|${debouncedSearch}|${fromDate}|${toDate}`;
+  const filterKey = `${typeFilter}|${debouncedSearch}|${fromDate}|${toDate}|${memberFilter}`;
   const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
   if (prevFilterKey !== filterKey) {
     setPrevFilterKey(filterKey);
@@ -82,7 +101,7 @@ function PatientRecordsContent() {
   }
 
   const { data, isLoading, isError, isFetching } = useQuery({
-    queryKey: ["patient-records", typeFilter, debouncedSearch, fromDate, toDate, page],
+    queryKey: ["patient-records", typeFilter, debouncedSearch, fromDate, toDate, memberFilter, page],
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set("limit", String(PAGE_SIZE));
@@ -90,6 +109,7 @@ function PatientRecordsContent() {
       if (debouncedSearch) params.set("q", debouncedSearch);
       if (fromDate) params.set("from_date", fromDate);
       if (toDate) params.set("to_date", toDate);
+      if (memberFilter) params.set("family_member_id", memberFilter);
       const cursor = cursors[page] ?? null;
       if (cursor) params.set("cursor", cursor);
       const res = await api.get(`/api/v1/patients/records?${params}`);
@@ -114,6 +134,7 @@ function PatientRecordsContent() {
     setDebouncedSearch("");
     setFromDate("");
     setToDate("");
+    setMemberFilter("");
   };
 
   // Authenticated blob download — the Authorization header is only
@@ -245,6 +266,41 @@ function PatientRecordsContent() {
             </button>
           ))}
         </div>
+
+        {/* Member chips — only shown once the patient has dependents */}
+        {familyMembers.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setMemberFilter("")}
+              className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors border ${
+                memberFilter === ""
+                  ? "bg-dreams-blue text-white border-dreams-blue"
+                  : "bg-white text-dreams-textSecondary border-dreams-border hover:border-dreams-blue/50 hover:text-dreams-blue"
+              }`}
+            >
+              {t("filters.everyone")}
+            </button>
+            {familyMembers.map((m) => (
+              <button
+                key={m.member_id}
+                type="button"
+                onClick={() =>
+                  setMemberFilter((prev) =>
+                    prev === m.member_id ? "" : m.member_id
+                  )
+                }
+                className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors border ${
+                  memberFilter === m.member_id
+                    ? "bg-dreams-blue text-white border-dreams-blue"
+                    : "bg-white text-dreams-textSecondary border-dreams-border hover:border-dreams-blue/50 hover:text-dreams-blue"
+                }`}
+              >
+                {m.full_name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Content */}
@@ -297,6 +353,15 @@ function PatientRecordsContent() {
                       >
                         {recordTypeLabel(record.record_type)}
                       </span>
+                      {record.family_member_id && (
+                        <span className="rounded-full px-2.5 py-0.5 text-xs font-medium bg-purple-50 text-purple-700">
+                          {t("forMember", {
+                            name:
+                              memberNameById.get(record.family_member_id) ??
+                              "—",
+                          })}
+                        </span>
+                      )}
                     </div>
                     <p className="mt-1 font-semibold text-dreams-textPrimary truncate">
                       {record.title}

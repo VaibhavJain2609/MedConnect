@@ -72,6 +72,7 @@ const navSections: NavSection[] = [
       { href: "/patient/vitals", labelKey: "vitals", icon: HeartPulse },
       { href: "/patient/visits", labelKey: "visits", icon: Stethoscope },
       { href: "/patient/medical-history", labelKey: "medicalHistory", icon: ClipboardList },
+      { href: "/patient/family", labelKey: "familyMembers", icon: Users },
     ],
   },
   {

@@ -50,6 +50,9 @@ class User(Base):
         foreign_keys="PatientVital.patient_id",
         cascade="all, delete-orphan",
     )
+    family_members: Mapped[list["FamilyMember"]] = relationship(
+        back_populates="owner", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         Index("idx_users_email", "email", postgresql_where=(deleted_at.is_(None))),
