@@ -1,21 +1,34 @@
 name: E2E
 
-# Runs the Playwright suite in frontend/e2e. Two modes:
+# Runs the Playwright suite in frontend/e2e end-to-end. Two modes:
 #
-#  * Staging-URL mode (default): set the repo variable E2E_BASE_URL to a
-#    deployed environment (e.g. https://staging.medconnect.example.com) and
-#    tests run against it. playwright.config.ts skips its local webServer
-#    whenever PLAYWRIGHT_BASE_URL is set.
-#  * Full-stack mode: leave E2E_BASE_URL unset and uncomment the
-#    "Start full stack" step below — Playwright then boots `npm run dev`
-#    itself via webServer and the compose stack supplies backend + Keycloak.
+#  * Full-stack mode (default — vars.E2E_BASE_URL unset): the canonical
+#    CI sequence is
+#      docker compose up -d postgres redis keycloak   (realm import runs)
+#      pip install -r backend/requirements.txt
+#      alembic upgrade head + alembic -c alembic_medicine.ini upgrade head
+#      python scripts/seed_demo_data.py              (== `make seed`)
+#      uvicorn app.main:app on :8000
+#      npm ci + npm run build (frontend)
+#      npx playwright install --with-deps chromium
+#      npx playwright test
+#    Playwright serves the app itself via `next start` on :3000
+#    (webServer in playwright.config.ts).
 #
-# Full-stack mode is DISABLED by default: docker-compose.yml has no test
-# profile and builds four custom images (postgres, keycloak, backend,
-# frontend) plus redis/nginx — several minutes of image builds and a
-# Keycloak realm import on every run, too heavy for per-PR CI. Keep it for
-# local reproduction or dedicated runners until the stack gets a lighter
-# test profile.
+#    Auth is REAL, not mocked: keycloak/realm-export.json imports demo
+#    users matching the seeded DB rows (docs/seed.md), and specs tagged
+#    @auth mint tokens via Keycloak's direct-grant endpoint
+#    (frontend/e2e/fixtures/auth.ts). All demo users share the password
+#    "demo-password".
+#
+#  * Staging-URL mode: set repo variable E2E_BASE_URL to a deployed
+#    environment — every stack step below is skipped and the suite points
+#    at that URL instead. Authenticated specs then need the E2E_*_EMAIL /
+#    E2E_*_PASSWORD secrets (users must exist in that realm, and its
+#    frontend client must allow direct grants for token minting).
+#
+# The stack is heavier than a unit-test job (two image builds, Keycloak
+# JVM startup, Next.js build) — budget ~8–12 min.
 
 on:
   pull_request:
@@ -26,28 +39,103 @@ on:
 permissions:
   contents: read
 
+env:
+  # Compose interpolation — mirrors .env.example dev values.
+  POSTGRES_USER: medconnect
+  POSTGRES_PASSWORD: medconnect
+  REDIS_PASSWORD: medconnect
+  KEYCLOAK_ADMIN: admin
+  KEYCLOAK_ADMIN_PASSWORD: admin
+
 jobs:
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      PLAYWRIGHT_BASE_URL: ${{ vars.E2E_BASE_URL }}
-      # Authenticated specs (e2e/appointments.spec.ts, auth.setup.ts) skip
-      # themselves when these secrets are unset.
-      E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
-      E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4 # pin: resolve tag to full commit SHA
+      - uses: actions/setup-python@v5
+        if: ${{ vars.E2E_BASE_URL == '' }}
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - uses: actions/setup-node@v4
         with:
           node-version: "20" # matches frontend/Dockerfile's node:20-alpine
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      # --- full-stack mode: infra -------------------------------------
+      # Postgres/keycloak images are thin (base image + copied files), so
+      # building them here is cheap; the backend image is skipped entirely
+      # — uvicorn runs on the runner instead.
+      - name: Start postgres + redis + keycloak
+        if: ${{ vars.E2E_BASE_URL == '' }}
+        run: docker compose up -d --build postgres redis keycloak
+
+      - name: Wait for Keycloak realm import
+        if: ${{ vars.E2E_BASE_URL == '' }}
+        # The well-known endpoint only answers once start-dev has finished
+        # AND the realm import succeeded — covers JVM boot + import.
+        run: |
+          timeout 300 bash -c \
+            'until curl -sf http://localhost:8080/realms/medconnect/.well-known/openid-configuration >/dev/null; do sleep 5; done' \
+            || { docker compose logs --no-color keycloak; exit 1; }
+
+      - name: Install backend dependencies
+        if: ${{ vars.E2E_BASE_URL == '' }}
+        working-directory: backend
+        run: pip install -r requirements.txt
+
+      - name: Run migrations and seed demo data
+        if: ${{ vars.E2E_BASE_URL == '' }}
+        working-directory: backend
+        env:
+          # Runner-side backend talks to compose-published ports directly;
+          # no PgBouncer — point both async and sync URLs at postgres.
+          DATABASE_URL: postgresql+asyncpg://medconnect:medconnect@localhost:5432/medconnect
+          DATABASE_URL_SYNC: postgresql://medconnect:medconnect@localhost:5432/medconnect
+          MEDICINE_DB_URL: postgresql+asyncpg://medconnect:medconnect@localhost:5432/medconnect_medicines
+          MEDICINE_DB_URL_SYNC: postgresql://medconnect:medconnect@localhost:5432/medconnect_medicines
+        run: |
+          alembic upgrade head
+          alembic -c alembic_medicine.ini upgrade head
+          python scripts/seed_demo_data.py
+
+      - name: Start backend (uvicorn on :8000)
+        if: ${{ vars.E2E_BASE_URL == '' }}
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://medconnect:medconnect@localhost:5432/medconnect
+          DATABASE_URL_SYNC: postgresql://medconnect:medconnect@localhost:5432/medconnect
+          MEDICINE_DB_URL: postgresql+asyncpg://medconnect:medconnect@localhost:5432/medconnect_medicines
+          MEDICINE_DB_URL_SYNC: postgresql://medconnect:medconnect@localhost:5432/medconnect_medicines
+          REDIS_URL: redis://:medconnect@localhost:6379/0
+          KEYCLOAK_URL: http://localhost:8080
+          KEYCLOAK_PUBLIC_URL: http://localhost:8080
+          KEYCLOAK_REALM: medconnect
+          KEYCLOAK_CLIENT_ID: medconnect-backend
+          APP_ENV: development
+        run: |
+          nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 > backend-e2e.log 2>&1 &
+          timeout 120 bash -c \
+            'until curl -sf http://localhost:8000/health >/dev/null; do sleep 3; done' \
+            || { cat backend-e2e.log; exit 1; }
+
+      # --- frontend + tests (both modes) -------------------------------
       - name: Install dependencies
         working-directory: frontend
         run: npm ci
+
+      - name: Build frontend
+        if: ${{ vars.E2E_BASE_URL == '' }}
+        working-directory: frontend
+        # webServer runs `next start` in CI — the production build must
+        # exist before Playwright launches it. NEXT_PUBLIC_* defaults
+        # (localhost:8000 / localhost:8080) are the right values here.
+        run: npm run build
 
       - name: Install Playwright browser
         working-directory: frontend
@@ -56,27 +144,42 @@ jobs:
         # ever needed.
         run: npx playwright install --with-deps chromium
 
-      # OPTIONAL full-stack mode — see header comment. Requires the compose
-      # env vars; also add NEXT_PUBLIC_* if they ever diverge from the
-      # localhost defaults in src/lib/keycloak.ts.
-      # - name: Start full stack (docker compose)
-      #   env:
-      #     POSTGRES_USER: medconnect
-      #     POSTGRES_PASSWORD: medconnect
-      #     REDIS_PASSWORD: medconnect
-      #     KEYCLOAK_ADMIN: admin
-      #     KEYCLOAK_ADMIN_PASSWORD: admin
-      #   run: |
-      #     docker compose up -d --build
-      #     timeout 300 bash -c 'until curl -sf http://localhost:8000/health; do sleep 5; done'
-
       - name: Run Playwright tests
         working-directory: frontend
-        run: npx playwright test
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ vars.E2E_BASE_URL }}
+          # Staging-URL mode credentials come from secrets. In full-stack
+          # mode they're overridden below with the seeded demo users.
+          E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
+          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+          E2E_DOCTOR_EMAIL: ${{ secrets.E2E_DOCTOR_EMAIL }}
+          E2E_DOCTOR_PASSWORD: ${{ secrets.E2E_DOCTOR_PASSWORD }}
+          E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+          E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+          E2E_KEYCLOAK_URL: ${{ vars.E2E_KEYCLOAK_URL }}
+        run: |
+          if [ -z "$PLAYWRIGHT_BASE_URL" ]; then
+            # Full-stack mode: the realm import ships demo users matching
+            # `make seed` rows; all share password "demo-password".
+            export E2E_TEST_EMAIL=kabir.singh@medconnect.demo
+            export E2E_TEST_PASSWORD=demo-password
+            export E2E_DOCTOR_EMAIL=dr.priya@medconnect.demo
+            export E2E_DOCTOR_PASSWORD=demo-password
+            export E2E_ADMIN_EMAIL=admin@medconnect.demo
+            export E2E_ADMIN_PASSWORD=demo-password
+            export E2E_KEYCLOAK_URL=http://localhost:8080
+          fi
+          npx playwright test
+
+      - name: Dump stack logs on failure
+        if: ${{ failure() && vars.E2E_BASE_URL == '' }}
+        run: |
+          docker compose logs --no-color --tail=200 postgres redis keycloak || true
+          cat backend/backend-e2e.log || true
 
       - name: Upload Playwright report
         if: always() # keep the report on green runs too — traces land there
-        uses: actions/upload-artifact@v4 # pin: resolve tag to full commit SHA
+        uses: actions/upload-artifact@v4
         with:
           name: playwright-report
           path: frontend/playwright-report/

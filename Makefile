@@ -36,7 +36,7 @@ TEST_DB_MEDICINE := postgresql+asyncpg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@l
 .PHONY: help up up-build down down-v restart ps logs health \
         migrate migrate-new migrate-down seed \
         psql psql-medicine redis-cli backup restore-drill \
-        test-backend test-frontend lint lint-backend lint-frontend typecheck \
+        test-backend test-frontend test-e2e lint lint-backend lint-frontend typecheck \
         backend-install frontend-install build clean \
         loadtest loadtest-smoke \
         k8s-render k8s-alerts-staging k8s-alerts-prod
@@ -126,6 +126,9 @@ test-backend: ## Run backend pytest locally (needs `make up` postgres + backend-
 
 test-frontend: ## Run frontend jest tests
 	cd frontend && npm test
+
+test-e2e: ## Run Playwright e2e (needs `make up` + `make seed`; see RUNBOOK §10)
+	cd frontend && npx playwright test
 
 lint: lint-backend lint-frontend ## Lint backend (ruff) + frontend (eslint)
 

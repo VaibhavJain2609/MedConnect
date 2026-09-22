@@ -16,6 +16,15 @@ export interface User {
 let initialized = false;
 let initPromise: Promise<boolean> | null = null;
 
+// E2E token injection — keep these keys in sync with
+// frontend/e2e/fixtures/auth.ts. The Playwright auth fixture mints real
+// Keycloak tokens via the realm's direct-grant endpoint and stashes them
+// in localStorage before app code runs; passing them to keycloak.init()
+// short-circuits the SSO redirect while JWKS validation, getMe(), and
+// token refresh all still exercise the real auth path.
+const E2E_ACCESS_TOKEN_KEY = "medconnect:e2e:keycloak-token";
+const E2E_REFRESH_TOKEN_KEY = "medconnect:e2e:keycloak-refresh-token";
+
 export async function initKeycloak(): Promise<boolean> {
   if (typeof window === "undefined") return false;
 
@@ -33,12 +42,19 @@ export async function initKeycloak(): Promise<boolean> {
 
   initPromise = (async () => {
   try {
+    // Playwright e2e hook (see E2E_*_KEY constants above). Present only
+    // when a test injected tokens; absent in every other context.
+    const e2eToken = window.localStorage.getItem(E2E_ACCESS_TOKEN_KEY);
+    const e2eRefreshToken = window.localStorage.getItem(E2E_REFRESH_TOKEN_KEY);
     const authenticated = await keycloak!.init({
       onLoad: "check-sso",
       pkceMethod: "S256",
       checkLoginIframe: false,
       silentCheckSsoRedirectUri: window.location.origin + "/silent-check-sso.html",
       redirectUri: window.location.origin + "/auth/callback",
+      ...(e2eToken && e2eRefreshToken
+        ? { token: e2eToken, refreshToken: e2eRefreshToken }
+        : {}),
     });
 
     initialized = true;

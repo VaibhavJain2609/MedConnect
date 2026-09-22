@@ -21,8 +21,12 @@ Usage:
     cd backend && python scripts/seed_demo_data.py --drop   # delete seeded rows
 
 Honours DATABASE_URL (default: the compose value from app.config). Seeded
-users get placeholder keycloak_sub values ('seed-admin-1', ...) — real login
-requires matching Keycloak users; see docs/seed.md.
+users' keycloak_sub values are fixed UUIDs ('5eed0000-...-00000000000N')
+that match the demo users imported by keycloak/realm-export.json — on a
+fresh `docker compose up` those Keycloak users exist (password:
+'demo-password') and the seeded accounts can log in directly. On a
+pre-existing Keycloak volume the realm import is skipped; either recreate
+the volume or create the users manually (see docs/seed.md).
 """
 
 import argparse
@@ -56,9 +60,12 @@ CLINIC_EMAIL = "clinic@medconnect.demo"
 CLINIC_NAME = "Sunrise Family Clinic (Demo)"
 BRANCH_NAME = "Main Branch"
 
+# keycloak_sub values are the fixed UUIDs of the demo users in
+# keycloak/realm-export.json (sub == Keycloak user id), so seeded rows
+# resolve to real logins once the realm is imported.
 ADMIN_SPEC = {
     "email": "admin@medconnect.demo",
-    "keycloak_sub": "seed-admin-1",
+    "keycloak_sub": "5eed0000-0000-4000-8000-000000000001",
     "full_name": "Demo Admin",
     "role": "admin",
 }
@@ -67,7 +74,7 @@ DOCTOR_SPECS = [
     {
         "user": {
             "email": "dr.priya@medconnect.demo",
-            "keycloak_sub": "seed-doctor-1",
+            "keycloak_sub": "5eed0000-0000-4000-8000-000000000002",
             "full_name": "Dr. Priya Sharma",
             "role": "doctor",
             "phone": "+919810000001",
@@ -87,7 +94,7 @@ DOCTOR_SPECS = [
     {
         "user": {
             "email": "dr.arjun@medconnect.demo",
-            "keycloak_sub": "seed-doctor-2",
+            "keycloak_sub": "5eed0000-0000-4000-8000-000000000003",
             "full_name": "Dr. Arjun Mehta",
             "role": "doctor",
             "phone": "+919810000002",
@@ -109,7 +116,7 @@ DOCTOR_SPECS = [
 PATIENT_SPECS = [
     {
         "email": "rohan.verma@medconnect.demo",
-        "keycloak_sub": "seed-patient-1",
+        "keycloak_sub": "5eed0000-0000-4000-8000-000000000004",
         "full_name": "Rohan Verma",
         "role": "patient",
         "phone": "+919810000101",
@@ -117,7 +124,7 @@ PATIENT_SPECS = [
     },
     {
         "email": "ananya.iyer@medconnect.demo",
-        "keycloak_sub": "seed-patient-2",
+        "keycloak_sub": "5eed0000-0000-4000-8000-000000000005",
         "full_name": "Ananya Iyer",
         "role": "patient",
         "phone": "+919810000102",
@@ -126,7 +133,7 @@ PATIENT_SPECS = [
     },
     {
         "email": "kabir.singh@medconnect.demo",
-        "keycloak_sub": "seed-patient-3",
+        "keycloak_sub": "5eed0000-0000-4000-8000-000000000006",
         "full_name": "Kabir Singh",
         "role": "patient",
         "phone": "+919810000103",
@@ -171,6 +178,15 @@ class DemoSeeder:
         )
         user = result.scalar_one_or_none()
         if user:
+            # Heal legacy placeholder subs ('seed-admin-1', ...) left by older
+            # seeds so they line up with the realm-export demo users. A sub
+            # that doesn't start with 'seed-' was set deliberately (e.g. a
+            # manually mapped Keycloak user) and is left alone.
+            if (
+                user.keycloak_sub != spec["keycloak_sub"]
+                and str(user.keycloak_sub).startswith("seed-")
+            ):
+                user.keycloak_sub = spec["keycloak_sub"]
             self._count("users", False)
             return user
         user = User(is_active=True, **spec)
@@ -496,8 +512,10 @@ class DemoSeeder:
         print("Seeded user emails:")
         for email in SEED_USER_EMAILS:
             print(f"  - {email}")
-        print("\nNote: keycloak_sub values are placeholders (seed-*); create matching")
-        print("Keycloak users to log in as these accounts. See docs/seed.md.")
+        print("\nNote: keycloak_sub values match the demo users imported by")
+        print("keycloak/realm-export.json (password: 'demo-password'). On an")
+        print("existing Keycloak volume the import is skipped — recreate it")
+        print("(`docker compose down -v`) or map users manually. docs/seed.md")
 
 
 async def drop_seeded(db):

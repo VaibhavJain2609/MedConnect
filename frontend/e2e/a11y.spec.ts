@@ -1,9 +1,9 @@
-import { test, expect, type Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
+import { test, expect } from "./fixtures/auth";
 import { AxeBuilder } from "@axe-core/playwright";
 import type { AxeResults } from "axe-core";
 import * as fs from "fs";
 import * as path from "path";
-import { authFile, doctorAuthFile, adminAuthFile } from "./auth-file";
 
 /**
  * Real-browser accessibility audit (axe-core via @axe-core/playwright).
@@ -27,12 +27,13 @@ import { authFile, doctorAuthFile, adminAuthFile } from "./auth-file";
  *   /                       — public landing (the login entry point; /login
  *                             itself just bounces to the Keycloak hosted
  *                             page, which is external to this codebase)
- *   /patient/appointments   — patient portal (authFile session)
- *   /doctor/appointments    — doctor portal (doctorAuthFile session)
- *   /admin/dashboard        — admin portal (adminAuthFile session)
+ *   /patient/appointments   — patient portal (loginAs "patient")
+ *   /doctor/appointments    — doctor portal (loginAs "doctor")
+ *   /admin/dashboard        — admin portal (loginAs "admin")
  *
- * Authenticated tests skip unless the matching E2E_*_EMAIL/PASSWORD env vars
- * are set — same pattern as the other e2e specs.
+ * Authenticated tests are tagged @auth and skip unless the matching
+ * E2E_*_EMAIL/PASSWORD env vars are set — same pattern as the other e2e
+ * specs.
  */
 
 const REPORT_DIR = path.join("test-results", "a11y");
@@ -150,12 +151,10 @@ test.describe("a11y audit — public", () => {
   });
 });
 
-test.describe("a11y audit — patient portal", () => {
-  test.skip(
-    !process.env.E2E_TEST_EMAIL || !process.env.E2E_TEST_PASSWORD,
-    "Set E2E_TEST_EMAIL and E2E_TEST_PASSWORD to run authenticated a11y tests"
-  );
-  test.use({ storageState: authFile });
+test.describe("a11y audit — patient portal", { tag: "@auth" }, () => {
+  test.beforeEach(async ({ loginAs }) => {
+    await loginAs("patient");
+  });
 
   test("patient appointments has no critical violations", async ({ page }) => {
     await page.goto("/patient/appointments");
@@ -170,12 +169,10 @@ test.describe("a11y audit — patient portal", () => {
   });
 });
 
-test.describe("a11y audit — doctor portal", () => {
-  test.skip(
-    !process.env.E2E_DOCTOR_EMAIL || !process.env.E2E_DOCTOR_PASSWORD,
-    "Set E2E_DOCTOR_EMAIL and E2E_DOCTOR_PASSWORD to run doctor a11y tests"
-  );
-  test.use({ storageState: doctorAuthFile });
+test.describe("a11y audit — doctor portal", { tag: "@auth" }, () => {
+  test.beforeEach(async ({ loginAs }) => {
+    await loginAs("doctor");
+  });
 
   test("doctor appointments has no critical violations", async ({ page }) => {
     await page.goto("/doctor/appointments");
@@ -189,12 +186,10 @@ test.describe("a11y audit — doctor portal", () => {
   });
 });
 
-test.describe("a11y audit — admin portal", () => {
-  test.skip(
-    !process.env.E2E_ADMIN_EMAIL || !process.env.E2E_ADMIN_PASSWORD,
-    "Set E2E_ADMIN_EMAIL and E2E_ADMIN_PASSWORD to run admin a11y tests"
-  );
-  test.use({ storageState: adminAuthFile });
+test.describe("a11y audit — admin portal", { tag: "@auth" }, () => {
+  test.beforeEach(async ({ loginAs }) => {
+    await loginAs("admin");
+  });
 
   test("admin dashboard has no critical violations", async ({ page }) => {
     await page.goto("/admin/dashboard");

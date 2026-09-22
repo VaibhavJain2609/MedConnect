@@ -55,22 +55,34 @@ Seeded user emails (all `@medconnect.demo`):
 
 ## Credentials / login note
 
-Seeded users get **placeholder** `keycloak_sub` values (`seed-admin-1`,
-`seed-doctor-1`, `seed-doctor-2`, `seed-patient-1..3`). They exist only in
-the application database — **no Keycloak users are created**, so these
-accounts cannot log in as-is.
+Seeded users' `keycloak_sub` values are fixed UUIDs
+(`5eed0000-0000-4000-8000-000000000001` … `…0006`) that match the demo
+users in `keycloak/realm-export.json`. On a **fresh** `docker compose up`,
+the realm import creates those Keycloak users — all with password
+`demo-password` — so seeded accounts can log in directly (and the e2e
+suite can mint tokens for them; see docs/e2e.md).
 
-To log in as a seeded user, create the user in the `medconnect` Keycloak
-realm (admin console at `http://localhost:8080`, admin/admin) and set the
-user's Keycloak `sub` to match — or simply update the seeded row's
+Two caveats:
+
+- **Existing volumes:** `--import-realm` is skipped when the realm already
+  exists in Keycloak's DB, so on a stack that pre-dates the demo users they
+  won't appear. Recreate the volume (`docker compose down -v && docker
+  compose up -d`, then `make seed`) or create the users manually in the
+  admin console (`http://localhost:8080`, admin/admin).
+- **Databases seeded before the UUID subs:** re-running `make seed` heals
+  rows whose `keycloak_sub` still has a legacy `seed-*` placeholder; a sub
+  that doesn't start with `seed-` was mapped deliberately and is preserved.
+  To start clean instead: `make seed ARGS="--drop" && make seed`.
+
+To point a seeded row at a different Keycloak user, update its
 `keycloak_sub` to the `sub` Keycloak assigns:
 
 ```sql
 UPDATE users SET keycloak_sub = '<keycloak-sub>' WHERE email = 'dr.priya@medconnect.demo';
 ```
 
-Because auto-provisioning matches on `keycloak_sub`, either approach makes
-the JWT resolve to the seeded account with its role, profile, and clinic
+Because auto-provisioning matches on `keycloak_sub`, this makes the JWT
+resolve to the seeded account with its role, profile, and clinic
 memberships intact.
 
 ## `--drop` semantics
