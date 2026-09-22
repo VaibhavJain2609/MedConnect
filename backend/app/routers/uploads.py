@@ -241,37 +241,77 @@ async def upload_file(
     return {"status": "ok", "object_key": object_key}
 
 
-async def _doctor_has_patient_relationship(
-    db: AsyncSession, doctor: Doctor, patient_id, record_created_at=None
+async def _doctor_has_any_patient_relationship(
+    db: AsyncSession, doctor: Doctor, records: list[MedicalRecord]
 ) -> bool:
-    """Delegates to access_service.doctor_patient_relationship_exists for the
-    base rule (authored record, or shared clinic with an approved link),
-    then applies the upload-specific extension: a revoked link still grants
-    read access to records created before its revoked_at timestamp."""
-    if await access_service.doctor_patient_relationship_exists(
-        db, doctor.user_id, doctor.id, patient_id, allow_revoked=False
-    ):
+    """True when the doctor may access ANY of the records' patients.
+
+    Set-based form of the doctor↔patient rule from
+    access_service.doctor_patient_relationship_exists (authored record, or
+    shared clinic with an approved link) plus the upload-specific extension:
+    a revoked link still grants read access to records created before its
+    revoked_at timestamp. Runs a constant 3 queries instead of ~3 per record
+    (R12 N+1 fix)."""
+    patient_ids = {r.patient_id for r in records}
+    if not patient_ids:
+        return False
+
+    # (1) Authored-record path — one query for the whole patient set.
+    authored = await db.execute(
+        select(MedicalRecord.patient_id)
+        .where(
+            MedicalRecord.doctor_id == doctor.id,
+            MedicalRecord.patient_id.in_(patient_ids),
+            MedicalRecord.deleted_at.is_(None),
+        )
+        .limit(1)
+    )
+    if authored.first() is not None:
         return True
 
-    # Revoked consent: read-only access to data created before revocation.
-    if record_created_at is None:
-        return False
-    links = await db.execute(
-        select(PatientClinicLink.revoked_at)
+    # (2) Approved clinic-link path at a shared clinic — one exists query.
+    shared = await db.execute(
+        select(PatientClinicLink.id)
         .join(ClinicMembership, PatientClinicLink.clinic_id == ClinicMembership.clinic_id)
         .where(
             ClinicMembership.user_id == doctor.user_id,
             ClinicMembership.is_active.is_(True),
             ClinicMembership.deleted_at.is_(None),
-            PatientClinicLink.patient_id == patient_id,
+            PatientClinicLink.patient_id.in_(patient_ids),
+            PatientClinicLink.consent_status == "approved",
+            PatientClinicLink.deleted_at.is_(None),
+        )
+        .limit(1)
+    )
+    if shared.first() is not None:
+        return True
+
+    # (3) Revoked-link extension: read-only access to records created before
+    # the link's revoked_at — one query returning (patient_id, revoked_at)
+    # for every relevant revoked link, evaluated per record in Python.
+    revoked = await db.execute(
+        select(PatientClinicLink.patient_id, PatientClinicLink.revoked_at)
+        .join(ClinicMembership, PatientClinicLink.clinic_id == ClinicMembership.clinic_id)
+        .where(
+            ClinicMembership.user_id == doctor.user_id,
+            ClinicMembership.is_active.is_(True),
+            ClinicMembership.deleted_at.is_(None),
+            PatientClinicLink.patient_id.in_(patient_ids),
             PatientClinicLink.consent_status == "revoked",
             PatientClinicLink.deleted_at.is_(None),
         )
     )
-    for (revoked_at,) in links.all():
-        if revoked_at is not None and record_created_at <= revoked_at:
-            return True
-    return False
+    revoked_by_patient: dict[uuid.UUID, list] = {}
+    for patient_id, revoked_at in revoked.all():
+        if revoked_at is not None:
+            revoked_by_patient.setdefault(patient_id, []).append(revoked_at)
+    if not revoked_by_patient:
+        return False
+    return any(
+        r.created_at is not None
+        and any(r.created_at <= ra for ra in revoked_by_patient.get(r.patient_id, ()))
+        for r in records
+    )
 
 
 async def _user_can_access_object(db: AsyncSession, user: User, object_key: str) -> bool:
@@ -335,12 +375,9 @@ async def _user_can_access_object(db: AsyncSession, user: User, object_key: str)
         doctor = doc_result.scalar_one_or_none()
         if not doctor:
             return False
-        for record in records:
-            if await _doctor_has_patient_relationship(
-                db, doctor, record.patient_id, record.created_at
-            ):
-                return True
-        return False
+        # Batched: constant 3 queries for the whole record set rather than
+        # ~3 per record (R12 N+1 fix).
+        return await _doctor_has_any_patient_relationship(db, doctor, list(records))
     return False
 
 

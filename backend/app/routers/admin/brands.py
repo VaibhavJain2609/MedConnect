@@ -490,15 +490,34 @@ async def bulk_import_brands(
     failed = 0
     skipped = 0
 
+    # Request-scoped find-or-create caches (R12 N+1 fix): bulk CSVs repeat the
+    # same manufacturer/salt/strength across rows, so each lookup happens once
+    # per unique value instead of once per row. All caches are cleared after
+    # any rollback() — rollback expires cached ORM objects and drops pending
+    # inserts, so a stale entry would be wrong AND raise MissingGreenlet.
+    mfr_by_name: dict[str, Manufacturer] = {}
+    salt_by_name: dict[str, Salt] = {}
+    strength_by_key: dict[tuple, SaltStrength] = {}
+    existing_brand_keys: set[tuple[str, object]] = set()
+
+    def _clear_caches() -> None:
+        mfr_by_name.clear()
+        salt_by_name.clear()
+        strength_by_key.clear()
+        existing_brand_keys.clear()
+
     for idx, row in enumerate(rows, start=1):
         try:
-            # Find or create manufacturer
-            mfr_result = await db.execute(
-                select(Manufacturer).where(
-                    func.lower(Manufacturer.manufacturer_name) == row.manufacturer_name.lower()
+            # Find or create manufacturer (cached per unique name)
+            mfr_key = row.manufacturer_name.lower()
+            manufacturer = mfr_by_name.get(mfr_key)
+            if manufacturer is None:
+                mfr_result = await db.execute(
+                    select(Manufacturer).where(
+                        func.lower(Manufacturer.manufacturer_name) == mfr_key
+                    )
                 )
-            )
-            manufacturer = mfr_result.scalar_one_or_none()
+                manufacturer = mfr_result.scalar_one_or_none()
 
             if not manufacturer:
                 manufacturer = Manufacturer(
@@ -507,15 +526,20 @@ async def bulk_import_brands(
                 )
                 db.add(manufacturer)
                 await db.flush()
+            mfr_by_name[mfr_key] = manufacturer
 
             # Check for existing brand
-            existing_result = await db.execute(
-                select(Brand).where(
-                    func.lower(Brand.brand_name) == row.brand_name.lower(),
-                    Brand.manufacturer_id == manufacturer.manufacturer_id,
+            brand_key = (row.brand_name.lower(), manufacturer.manufacturer_id)
+            if brand_key not in existing_brand_keys:
+                existing_result = await db.execute(
+                    select(Brand).where(
+                        func.lower(Brand.brand_name) == row.brand_name.lower(),
+                        Brand.manufacturer_id == manufacturer.manufacturer_id,
+                    )
                 )
-            )
-            if existing_result.scalar_one_or_none():
+                if existing_result.scalar_one_or_none():
+                    existing_brand_keys.add(brand_key)
+            if brand_key in existing_brand_keys:
                 results.append(BulkImportResult(
                     row=idx,
                     brand_name=row.brand_name,
@@ -538,16 +562,20 @@ async def bulk_import_brands(
                 salt_name = comp_str[:comp_str.index("(")].strip()
                 strength_str = comp_str[comp_str.index("(") + 1:comp_str.index(")")].strip()
 
-                # Find or create salt
-                salt_result = await db.execute(
-                    select(Salt).where(func.lower(Salt.salt_name) == salt_name.lower())
-                )
-                salt = salt_result.scalar_one_or_none()
+                # Find or create salt (cached per unique name)
+                salt_key = salt_name.lower()
+                salt = salt_by_name.get(salt_key)
+                if salt is None:
+                    salt_result = await db.execute(
+                        select(Salt).where(func.lower(Salt.salt_name) == salt_key)
+                    )
+                    salt = salt_result.scalar_one_or_none()
 
                 if not salt:
                     salt = Salt(salt_name=salt_name, prescription_required=True)
                     db.add(salt)
                     await db.flush()
+                salt_by_name[salt_key] = salt
 
                 # Parse strength value and unit (e.g., "500mg" -> 500, "mg")
                 import re
@@ -558,24 +586,28 @@ async def bulk_import_brands(
                 strength_value = float(match.group(1))
                 strength_unit = match.group(2)
 
-                # Find or create strength
-                strength_result = await db.execute(
-                    select(SaltStrength).where(
-                        SaltStrength.salt_id == salt.salt_id,
-                        SaltStrength.strength_value == strength_value,
-                        SaltStrength.strength_unit == strength_unit,
+                # Find or create strength (cached per unique triple)
+                strength_key = (salt.salt_id, strength_value, strength_unit)
+                salt_strength = strength_by_key.get(strength_key)
+                if salt_strength is None:
+                    strength_result = await db.execute(
+                        select(SaltStrength).where(
+                            SaltStrength.salt_id == salt.salt_id,
+                            SaltStrength.strength_value == strength_value,
+                            SaltStrength.strength_unit == strength_unit,
+                        )
                     )
-                )
-                salt_strength = strength_result.scalar_one_or_none()
+                    salt_strength = strength_result.scalar_one_or_none()
 
-                if not salt_strength:
-                    salt_strength = SaltStrength(
-                        salt_id=salt.salt_id,
-                        strength_value=strength_value,
-                        strength_unit=strength_unit,
-                    )
-                    db.add(salt_strength)
-                    await db.flush()
+                    if not salt_strength:
+                        salt_strength = SaltStrength(
+                            salt_id=salt.salt_id,
+                            strength_value=strength_value,
+                            strength_unit=strength_unit,
+                        )
+                        db.add(salt_strength)
+                        await db.flush()
+                    strength_by_key[strength_key] = salt_strength
 
                 composition_data.append(BrandCompositionInput(
                     salt_strength_id=str(salt_strength.salt_strength_id),
@@ -621,9 +653,12 @@ async def bulk_import_brands(
                 message=str(e),
             ))
             failed += 1
-            # Rollback this row's changes but continue with others
+            # Rollback this row's changes but continue with others. The
+            # rollback expires every cached ORM object and drops pending
+            # inserts — clear all find-or-create caches so the next row
+            # doesn't reuse a stale/detached instance (MissingGreenlet).
             await db.rollback()
-            # Reconnect session for next iteration
+            _clear_caches()
             continue
 
     # Commit all successful rows
