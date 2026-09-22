@@ -468,3 +468,70 @@ class TestDeleteAppointment:
         )
         resp = await doctor_client.delete(f"/api/v1/appointments/{appt.id}")
         assert resp.status_code == 204
+
+
+# ---------------------------------------------------------------------------
+# List endpoint — from/to date-range filter (doctor week calendar)
+# ---------------------------------------------------------------------------
+
+
+class TestListAppointmentsDateRange:
+    """GET /api/v1/appointments?from=YYYY-MM-DD&to=YYYY-MM-DD must return only
+    the doctor's appointments inside the inclusive UTC date range."""
+
+    @staticmethod
+    def _week_bounds() -> tuple[datetime, datetime, datetime]:
+        """(monday 10:00, sunday 15:00, following monday 10:00) two weeks out."""
+        base = datetime.now(timezone.utc) + timedelta(days=14)
+        monday = (base - timedelta(days=base.weekday())).replace(
+            hour=10, minute=0, second=0, microsecond=0
+        )
+        sunday = monday + timedelta(days=6, hours=5)
+        next_monday = monday + timedelta(days=7)
+        return monday, sunday, next_monday
+
+    async def test_from_to_returns_only_in_range(
+        self, doctor_client, db, doctor_user, doctor_profile, patient_user
+    ):
+        monday, sunday, next_monday = self._week_bounds()
+        appt_mon = await _make_appointment(
+            db, patient_id=patient_user.id, doctor_id=doctor_profile.id,
+            created_by=doctor_user.id, scheduled_at=monday,
+        )
+        appt_sun = await _make_appointment(
+            db, patient_id=patient_user.id, doctor_id=doctor_profile.id,
+            created_by=doctor_user.id, scheduled_at=sunday,
+        )
+        await _make_appointment(
+            db, patient_id=patient_user.id, doctor_id=doctor_profile.id,
+            created_by=doctor_user.id, scheduled_at=next_monday,  # out of range
+        )
+
+        resp = await doctor_client.get(
+            "/api/v1/appointments",
+            params={"from": monday.date().isoformat(), "to": sunday.date().isoformat()},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        ids = {a["id"] for a in body["data"]}
+        assert ids == {str(appt_mon.id), str(appt_sun.id)}
+        assert body["total"] == 2
+
+    async def test_reversed_range_returns_400(
+        self, doctor_client, db, doctor_user, doctor_profile
+    ):
+        monday, sunday, _ = self._week_bounds()
+        resp = await doctor_client.get(
+            "/api/v1/appointments",
+            params={"from": sunday.date().isoformat(), "to": monday.date().isoformat()},
+        )
+        assert resp.status_code == 400
+
+    async def test_invalid_from_returns_400(
+        self, doctor_client, db, doctor_user, doctor_profile
+    ):
+        resp = await doctor_client.get(
+            "/api/v1/appointments",
+            params={"from": "not-a-date", "to": "2025-01-01"},
+        )
+        assert resp.status_code == 400

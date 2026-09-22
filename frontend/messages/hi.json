@@ -166,6 +166,42 @@
       "customTimeLink": "दूसरा समय चाहिए? कस्टम समय दर्ज करें"
     }
   },
+  "doctorAppointments": {
+    "view": {
+      "label": "दृश्य",
+      "list": "सूची",
+      "calendar": "कैलेंडर"
+    },
+    "calendar": {
+      "prevWeek": "पिछला सप्ताह",
+      "nextWeek": "अगला सप्ताह",
+      "today": "आज",
+      "loading": "शेड्यूल लोड हो रहा है…",
+      "emptyTitle": "इस सप्ताह कोई अपॉइंटमेंट नहीं",
+      "emptyHint": "दूसरा सप्ताह देखने के लिए नेविगेशन का उपयोग करें, या नया अपॉइंटमेंट बुक करें।",
+      "unknownPatient": "अज्ञात मरीज़",
+      "detail": {
+        "ariaLabel": "अपॉइंटमेंट विवरण",
+        "title": "अपॉइंटमेंट विवरण",
+        "date": "तारीख",
+        "time": "समय",
+        "duration": "अवधि",
+        "durationMinutes": "{count} मिनट",
+        "type": "प्रकार",
+        "clinic": "क्लीनिक",
+        "chiefComplaint": "मुख्य शिकायत",
+        "close": "बंद करें",
+        "edit": "संपादित करें",
+        "cancel": "रद्द करें",
+        "joinCall": "कॉल जॉइन करें",
+        "getCallLink": "लिंक पाएं",
+        "generatingLink": "बना रहे हैं…",
+        "linkAccount": "खाता जोड़ें",
+        "walkIn": "वॉक-इन",
+        "unknownPatient": "अज्ञात मरीज़"
+      }
+    }
+  },
   "notifications": {
     "title": "सूचनाएं",
     "unreadCount": "{count} अपठित",

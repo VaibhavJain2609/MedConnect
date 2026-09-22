@@ -166,6 +166,42 @@
       "customTimeLink": "Need a different time? Enter a custom time"
     }
   },
+  "doctorAppointments": {
+    "view": {
+      "label": "View",
+      "list": "List",
+      "calendar": "Calendar"
+    },
+    "calendar": {
+      "prevWeek": "Previous week",
+      "nextWeek": "Next week",
+      "today": "Today",
+      "loading": "Loading schedule…",
+      "emptyTitle": "No appointments this week",
+      "emptyHint": "Use the navigation to view another week, or book a new appointment.",
+      "unknownPatient": "Unknown Patient",
+      "detail": {
+        "ariaLabel": "Appointment details",
+        "title": "Appointment Details",
+        "date": "Date",
+        "time": "Time",
+        "duration": "Duration",
+        "durationMinutes": "{count} min",
+        "type": "Type",
+        "clinic": "Clinic",
+        "chiefComplaint": "Chief Complaint",
+        "close": "Close",
+        "edit": "Edit",
+        "cancel": "Cancel",
+        "joinCall": "Join Call",
+        "getCallLink": "Get Link",
+        "generatingLink": "Generating…",
+        "linkAccount": "Link Account",
+        "walkIn": "Walk-in",
+        "unknownPatient": "Unknown Patient"
+      }
+    }
+  },
   "notifications": {
     "title": "Notifications",
     "unreadCount": "{count} unread",
