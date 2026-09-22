@@ -24,6 +24,7 @@ export interface Appointment {
   notes: string | null;
   cancelled_reason: string | null;
   meeting_url: string | null;
+  teleconsult_url: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;

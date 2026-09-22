@@ -1,7 +1,7 @@
 """Regression tests for round-3 critic findings.
 
 Covers:
-- teleconsult meeting URLs are unguessable (random token, not the appointment UUID)
+- teleconsult meeting URLs are deterministic per appointment (mc-<uuid hex>)
 - revoked clinic consent blocks NEW appointment/encounter writes
 - naive scheduled_at is coerced to UTC instead of 500ing
 - prescription safety gate flags unresolved free-text items (checked=False)
@@ -92,16 +92,18 @@ async def appointment(db: AsyncSession, doctor_profile: Doctor, patient_user: Us
 
 
 # ---------------------------------------------------------------------------
-# Teleconsult meeting URL unguessability
+# Teleconsult meeting URL determinism
 # ---------------------------------------------------------------------------
 
 
-class TestMeetingUrlEntropy:
-    async def test_meeting_url_not_derivable_from_appointment_id(
+class TestMeetingUrlDeterminism:
+    async def test_meeting_url_deterministic_per_appointment(
         self, doctor_client, doctor_profile, patient_user, db
     ):
-        """Room names must be random tokens — the appointment UUID is exposed
-        on queue/admin/audit surfaces and must not grant room access."""
+        """Room name is mc-<appointment UUID hex> — one stable room per
+        appointment (idempotent across create/status transitions/regenerate).
+        Access is enforced at the API layer: the URL only reaches the
+        patient, the doctor, clinic members, and admins."""
         from tests.conftest import grant_doctor_patient_relationship
 
         await grant_doctor_patient_relationship(db, "doctor-123", patient_user.id)
@@ -117,12 +119,10 @@ class TestMeetingUrlEntropy:
         )
         assert res.status_code == 201, res.text
         body = res.json()
+        expected = f"mc-{uuid.UUID(body['id']).hex}"
         assert body["meeting_url"]
-        assert body["id"] not in body["meeting_url"]  # no UUID in room name
-        # token_urlsafe(24) may itself contain '-' — measure the part after
-        # the fixed 'medconnect-' prefix, not a '-' split.
-        suffix = body["meeting_url"].split("medconnect-", 1)[-1]
-        assert len(suffix) > 20  # random token
+        assert body["meeting_url"].endswith(expected)
+        assert body["teleconsult_url"] == body["meeting_url"]
 
 
 # ---------------------------------------------------------------------------

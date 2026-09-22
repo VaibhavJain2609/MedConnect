@@ -27,6 +27,7 @@ class AppointmentResponse(BaseModel):
     notes: str | None = None
     cancelled_reason: str | None = None
     meeting_url: str | None = None
+    teleconsult_url: str | None = None
     is_provisional: bool = False
     patient_phone: str | None = None
     created_by: UUID

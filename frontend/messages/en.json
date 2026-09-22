@@ -113,6 +113,7 @@
       "pastHint": "Your completed and cancelled appointments will appear here."
     },
     "joinCall": "Join Call",
+    "joinVideoConsult": "Join video consult",
     "joinCallLocked": "Join Call (opens 10 min before)",
     "joinCallLockedHint": "The call link opens 10 minutes before the scheduled time",
     "getCallLink": "Get Call Link",
