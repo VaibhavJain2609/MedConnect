@@ -39,6 +39,7 @@ from app.routers import clinic_invites
 from app.routers import patient_links
 from app.routers import record_access
 from app.routers import appointments
+from app.routers import waitlist
 from app.routers import uploads
 from app.routers import vitals
 from app.routers import prescriptions_pdf
@@ -322,6 +323,9 @@ app.include_router(clinic_holidays.router)
 app.include_router(onboarding.router)
 app.include_router(patient_links.router)
 app.include_router(record_access.router)
+# waitlist before appointments: the literal /api/v1/appointments/waitlist
+# routes must match before /{appointment_id} swallows the "waitlist" segment.
+app.include_router(waitlist.router)
 app.include_router(appointments.router)
 app.include_router(uploads.router)
 app.include_router(vitals.router)

@@ -12,6 +12,7 @@ from app.models.clinic_invite import ClinicInvite, ClinicJoinRequest
 from app.models.patient_link import PatientClinicLink, PatientLinkCode
 from app.models.record_access import RecordAccessConsent
 from app.models.appointment import Appointment
+from app.models.appointment_waitlist import AppointmentWaitlist
 from app.models.doctor_availability import DoctorAvailability, DoctorLeave
 from app.models.encounter import Encounter
 from app.models.platform_setting import PlatformSetting
@@ -80,6 +81,7 @@ __all__ = [
     "PatientLinkCode",
     "RecordAccessConsent",
     "Appointment",
+    "AppointmentWaitlist",
     "DoctorAvailability",
     "DoctorLeave",
     "Encounter",

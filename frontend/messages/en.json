@@ -168,6 +168,26 @@
       "retrying": "Retrying…",
       "noAvailability": "No published availability — pick a custom time.",
       "customTimeLink": "Need a different time? Enter a custom time"
+    },
+    "waitlist": {
+      "offerHint": "No slots available for this day. Join the waitlist and we'll notify you if one opens up.",
+      "joinForDay": "Join waitlist",
+      "joining": "Joining…",
+      "joined": "You're on the waitlist — we'll notify you if a slot opens.",
+      "alreadyJoined": "You're already on the waitlist for this day.",
+      "joinError": "Couldn't join the waitlist. Please try again.",
+      "sectionTitle": "Waitlist",
+      "sectionHint": "You'll be notified if a slot opens — nothing is booked automatically.",
+      "unknownDoctor": "Doctor",
+      "window": {
+        "morning": "Morning",
+        "afternoon": "Afternoon",
+        "any": "Any time"
+      },
+      "statusPending": "Waiting",
+      "statusNotified": "Slot opened",
+      "cancelling": "Cancelling…",
+      "cancelRequest": "Cancel"
     }
   },
   "doctorAppointments": {
