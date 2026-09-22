@@ -8,7 +8,7 @@ from sqlalchemy import String, Text, ForeignKey, PrimaryKeyConstraint, UniqueCon
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.database import MedicineBase
+from app.database import MedicineBase, utcnow
 
 if TYPE_CHECKING:
     from .salts import Salt
@@ -27,7 +27,7 @@ class SideEffect(MedicineBase):
     severity: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)  # mild, moderate, severe, life-threatening
     frequency: Mapped[str | None] = mapped_column(String(20), nullable=True)  # rare, uncommon, common, very common
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     # Relationships
     salt_side_effects: Mapped[list["SaltSideEffect"]] = relationship("SaltSideEffect", back_populates="side_effect")
@@ -100,7 +100,7 @@ class Contraindication(MedicineBase):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     icd10_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
     severity: Mapped[str | None] = mapped_column(String(20), nullable=True)  # absolute, relative
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     # Relationships
     salt_contraindications: Mapped[list["SaltContraindication"]] = relationship("SaltContraindication", back_populates="contraindication")
@@ -157,7 +157,7 @@ class DrugInteraction(MedicineBase):
     mechanism: Mapped[str | None] = mapped_column(Text, nullable=True)
     management: Mapped[str | None] = mapped_column(Text, nullable=True)
     evidence_level: Mapped[str | None] = mapped_column(String(20), nullable=True)  # theoretical, case-report, study-based
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     # Relationships
     salt_1: Mapped["Salt"] = relationship("Salt", foreign_keys=[salt_id_1], back_populates="interactions_as_salt1")

@@ -8,7 +8,7 @@ from sqlalchemy import String, Boolean, ForeignKey, Integer, Date, UniqueConstra
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.database import MedicineBase
+from app.database import MedicineBase, utcnow
 
 if TYPE_CHECKING:
     from .salts import SaltStrength
@@ -29,8 +29,8 @@ class Manufacturer(MedicineBase):
     license_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
     contact_info: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
 
     # Relationships
     brands: Mapped[list["Brand"]] = relationship("Brand", back_populates="manufacturer")
@@ -59,8 +59,8 @@ class Brand(MedicineBase):
     launch_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     discontinuation_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     ndhm_code: Mapped[str | None] = mapped_column(String(50), nullable=True)  # ABDM integration
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
 
     # Relationships
     manufacturer: Mapped["Manufacturer"] = relationship("Manufacturer", back_populates="brands")

@@ -8,7 +8,7 @@ from sqlalchemy import String, Text, Boolean, ForeignKey, PrimaryKeyConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.database import MedicineBase
+from app.database import MedicineBase, utcnow
 
 if TYPE_CHECKING:
     from .salts import Salt
@@ -27,7 +27,7 @@ class Use(MedicineBase):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     icd10_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
     is_primary_indication: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     # Relationships
     salt_uses: Mapped[list["SaltUse"]] = relationship("SaltUse", back_populates="use")

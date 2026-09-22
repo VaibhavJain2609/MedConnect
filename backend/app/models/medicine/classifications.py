@@ -8,7 +8,7 @@ from sqlalchemy import String, Text, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.database import MedicineBase
+from app.database import MedicineBase, utcnow
 
 if TYPE_CHECKING:
     from .salts import Salt
@@ -27,7 +27,7 @@ class ChemicalClass(MedicineBase):
     parent_class_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("chemical_classes.chemical_class_id"), nullable=True
     )
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     # Relationships
     parent: Mapped["ChemicalClass | None"] = relationship(
@@ -53,7 +53,7 @@ class TherapeuticClass(MedicineBase):
     class_name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     icd10_codes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     # Relationships
     salts: Mapped[list["Salt"]] = relationship("Salt", back_populates="therapeutic_class")
@@ -73,7 +73,7 @@ class ActionClass(MedicineBase):
     class_name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     mechanism: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     # Relationships
     salts: Mapped[list["Salt"]] = relationship("Salt", back_populates="action_class")

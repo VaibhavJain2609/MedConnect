@@ -9,7 +9,7 @@ from sqlalchemy import String, Text, Boolean, ForeignKey, Numeric
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.database import MedicineBase
+from app.database import MedicineBase, utcnow
 
 if TYPE_CHECKING:
     from .salts import Salt
@@ -49,7 +49,7 @@ class DosingGuideline(MedicineBase):
     hepatic_adjustment: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     # Relationships
     salt: Mapped["Salt"] = relationship("Salt", back_populates="dosing_guidelines")

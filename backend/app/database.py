@@ -1,7 +1,20 @@
+from datetime import datetime, timezone
+
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
 from app.config import settings
+
+
+def utcnow() -> datetime:
+    """Current UTC time as a naive datetime.
+
+    Drop-in replacement for the deprecated ``datetime.utcnow`` — columns
+    declared ``Mapped[datetime]`` map to ``DateTime(timezone=False)``, so the
+    tz-aware ``now(UTC)`` result is made naive to keep identical semantics.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
 
 # asyncpg connect args shared by both engines. Under PgBouncer
 # pool_mode=transaction, server connections are recycled per transaction so

@@ -9,7 +9,7 @@ from sqlalchemy import String, Text, Boolean, ForeignKey, Numeric, UniqueConstra
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.database import MedicineBase
+from app.database import MedicineBase, utcnow
 
 if TYPE_CHECKING:
     from .classifications import ChemicalClass, TherapeuticClass, ActionClass
@@ -58,8 +58,8 @@ class Salt(MedicineBase):
     rxcui: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     # Metadata
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
 
     # Relationships
@@ -112,7 +112,7 @@ class SaltStrength(MedicineBase):
     strength_unit: Mapped[str] = mapped_column(String(20), nullable=False)
     is_standard_strength: Mapped[bool] = mapped_column(Boolean, default=True)
     pediatric_approved: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     # Relationships
     salt: Mapped["Salt"] = relationship("Salt", back_populates="strengths")
