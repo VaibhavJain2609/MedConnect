@@ -1,5 +1,6 @@
 import { AuthGuard } from "@/components/layout/auth-guard";
 import { PatientLayout } from "@/components/layout/patient-layout";
+import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 
 export default function PatientRootLayout({
   children,
@@ -9,6 +10,7 @@ export default function PatientRootLayout({
   return (
     <AuthGuard requiredRole="patient">
       <PatientLayout>{children}</PatientLayout>
+      <InstallPrompt />
     </AuthGuard>
   );
 }
