@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -28,13 +28,16 @@ router = APIRouter(prefix="/api/v1/patients", tags=["patients"])
 async def timeline(
     type: str | None = Query(None, description="Filter by record type"),
     q: str | None = Query(None, description="Search query"),
+    from_date: date | None = Query(None, description="Only records created on/after this date (UTC)"),
+    to_date: date | None = Query(None, description="Only records created on/before this date (UTC)"),
     cursor: UUID | None = Query(None, description="Pagination cursor"),
     limit: int = Query(20, ge=1, le=100),
     user: User = Depends(require_patient),
     db: AsyncSession = Depends(get_db),
 ):
     records, next_cursor, has_more = await get_patient_timeline(
-        db=db, patient_id=user.id, record_type=type, query=q, cursor=cursor, limit=limit
+        db=db, patient_id=user.id, record_type=type, query=q, cursor=cursor, limit=limit,
+        from_date=from_date, to_date=to_date,
     )
     return PaginatedResponse(
         data=records,
@@ -45,14 +48,18 @@ async def timeline(
 @router.get("/records")
 async def list_records(
     type: str | None = Query(None, description="Filter by record type"),
+    record_type: str | None = Query(None, description="Filter by record type (alias for 'type')"),
     q: str | None = Query(None, description="Search query"),
+    from_date: date | None = Query(None, description="Only records created on/after this date (UTC)"),
+    to_date: date | None = Query(None, description="Only records created on/before this date (UTC)"),
     cursor: UUID | None = Query(None, description="Pagination cursor"),
     limit: int = Query(20, ge=1, le=100),
     user: User = Depends(require_patient),
     db: AsyncSession = Depends(get_db),
 ):
     records, next_cursor, has_more = await get_patient_timeline(
-        db=db, patient_id=user.id, record_type=type, query=q, cursor=cursor, limit=limit
+        db=db, patient_id=user.id, record_type=record_type or type, query=q, cursor=cursor,
+        limit=limit, from_date=from_date, to_date=to_date,
     )
     return PaginatedResponse(
         data=records,

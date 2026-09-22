@@ -51,6 +51,37 @@
     "loadMore": "और लोड करें",
     "loading": "लोड हो रहा है..."
   },
+  "records": {
+    "breadcrumb": "मेरे रिकॉर्ड",
+    "title": "मेरे रिकॉर्ड",
+    "subtitle": "आपके सभी मेडिकल रिकॉर्ड एक जगह",
+    "addRecord": "रिकॉर्ड जोड़ें",
+    "export": "सभी एक्सपोर्ट करें (FHIR)",
+    "exporting": "एक्सपोर्ट हो रहा है…",
+    "exportError": "एक्सपोर्ट विफल। कृपया पुनः प्रयास करें।",
+    "searchPlaceholder": "रिकॉर्ड खोजें...",
+    "filters": {
+      "all": "सभी",
+      "from": "से",
+      "to": "तक",
+      "reset": "फ़िल्टर रीसेट करें",
+      "prescription": "प्रिस्क्रिप्शन",
+      "opd_note": "ओपीडी नोट्स",
+      "lab_report": "लैब रिपोर्ट",
+      "diagnostic_report": "डायग्नोस्टिक रिपोर्ट",
+      "discharge_summary": "डिस्चार्ज सारांश",
+      "imaging": "इमेजिंग",
+      "immunization": "टीकाकरण",
+      "other": "अन्य"
+    },
+    "emptyTitle": "कोई रिकॉर्ड नहीं मिला।",
+    "emptyHint": "रिकॉर्ड जोड़े जाने के बाद आपके मेडिकल रिकॉर्ड यहां दिखाई देंगे।",
+    "emptyFilteredTitle": "आपके फ़िल्टर से कोई रिकॉर्ड मेल नहीं खाता।",
+    "emptyFilteredHint": "अपने फ़िल्टर बदलकर या रीसेट करके देखें।",
+    "loadError": "रिकॉर्ड लोड करने में विफल।",
+    "loadErrorHint": "कृपया पेज रीफ्रेश करें या बाद में पुनः प्रयास करें।",
+    "doctorPrefix": "डॉ. {name}"
+  },
   "appointments": {
     "title": "मेरी अपॉइंटमेंट",
     "bookAppointment": "अपॉइंटमेंट बुक करें",
