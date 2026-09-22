@@ -1,11 +1,43 @@
-from pydantic import model_validator
+from urllib.parse import urlparse
+
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Hostnames that only ever exist inside the local compose network or on a
+# dev machine. If any connection URL resolves to one of these while
+# APP_ENV=production, the process refuses to boot.
+_LOCAL_HOSTS = {"postgres", "pgbouncer", "redis", "keycloak", "localhost", "127.0.0.1", "::1"}
+
+# Credential markers that appear in the committed dev defaults / .env.example
+# placeholders. Seeing one in a production URL means the secret was never
+# overridden (or the example file was copied verbatim).
+_WEAK_DB_CRED_MARKERS = ("medconnect:medconnect@", "USER:PASS@", ":PASS@")
+_WEAK_REDIS_CRED_MARKERS = (":REDIS_PASS@", ":CHANGE_ME@")
+
+# Values that are acceptable as the local-dev/placeholder admin password but
+# must never authenticate the Keycloak admin REST user in production.
+_WEAK_ADMIN_PASSWORDS = {"admin", "changeme", "change_me", "password"}
+
+
+def _hostname(url: str) -> str:
+    return (urlparse(url).hostname or "").lower()
 
 
 class Settings(BaseSettings):
     APP_NAME: str = "MedConnect"
+    # Restricted to a known set by the field validator below — a typo like
+    # "prod" would otherwise silently bypass every production guard.
     APP_ENV: str = "development"
     DEBUG: bool = False
+
+    # Root logger level for the structlog/stdlib JSON pipeline in main.py.
+    LOG_LEVEL: str = "INFO"
+
+    # Comma-separated Host-header allowlist, wired to TrustedHostMiddleware
+    # in main.py. Empty = middleware not installed (the ingress/ALB remains
+    # the enforcement point). Recommended in production, e.g.
+    # ALLOWED_HOSTS=api.example.com,medconnect.example.com
+    ALLOWED_HOSTS: str = ""
 
     DATABASE_URL: str = "postgresql+asyncpg://medconnect:medconnect@postgres:5432/medconnect"
     DATABASE_URL_SYNC: str = "postgresql://medconnect:medconnect@postgres:5432/medconnect"
@@ -26,11 +58,14 @@ class Settings(BaseSettings):
     KEYCLOAK_PUBLIC_URL: str = "http://localhost:8080"
     KEYCLOAK_REALM: str = "medconnect"
     KEYCLOAK_CLIENT_ID: str = "medconnect-backend"
-    # Set to False in dev .env if Keycloak lacks audience mappers
+    # Set to False in dev .env if Keycloak lacks audience mappers.
+    # Forced to True by the production guard below — disabling audience
+    # verification in prod accepts tokens minted for ANY client in the realm.
     VERIFY_JWT_AUDIENCE: bool = True
     KEYCLOAK_ADMIN_USER: str = "admin"
     KEYCLOAK_ADMIN_PASSWORD: str = "admin"
 
+    # Optional — empty disables sentry_sdk.init in main.py.
     SENTRY_DSN: str = ""
 
     BACKEND_URL: str = "http://localhost:8000"
@@ -88,21 +123,93 @@ class Settings(BaseSettings):
     OCR_LLM_MODEL: str | None = None
     OCR_LLM_TIMEOUT_SECONDS: float = 30.0
 
+    @field_validator("APP_ENV")
+    @classmethod
+    def _check_app_env(cls, v: str) -> str:
+        allowed = {"development", "test", "staging", "production"}
+        if v not in allowed:
+            raise ValueError(f"APP_ENV must be one of {sorted(allowed)}; got {v!r}")
+        return v
+
+    @field_validator("LOG_LEVEL")
+    @classmethod
+    def _normalise_log_level(cls, v: str) -> str:
+        level = v.strip().upper()
+        allowed = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+        if level not in allowed:
+            raise ValueError(f"LOG_LEVEL must be one of {sorted(allowed)}; got {v!r}")
+        return level
+
+    @field_validator("STORAGE_BACKEND")
+    @classmethod
+    def _check_storage_backend(cls, v: str) -> str:
+        if v not in {"local", "s3"}:
+            raise ValueError(f"STORAGE_BACKEND must be 'local' or 's3'; got {v!r}")
+        return v
+
     @model_validator(mode="after")
     def check_production_config(self) -> "Settings":
-        if self.APP_ENV == "production":
-            if "@postgres:5432" in self.DATABASE_URL:
-                raise ValueError("DATABASE_URL must be set to a real production database in production")
-            if self.KEYCLOAK_URL == "http://keycloak:8080":
-                raise ValueError("KEYCLOAK_URL must be set to a real Keycloak URL in production")
-            if self.REDIS_URL == "redis://redis:6379/0":
-                raise ValueError("REDIS_URL must be set to a real Redis URL in production")
-            if "localhost" in self.FRONTEND_URL:
-                raise ValueError("FRONTEND_URL must be set to a real production URL in production")
-            if self.KEYCLOAK_ADMIN_USER == "admin" and self.KEYCLOAK_ADMIN_PASSWORD == "admin":
-                raise ValueError("KEYCLOAK_ADMIN_USER and KEYCLOAK_ADMIN_PASSWORD must be changed from defaults in production")
-            if self.STORAGE_BACKEND == "local" and self.UPLOADS_DIR.startswith("/tmp"):
-                raise ValueError("UPLOADS_DIR must not use /tmp in production; set STORAGE_BACKEND=s3 or use a persistent path")
+        """Fail fast at startup when APP_ENV=production and any setting still
+        carries its local-dev default. Every violation is collected and
+        reported in one error so a misconfigured deploy fixes everything in
+        a single iteration instead of crash-looping once per variable."""
+        if self.APP_ENV != "production":
+            return self
+
+        errors: list[str] = []
+
+        # --- Connection URLs: must not resolve to compose/dev hostnames ---
+        db_url_fields = (
+            "DATABASE_URL",
+            "DATABASE_URL_SYNC",
+            "MEDICINE_DB_URL",
+            "MEDICINE_DB_URL_SYNC",
+        )
+        for name in db_url_fields:
+            url = getattr(self, name)
+            if _hostname(url) in _LOCAL_HOSTS:
+                errors.append(f"{name} still points at a local/dev host — set a real production database URL")
+            if any(marker in url for marker in _WEAK_DB_CRED_MARKERS):
+                errors.append(f"{name} still uses the default dev credential — set a real password")
+
+        if _hostname(self.REDIS_URL) in _LOCAL_HOSTS:
+            errors.append("REDIS_URL still points at a local/dev host — set a real production Redis URL")
+        if any(marker in self.REDIS_URL for marker in _WEAK_REDIS_CRED_MARKERS):
+            errors.append("REDIS_URL still uses the default dev credential — set a real password")
+
+        if _hostname(self.KEYCLOAK_URL) in _LOCAL_HOSTS:
+            errors.append("KEYCLOAK_URL must be set to a real Keycloak URL in production")
+
+        # --- Public origins: https only, no localhost, no wildcards ---
+        # FRONTEND_URL feeds CORSMiddleware allow_origins and CSP
+        # connect-src; a "*" here is a wildcard-CORS hole.
+        for name in ("FRONTEND_URL", "BACKEND_URL", "KEYCLOAK_PUBLIC_URL"):
+            url = getattr(self, name)
+            if "*" in url:
+                errors.append(f"{name} must not contain a wildcard in production")
+            if _hostname(url) in {"localhost", "127.0.0.1", "::1"}:
+                errors.append(f"{name} must be set to a real production URL (got {url!r})")
+            elif not url.startswith("https://"):
+                errors.append(f"{name} must be an https:// URL in production (got {url!r})")
+
+        # --- Credentials ---
+        if self.KEYCLOAK_ADMIN_USER == "admin":
+            errors.append("KEYCLOAK_ADMIN_USER must be changed from the 'admin' default in production")
+        if self.KEYCLOAK_ADMIN_PASSWORD.strip().lower() in _WEAK_ADMIN_PASSWORDS:
+            errors.append("KEYCLOAK_ADMIN_PASSWORD must be changed from the dev default in production")
+
+        # --- Safety switches that must stay on/off ---
+        if self.DEBUG:
+            errors.append("DEBUG must be false in production")
+        if not self.VERIFY_JWT_AUDIENCE:
+            errors.append("VERIFY_JWT_AUDIENCE must be true in production — disabling it accepts tokens minted for any client in the realm")
+
+        # --- Uploads ---
+        if self.STORAGE_BACKEND == "local" and self.UPLOADS_DIR.startswith("/tmp"):
+            errors.append("UPLOADS_DIR must not use /tmp in production; set STORAGE_BACKEND=s3 or use a persistent path")
+
+        if errors:
+            raise ValueError("Invalid production configuration: " + "; ".join(errors))
         return self
 
     model_config = SettingsConfigDict(env_file=".env")

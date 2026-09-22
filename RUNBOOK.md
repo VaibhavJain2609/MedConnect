@@ -280,3 +280,58 @@ Failure modes:
 
 PHI: report images stay in the uploads object store; providers log only
 identifiers (provider name, candidate count) — never image bytes or values.
+
+## 10. Production checklist (config)
+
+`Settings.check_production_config` (`backend/app/config.py`) fails fast at
+startup when `APP_ENV=production` and any setting still carries a local-dev
+default — the process exits with a `ValueError` naming **every** violation
+so a misconfigured deploy is fixed in one iteration, not one crash-loop per
+variable. `APP_ENV` itself is restricted to
+`development|test|staging|production`, so a typo like `prod` can't silently
+bypass the guard.
+
+### Must be overridden in production (names only — no values here)
+
+Values live in AWS Secrets Manager (`medconnect/<env>/{rds,redis,keycloak-admin}`)
+synced by the ExternalSecrets in `infra/k8s/base/external-secrets/`, plus the
+per-overlay ConfigMap patches. Locally they come from `backend/.env`
+(gitignored — copy `backend/.env.example`).
+
+**Enforced by the startup guard:**
+
+- `APP_ENV` — must be `production` (also disables `/docs`, enables HSTS).
+- `DATABASE_URL`, `DATABASE_URL_SYNC`, `MEDICINE_DB_URL`,
+  `MEDICINE_DB_URL_SYNC` — real DB hosts (no `postgres`/`pgbouncer`/
+  `localhost`) and non-default credentials.
+- `REDIS_URL` — real host + AUTH token.
+- `KEYCLOAK_URL` — reachable internal JWKS/admin base (not the compose
+  `keycloak` short name; use the FQDN, e.g. `keycloak.<ns>.svc.cluster.local`).
+- `KEYCLOAK_PUBLIC_URL`, `FRONTEND_URL`, `BACKEND_URL` — public `https://`
+  origins; `localhost`, wildcard `*`, and plain `http://` are rejected.
+  `FRONTEND_URL` feeds CORS `allow_origins` + CSP `connect-src`.
+- `KEYCLOAK_ADMIN_USER`, `KEYCLOAK_ADMIN_PASSWORD` — non-default.
+- `UPLOADS_DIR` — persistent path (not `/tmp`) when `STORAGE_BACKEND=local`,
+  or set `STORAGE_BACKEND=s3`.
+- `VERIFY_JWT_AUDIENCE` — must stay `true`.
+- `DEBUG` — must stay `false`.
+
+**Compose-level secrets** (`docker-compose.yml` interpolates these from the
+root `.env` — never commit it; `.env.example` ships `CHANGE_ME` placeholders):
+
+- `POSTGRES_USER`, `POSTGRES_PASSWORD`, `REDIS_PASSWORD`,
+  `KEYCLOAK_ADMIN`, `KEYCLOAK_ADMIN_PASSWORD`
+
+**Recommended (not enforced by the guard):**
+
+- `ALLOWED_HOSTS` — comma-separated Host-header allowlist; installs
+  `TrustedHostMiddleware` when set (defense-in-depth under the ALB/ingress).
+- `LOG_LEVEL` — `DEBUG|INFO|WARNING|ERROR|CRITICAL` (default `INFO`).
+- `SENTRY_DSN` — empty disables Sentry.
+- `UVICORN_WORKERS` — uvicorn worker count (compose default 1).
+- `TRUSTED_PROXY_IPS` — comma-separated proxy IPs whose `X-Forwarded-For`
+  is honoured by the rate limiter (empty = never trust XFF).
+- `RATE_LIMIT_USER_PER_MINUTE`, `JITSI_BASE_URL`, `DB_TRANSACTION_POOLING`.
+- Notification channels — `SMTP_*`, `MSG91_*`, `WHATSAPP_*`, `VAPID_*`;
+  unset = channel skipped with a logged `channel_unavailable`.
+- `OCR_*` — only when enabling lab ingest (§9).
