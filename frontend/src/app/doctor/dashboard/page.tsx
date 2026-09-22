@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { QuickActions } from "@/components/dashboard/quick-actions";
 import { TodaySchedule } from "@/components/dashboard/today-schedule";
@@ -8,6 +9,7 @@ import { PatientsWidget } from "@/components/dashboard/patients-widget";
 import { useAuthStore } from "@/stores/auth-store";
 
 export default function DoctorDashboard() {
+  const t = useTranslations("doctorDashboard");
   const { user } = useAuthStore();
 
   const todayLabel = new Date().toLocaleDateString("en-IN", {
@@ -19,13 +21,14 @@ export default function DoctorDashboard() {
 
   return (
     <div className="space-y-6">
-      <Breadcrumb items={[{ label: "Dashboard" }]} />
+      <Breadcrumb items={[{ label: t("breadcrumb") }]} />
 
       <div>
-        <h1 className="text-3xl font-bold text-dreams-textPrimary">Dashboard</h1>
+        <h1 className="text-3xl font-bold text-dreams-textPrimary">{t("title")}</h1>
         <p className="text-dreams-textSecondary mt-1">
-          Welcome back{user?.full_name ? `, Dr. ${user.full_name}` : ", Doctor"} —{" "}
-          {todayLabel}
+          {user?.full_name
+            ? t("welcomeNamed", { name: user.full_name, date: todayLabel })
+            : t("welcome", { date: todayLabel })}
         </p>
       </div>
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search, Users, ChevronRight } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { getDoctorPatients, DoctorPatient } from "@/lib/api/doctors";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { LoadMoreButton } from "@/components/ui/pagination";
@@ -12,6 +13,7 @@ import { Avatar } from "@/components/ui/avatar";
 const PAGE_SIZE = 20;
 
 export default function DoctorPatientsPage() {
+  const t = useTranslations("doctorPatients");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -57,12 +59,12 @@ export default function DoctorPatientsPage() {
 
   return (
     <div className="space-y-6">
-      <Breadcrumb items={[{ label: "My Patients" }]} />
+      <Breadcrumb items={[{ label: t("breadcrumb") }]} />
 
       <div>
-        <h1 className="text-3xl font-bold text-dreams-textPrimary">My Patients</h1>
+        <h1 className="text-3xl font-bold text-dreams-textPrimary">{t("title")}</h1>
         <p className="text-dreams-textSecondary mt-1">
-          Patients linked to your profile
+          {t("subtitle")}
         </p>
       </div>
 
@@ -71,7 +73,7 @@ export default function DoctorPatientsPage() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
         <input
           type="text"
-          placeholder="Search by name, email or phone..."
+          placeholder={t("searchPlaceholder")}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full h-10 pl-10 pr-4 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
@@ -85,9 +87,9 @@ export default function DoctorPatientsPage() {
         </div>
       ) : error ? (
         <div className="flex flex-col items-center justify-center py-12 space-y-2">
-          <p className="text-red-600 font-medium">Failed to load patients</p>
+          <p className="text-red-600 font-medium">{t("loadError")}</p>
           <p className="text-dreams-textSecondary text-sm">
-            {error instanceof Error ? error.message : "An error occurred"}
+            {error instanceof Error ? error.message : t("loadErrorGeneric")}
           </p>
         </div>
       ) : patients.length === 0 ? (
@@ -96,19 +98,17 @@ export default function DoctorPatientsPage() {
             <Users className="h-10 w-10 text-dreams-textSecondary" />
           </div>
           <h2 className="text-xl font-semibold text-dreams-textPrimary mb-2">
-            {debouncedQuery ? "No patients found" : "No patients yet"}
+            {debouncedQuery ? t("emptySearchTitle") : t("emptyTitle")}
           </h2>
           <p className="text-dreams-textSecondary max-w-sm">
-            {debouncedQuery
-              ? "Try a different search term."
-              : "Create a medical record or prescription to add your first patient."}
+            {debouncedQuery ? t("emptySearchHint") : t("emptyHint")}
           </p>
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-dreams-border shadow-card overflow-hidden">
           <div className="px-6 py-4 border-b border-dreams-border flex items-center justify-between">
             <h2 className="font-semibold text-dreams-textPrimary">
-              {patients.length} {patients.length === 1 ? "patient" : "patients"}
+              {t("count", { count: patients.length })}
             </h2>
           </div>
           <ul className="divide-y divide-dreams-border">
@@ -124,7 +124,7 @@ export default function DoctorPatientsPage() {
                       {patient.full_name}
                     </p>
                     <p className="text-sm text-dreams-textSecondary truncate">
-                      {patient.email ?? patient.phone ?? "No contact info"}
+                      {patient.email ?? patient.phone ?? t("noContact")}
                     </p>
                   </div>
                   <ChevronRight className="h-4 w-4 text-dreams-textSecondary group-hover:text-dreams-blue transition-colors flex-shrink-0" />

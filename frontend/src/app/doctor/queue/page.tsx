@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import api from "@/lib/api";
 import { useClinicStore } from "@/stores/clinic-store";
 
@@ -19,13 +20,8 @@ interface QueueEntry {
   created_at: string;
 }
 
-const STATUS_LABELS: Record<QueueEntry["status"], string> = {
-  waiting: "Waiting",
-  in_consultation: "In Consultation",
-  completed: "Completed",
-  cancelled: "Cancelled",
-};
-
+// Status labels come from the "doctorQueue.status" message namespace
+// (see docs/i18n.md).
 const STATUS_COLORS: Record<QueueEntry["status"], string> = {
   waiting: "bg-blue-100 text-blue-800",
   in_consultation: "bg-green-100 text-green-800",
@@ -56,6 +52,8 @@ function BillPatientModal({
   clinicId: string;
   onClose: () => void;
 }) {
+  const t = useTranslations("doctorQueue.bill");
+  const tCommon = useTranslations("common");
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [notes, setNotes] = useState("");
@@ -75,7 +73,7 @@ function BillPatientModal({
     e.preventDefault();
     const amt = parseFloat(amount);
     if (!amount || isNaN(amt) || amt <= 0) {
-      setError("Please enter a valid amount.");
+      setError(t("invalidAmount"));
       return;
     }
     setSaving(true);
@@ -97,7 +95,7 @@ function BillPatientModal({
         typeof axiosError.response.data.detail === "object" &&
         axiosError.response.data.detail.error?.message
           ? axiosError.response.data.detail.error.message
-          : "Failed to create invoice.";
+          : t("createFailed");
       setError(msg);
     } finally {
       setSaving(false);
@@ -112,19 +110,19 @@ function BillPatientModal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Create invoice"
+        aria-label={t("ariaLabel")}
         className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-bold text-dreams-textPrimary mb-1">Create Invoice</h2>
+        <h2 className="text-lg font-bold text-dreams-textPrimary mb-1">{t("title")}</h2>
         <p className="text-sm text-dreams-textSecondary mb-4">
-          Patient: <span className="font-medium text-dreams-textPrimary">{state.patientName ?? "Unknown"}</span>
+          {t("patientLabel")} <span className="font-medium text-dreams-textPrimary">{state.patientName ?? tCommon("unknownPatient")}</span>
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-dreams-textPrimary mb-1">
-              Amount (₹) <span className="text-red-500">*</span>
+              {t("amount")} <span className="text-red-500">*</span>
             </label>
             <input
               type="number"
@@ -132,33 +130,33 @@ function BillPatientModal({
               step="0.01"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              placeholder="e.g. 500"
+              placeholder={t("amountPlaceholder")}
               className="w-full px-3 py-2 border border-dreams-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue/30"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-dreams-textPrimary mb-1">Payment Method</label>
+            <label className="block text-sm font-medium text-dreams-textPrimary mb-1">{t("paymentMethod")}</label>
             <select
               value={paymentMethod}
               onChange={(e) => setPaymentMethod(e.target.value)}
               className="w-full px-3 py-2 border border-dreams-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue/30"
             >
-              <option value="cash">Cash</option>
-              <option value="card">Card</option>
-              <option value="upi">UPI</option>
-              <option value="insurance">Insurance</option>
-              <option value="other">Other</option>
+              <option value="cash">{t("methods.cash")}</option>
+              <option value="card">{t("methods.card")}</option>
+              <option value="upi">{t("methods.upi")}</option>
+              <option value="insurance">{t("methods.insurance")}</option>
+              <option value="other">{t("methods.other")}</option>
             </select>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-dreams-textPrimary mb-1">Notes (optional)</label>
+            <label className="block text-sm font-medium text-dreams-textPrimary mb-1">{t("notes")}</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="e.g. Consultation fee"
+              placeholder={t("notesPlaceholder")}
               rows={2}
               className="w-full px-3 py-2 border border-dreams-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue/30 resize-none"
             />
@@ -174,14 +172,14 @@ function BillPatientModal({
               onClick={onClose}
               className="flex-1 px-4 py-2 text-sm border border-dreams-border rounded-lg text-dreams-textSecondary hover:bg-dreams-lightBg transition-colors"
             >
-              Cancel
+              {tCommon("cancel")}
             </button>
             <button
               type="submit"
               disabled={saving}
               className="flex-1 px-4 py-2 text-sm bg-dreams-blue text-white rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
-              {saving ? "Saving…" : "Create Invoice"}
+              {saving ? t("saving") : t("submit")}
             </button>
           </div>
         </form>
@@ -191,6 +189,8 @@ function BillPatientModal({
 }
 
 export default function QueuePage() {
+  const t = useTranslations("doctorQueue");
+  const tCommon = useTranslations("common");
   // Reactive clinic id from the persisted clinic store — the axios
   // interceptor attaches it as X-Clinic-Id automatically.
   const clinicId = useClinicStore((s) => s.activeClinicId) ?? "";
@@ -220,7 +220,7 @@ export default function QueuePage() {
       await api.patch(`/api/v1/queue/${id}/status`, { status });
       await fetchQueue();
     } catch {
-      alert("Failed to update status.");
+      alert(t("updateFailed"));
     } finally {
       setActionLoading(null);
     }
@@ -242,9 +242,9 @@ export default function QueuePage() {
   // otherwise the last fetch failure.
   const displayError = clinicId
     ? isError
-      ? "Failed to load queue."
+      ? t("loadFailed")
       : ""
-    : "No active clinic selected. Set clinic from the clinic page.";
+    : t("noClinic");
 
   if (displayError) {
     return (
@@ -269,20 +269,20 @@ export default function QueuePage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-dreams-textPrimary">Queue</h1>
+            <h1 className="text-2xl font-bold text-dreams-textPrimary">{t("title")}</h1>
             <p className="text-sm text-dreams-textSecondary mt-1">
-              Today&apos;s waiting room — auto-refreshes every 30s
+              {t("subtitle")}
             </p>
           </div>
           <div className="flex items-center gap-3">
             <span className="text-sm text-dreams-textSecondary">
-              {waiting.length} waiting · {inConsultation.length} in consultation
+              {t("summary", { waiting: waiting.length, inConsultation: inConsultation.length })}
             </span>
             <button
               onClick={() => void fetchQueue()}
               className="px-3 py-1.5 text-sm border border-dreams-border rounded-lg hover:bg-gray-50 transition-colors"
             >
-              Refresh
+              {t("refresh")}
             </button>
           </div>
         </div>
@@ -291,9 +291,9 @@ export default function QueuePage() {
         {waiting.length > 0 && inConsultation.length === 0 && (
           <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-blue-800">Next up</p>
+              <p className="text-sm font-medium text-blue-800">{t("nextUp")}</p>
               <p className="text-lg font-bold text-blue-900 mt-0.5">
-                #{waiting[0].queue_number} — {waiting[0].patient_name ?? "Unknown Patient"}
+                #{waiting[0].queue_number} — {waiting[0].patient_name ?? tCommon("unknownPatient")}
               </p>
             </div>
             <button
@@ -301,7 +301,7 @@ export default function QueuePage() {
               disabled={actionLoading === waiting[0].id + "in_consultation"}
               className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
             >
-              Call Next Patient
+              {t("callNext")}
             </button>
           </div>
         )}
@@ -310,7 +310,7 @@ export default function QueuePage() {
         {inConsultation.length > 0 && (
           <section>
             <h2 className="text-xs font-semibold uppercase tracking-wider text-dreams-textSecondary mb-3">
-              In Consultation
+              {t("sections.inConsultation")}
             </h2>
             <div className="space-y-2">
               {inConsultation.map((entry) => (
@@ -331,7 +331,7 @@ export default function QueuePage() {
         {waiting.length > 0 && (
           <section>
             <h2 className="text-xs font-semibold uppercase tracking-wider text-dreams-textSecondary mb-3">
-              Waiting ({waiting.length})
+              {t("sections.waiting", { count: waiting.length })}
             </h2>
             <div className="space-y-2">
               {waiting.map((entry) => (
@@ -351,7 +351,7 @@ export default function QueuePage() {
         {done.length > 0 && (
           <section>
             <h2 className="text-xs font-semibold uppercase tracking-wider text-dreams-textSecondary mb-3">
-              Completed Today ({done.length})
+              {t("sections.completedToday", { count: done.length })}
             </h2>
             <div className="space-y-2">
               {done.map((entry) => (
@@ -368,7 +368,7 @@ export default function QueuePage() {
 
         {entries.length === 0 && (
           <div className="text-center py-16 text-dreams-textSecondary">
-            No patients in queue today.
+            {t("empty")}
           </div>
         )}
       </div>
@@ -391,6 +391,8 @@ function QueueCard({
   onBill?: () => void;
   loading: string | null;
 }) {
+  const t = useTranslations("doctorQueue");
+  const tCommon = useTranslations("common");
   const isLoading = (suffix: string) => loading === entry.id + suffix;
 
   return (
@@ -401,7 +403,7 @@ function QueueCard({
         </span>
         <div className="min-w-0">
           <p className="font-medium text-dreams-textPrimary truncate">
-            {entry.patient_name ?? "Unknown Patient"}
+            {entry.patient_name ?? tCommon("unknownPatient")}
           </p>
           {entry.notes && (
             <p className="text-xs text-dreams-textSecondary truncate">{entry.notes}</p>
@@ -418,7 +420,7 @@ function QueueCard({
             STATUS_COLORS[entry.status]
           }`}
         >
-          {STATUS_LABELS[entry.status]}
+          {t(`status.${entry.status}`)}
         </span>
 
         {onCallIn && (
@@ -427,7 +429,7 @@ function QueueCard({
             disabled={isLoading("in_consultation")}
             className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
-            Call In
+            {t("actions.callIn")}
           </button>
         )}
         {onComplete && (
@@ -436,7 +438,7 @@ function QueueCard({
             disabled={isLoading("completed")}
             className="px-3 py-1 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
           >
-            Complete
+            {t("actions.complete")}
           </button>
         )}
         {onBill && (
@@ -444,7 +446,7 @@ function QueueCard({
             onClick={onBill}
             className="px-3 py-1 text-xs border border-dreams-blue text-dreams-blue rounded-lg hover:bg-dreams-blue/10 transition-colors"
           >
-            Bill Patient
+            {t("actions.billPatient")}
           </button>
         )}
         {onCancel && (
@@ -453,7 +455,7 @@ function QueueCard({
             disabled={isLoading("cancelled")}
             className="px-3 py-1 text-xs border border-red-300 text-red-600 rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors"
           >
-            Cancel
+            {tCommon("cancel")}
           </button>
         )}
       </div>

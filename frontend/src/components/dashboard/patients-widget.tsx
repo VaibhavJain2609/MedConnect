@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { ArrowRight, Users } from "lucide-react";
 
 import { getDoctorPatients, type DoctorPatient } from "@/lib/api/doctors";
@@ -26,6 +27,7 @@ function PatientsSkeleton() {
  * GET /api/v1/doctors/patients, with per-patient shortcuts.
  */
 export function PatientsWidget() {
+  const t = useTranslations("doctorDashboard.patients");
   const query = useQuery({
     queryKey: ["doctor-dashboard-patients"],
     queryFn: () => getDoctorPatients({ limit: PATIENT_LIMIT }),
@@ -35,28 +37,28 @@ export function PatientsWidget() {
 
   return (
     <DashboardWidget
-      title="Your Patients"
+      title={t("title")}
       icon={Users}
       headerAction={
         <Link
           href="/doctor/patients"
           className="inline-flex items-center gap-1 text-sm font-medium text-dreams-blue hover:underline"
         >
-          View all
+          {t("viewAll")}
           <ArrowRight className="h-3.5 w-3.5" aria-hidden />
         </Link>
       }
       isLoading={query.isLoading}
       isError={query.isError}
       onRetry={() => query.refetch()}
-      errorMessage="Couldn't load your patients."
+      errorMessage={t("loadError")}
       skeleton={<PatientsSkeleton />}
     >
       {patients.length === 0 ? (
         <EmptyState
           icon={Users}
-          title="No patients yet"
-          description="Create a medical record or prescription to add your first patient."
+          title={t("emptyTitle")}
+          description={t("emptyHint")}
           className="py-8"
         />
       ) : (
@@ -77,13 +79,13 @@ export function PatientsWidget() {
                   href={`/doctor/patients/${patient.id}`}
                   className="text-xs font-medium text-dreams-blue hover:underline"
                 >
-                  View →
+                  {t("view")}
                 </Link>
                 <Link
                   href={`/doctor/records/new?patient_id=${patient.id}`}
                   className="text-xs text-dreams-textSecondary hover:text-dreams-blue hover:underline"
                 >
-                  Add record →
+                  {t("addRecord")}
                 </Link>
               </div>
             </div>

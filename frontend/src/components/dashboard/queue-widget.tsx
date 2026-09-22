@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { ArrowRight, ListOrdered } from "lucide-react";
 
 import api from "@/lib/api";
@@ -30,6 +31,8 @@ function QueueSkeleton() {
  * Renders a setup hint instead of data when no clinic is selected.
  */
 export function QueueWidget() {
+  const t = useTranslations("doctorDashboard.queue");
+  const tCommon = useTranslations("common");
   const clinicId = useClinicStore((s) => s.activeClinicId);
 
   const query = useQuery({
@@ -50,18 +53,18 @@ export function QueueWidget() {
 
   if (!clinicId) {
     return (
-      <DashboardWidget title="Queue" icon={ListOrdered}>
+      <DashboardWidget title={t("title")} icon={ListOrdered}>
         <EmptyState
           icon={ListOrdered}
-          title="No clinic selected"
-          description="Select a clinic to see today's queue."
+          title={t("noClinicTitle")}
+          description={t("noClinicHint")}
           className="py-8"
           action={
             <Link
               href="/doctor/clinic"
               className="text-sm font-medium text-dreams-blue hover:underline"
             >
-              Go to clinic settings →
+              {t("noClinicAction")}
             </Link>
           }
         />
@@ -75,28 +78,28 @@ export function QueueWidget() {
 
   return (
     <DashboardWidget
-      title="Queue"
+      title={t("title")}
       icon={ListOrdered}
       headerAction={
         <Link
           href="/doctor/queue"
           className="inline-flex items-center gap-1 text-sm font-medium text-dreams-blue hover:underline"
         >
-          Open queue
+          {t("openQueue")}
           <ArrowRight className="h-3.5 w-3.5" aria-hidden />
         </Link>
       }
       isLoading={query.isLoading}
       isError={query.isError}
       onRetry={() => query.refetch()}
-      errorMessage="Couldn't load the queue."
+      errorMessage={t("loadError")}
       skeleton={<QueueSkeleton />}
     >
       {waitingCount === 0 ? (
         <EmptyState
           icon={ListOrdered}
-          title="No patients waiting"
-          description="Your queue is clear right now."
+          title={t("emptyTitle")}
+          description={t("emptyHint")}
           className="py-8"
         />
       ) : (
@@ -105,7 +108,7 @@ export function QueueWidget() {
             <span className="text-2xl font-bold text-dreams-textPrimary">
               {waitingCount}
             </span>{" "}
-            patient{waitingCount === 1 ? "" : "s"} waiting
+            {t("waitingSuffix", { count: waitingCount })}
           </p>
 
           {nextPatient && (
@@ -114,9 +117,9 @@ export function QueueWidget() {
                 #{nextPatient.queue_number}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-xs text-dreams-textSecondary">Next up</p>
+                <p className="text-xs text-dreams-textSecondary">{t("nextUp")}</p>
                 <p className="truncate text-sm font-medium text-dreams-textPrimary">
-                  {nextPatient.patient_name ?? "Unknown patient"}
+                  {nextPatient.patient_name ?? tCommon("unknownPatient")}
                 </p>
               </div>
             </div>

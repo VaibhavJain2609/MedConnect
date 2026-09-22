@@ -4,7 +4,9 @@
       "main": "मुख्य",
       "health": "स्वास्थ्य",
       "clinics": "क्लीनिक",
-      "account": "खाता"
+      "account": "खाता",
+      "clinical": "क्लीनिकल",
+      "actions": "त्वरित कार्य"
     },
     "healthTimeline": "स्वास्थ्य टाइमलाइन",
     "appointments": "अपॉइंटमेंट",
@@ -24,7 +26,27 @@
     "logout": "लॉग आउट",
     "collapseSidebar": "साइडबार छोटा करें",
     "expandSidebar": "साइडबार बड़ा करें",
-    "closeMenu": "मेनू बंद करें"
+    "closeMenu": "मेनू बंद करें",
+    "doctorDashboard": "डैशबोर्ड",
+    "doctorMyPatients": "मेरे मरीज़",
+    "doctorSchedule": "शेड्यूल",
+    "doctorEncounters": "विज़िट",
+    "doctorMyPrescriptions": "मेरे प्रिस्क्रिप्शन",
+    "doctorRefillRequests": "रीफिल अनुरोध",
+    "doctorTemplates": "टेम्पलेट",
+    "doctorQueue": "कतार",
+    "doctorMyClinic": "मेरा क्लीनिक",
+    "doctorStaffInvites": "स्टाफ और आमंत्रण",
+    "doctorLinkPatient": "मरीज़ लिंक करें",
+    "doctorNewPrescription": "नया प्रिस्क्रिप्शन",
+    "doctorNewRecord": "नया रिकॉर्ड"
+  },
+  "common": {
+    "retry": "पुनः प्रयास करें",
+    "loadFailed": "लोड करने में विफल। कृपया पुनः प्रयास करें।",
+    "close": "बंद करें",
+    "cancel": "रद्द करें",
+    "unknownPatient": "अज्ञात मरीज़"
   },
   "timeline": {
     "breadcrumb": "स्वास्थ्य टाइमलाइन",
@@ -262,6 +284,212 @@
     "loadFailedHint": "कृपया अपना कनेक्शन जांचें और पुनः प्रयास करें।",
     "tryAgain": "पुनः प्रयास करें",
     "retrying": "पुनः प्रयास हो रहा है…"
+  },
+  "doctorDashboard": {
+    "breadcrumb": "डैशबोर्ड",
+    "title": "डैशबोर्ड",
+    "welcome": "वापसी पर स्वागत है, डॉक्टर — {date}",
+    "welcomeNamed": "वापसी पर स्वागत है, डॉ. {name} — {date}",
+    "quickActions": {
+      "title": "त्वरित कार्य",
+      "newPrescription": "नया प्रिस्क्रिप्शन",
+      "newPrescriptionHint": "प्रिस्क्रिप्शन लिखें",
+      "newRecord": "नया रिकॉर्ड",
+      "newRecordHint": "मेडिकल रिकॉर्ड बनाएं",
+      "checkSchedule": "शेड्यूल देखें",
+      "checkScheduleHint": "अपनी अपॉइंटमेंट देखें"
+    },
+    "schedule": {
+      "title": "आज का शेड्यूल",
+      "viewAll": "सभी देखें",
+      "loadError": "आज का शेड्यूल लोड नहीं हो सका।",
+      "emptyTitle": "आज कोई अपॉइंटमेंट नहीं",
+      "emptyHint": "आपका शेड्यूल खाली है। नई बुकिंग यहां दिखाई देंगी।",
+      "countSuffix": "{count, plural, one {अपॉइंटमेंट आज} other {अपॉइंटमेंट आज}}",
+      "walkIn": "(वॉक-इन)",
+      "noneLeft": "आज के लिए कोई आगामी अपॉइंटमेंट शेष नहीं।"
+    },
+    "queue": {
+      "title": "कतार",
+      "openQueue": "कतार खोलें",
+      "loadError": "कतार लोड नहीं हो सकी।",
+      "noClinicTitle": "कोई क्लीनिक चयनित नहीं",
+      "noClinicHint": "आज की कतार देखने के लिए क्लीनिक चुनें।",
+      "noClinicAction": "क्लीनिक सेटिंग पर जाएं →",
+      "emptyTitle": "कोई मरीज़ प्रतीक्षा में नहीं",
+      "emptyHint": "अभी आपकी कतार खाली है।",
+      "waitingSuffix": "{count, plural, one {मरीज़ प्रतीक्षा में} other {मरीज़ प्रतीक्षा में}}",
+      "nextUp": "अगला मरीज़"
+    },
+    "patients": {
+      "title": "आपके मरीज़",
+      "viewAll": "सभी देखें",
+      "loadError": "आपके मरीज़ लोड नहीं हो सके।",
+      "emptyTitle": "अभी कोई मरीज़ नहीं",
+      "emptyHint": "पहला मरीज़ जोड़ने के लिए मेडिकल रिकॉर्ड या प्रिस्क्रिप्शन बनाएं।",
+      "view": "देखें →",
+      "addRecord": "रिकॉर्ड जोड़ें →"
+    }
+  },
+  "doctorAppointments": {
+    "breadcrumb": "अपॉइंटमेंट",
+    "title": "अपॉइंटमेंट",
+    "todaysSchedule": "आज का शेड्यूल",
+    "dateAriaLabel": "अपॉइंटमेंट की तारीख",
+    "today": "आज",
+    "newAppointment": "नई अपॉइंटमेंट",
+    "summary": "{count, plural, one {# अपॉइंटमेंट} other {# अपॉइंटमेंट}} निर्धारित",
+    "emptyTitle": "कोई अपॉइंटमेंट नहीं",
+    "emptyToday": "आज के लिए आपकी कोई अपॉइंटमेंट निर्धारित नहीं है।",
+    "emptyDate": "{date} को कोई अपॉइंटमेंट नहीं।",
+    "walkIn": "वॉक-इन",
+    "chiefComplaint": "मुख्य शिकायत: {complaint}",
+    "newPrescription": "नया प्रिस्क्रिप्शन",
+    "newRecord": "नया रिकॉर्ड",
+    "joinCall": "कॉल में जुड़ें",
+    "getLink": "लिंक प्राप्त करें",
+    "generating": "बनाया जा रहा है…",
+    "linkAccount": "खाता लिंक करें",
+    "edit": "संपादित करें",
+    "cancel": "रद्द करें",
+    "actions": {
+      "markArrived": "पहुंचे चिह्नित करें",
+      "noShow": "अनुपस्थित",
+      "start": "शुरू करें",
+      "complete": "पूर्ण करें"
+    },
+    "search": {
+      "placeholder": "नाम या फ़ोन से मरीज़ खोजें...",
+      "empty": "कोई मरीज़ नहीं मिला।"
+    },
+    "booking": {
+      "ariaLabel": "नई अपॉइंटमेंट",
+      "title": "नई अपॉइंटमेंट",
+      "tabExisting": "मौजूदा मरीज़",
+      "tabWalkin": "वॉक-इन / कॉल-इन",
+      "patient": "मरीज़ *",
+      "clearPatient": "चयनित मरीज़ हटाएं",
+      "patientName": "मरीज़ का नाम *",
+      "patientNamePlaceholder": "पूरा नाम",
+      "phone": "फ़ोन नंबर *",
+      "date": "तारीख *",
+      "time": "समय *",
+      "duration": "अवधि",
+      "durationOption": "{count} मिनट",
+      "type": "प्रकार *",
+      "chiefComplaint": "मुख्य शिकायत",
+      "chiefComplaintPlaceholder": "जैसे 2 दिनों से बुखार, सिरदर्द",
+      "clinic": "क्लीनिक",
+      "clinicRequired": "क्लीनिक *",
+      "selectClinic": "क्लीनिक चुनें",
+      "noClinic": "कोई क्लीनिक नहीं (निजी)",
+      "doctor": "डॉक्टर *",
+      "selectDoctor": "डॉक्टर चुनें",
+      "branch": "शाखा",
+      "loadingBranches": "शाखाएं लोड हो रही हैं...",
+      "anyBranch": "कोई भी शाखा",
+      "submit": "अपॉइंटमेंट बुक करें",
+      "submitting": "बुक हो रहा है...",
+      "errorName": "मरीज़ का नाम आवश्यक है",
+      "errorPhone": "फ़ोन नंबर आवश्यक है",
+      "errorClinic": "वॉक-इन बुकिंग के लिए क्लीनिक चुनना आवश्यक है",
+      "errorDoctor": "कृपया डॉक्टर चुनें",
+      "errorPatient": "कृपया मरीज़ चुनें",
+      "errorFailed": "अपॉइंटमेंट नहीं बनाई जा सकी"
+    },
+    "editModal": {
+      "ariaLabel": "अपॉइंटमेंट संपादित करें",
+      "title": "अपॉइंटमेंट संपादित करें",
+      "patient": "मरीज़",
+      "saving": "सहेजा जा रहा है...",
+      "submit": "बदलाव सहेजें",
+      "errorFailed": "अपॉइंटमेंट अपडेट नहीं हो सकी"
+    },
+    "cancelModal": {
+      "ariaLabel": "अपॉइंटमेंट रद्द करें",
+      "title": "अपॉइंटमेंट रद्द करें",
+      "body": "<strong>{name}</strong> की अपॉइंटमेंट रद्द करें?",
+      "reason": "कारण (वैकल्पिक)",
+      "reasonPlaceholder": "जैसे डॉक्टर अनुपलब्ध, मरीज़ का अनुरोध...",
+      "confirm": "अपॉइंटमेंट रद्द करें",
+      "cancelling": "रद्द की जा रही है...",
+      "keep": "रखें",
+      "errorFailed": "अपॉइंटमेंट रद्द नहीं हो सकी"
+    },
+    "linkModal": {
+      "ariaLabel": "मरीज़ का खाता लिंक करें",
+      "title": "मरीज़ का खाता लिंक करें",
+      "body": "<strong>{name}</strong> का वॉक-इन रिकॉर्ड लिंक किया जा रहा है। मरीज़ से कहें कि MedConnect खोले, <b>मेरे क्लीनिक</b> पर जाए और अपना लिंक कोड साझा करे।",
+      "codeLabel": "मरीज़ का लिंक कोड",
+      "codePlaceholder": "जैसे ABC1234567",
+      "errorCode": "कृपया लिंक कोड दर्ज करें",
+      "submit": "खाता लिंक करें",
+      "submitting": "लिंक हो रहा है...",
+      "errorFailed": "खाता लिंक नहीं हो सका"
+    }
+  },
+  "doctorQueue": {
+    "title": "कतार",
+    "subtitle": "आज का वेटिंग रूम — हर 30 सेकंड में ऑटो-रिफ्रेश",
+    "summary": "{waiting} प्रतीक्षा में · {inConsultation} परामर्श में",
+    "refresh": "रिफ्रेश करें",
+    "nextUp": "अगला मरीज़",
+    "callNext": "अगले मरीज़ को बुलाएं",
+    "sections": {
+      "inConsultation": "परामर्श में",
+      "waiting": "प्रतीक्षा में ({count})",
+      "completedToday": "आज पूर्ण ({count})"
+    },
+    "status": {
+      "waiting": "प्रतीक्षा में",
+      "in_consultation": "परामर्श में",
+      "completed": "पूर्ण",
+      "cancelled": "रद्द"
+    },
+    "empty": "आज कतार में कोई मरीज़ नहीं।",
+    "loadFailed": "कतार लोड नहीं हो सकी।",
+    "noClinic": "कोई सक्रिय क्लीनिक चयनित नहीं। क्लीनिक पेज से क्लीनिक सेट करें।",
+    "updateFailed": "स्थिति अपडेट नहीं हो सकी।",
+    "actions": {
+      "callIn": "बुलाएं",
+      "complete": "पूर्ण करें",
+      "billPatient": "बिल बनाएं"
+    },
+    "bill": {
+      "ariaLabel": "इनवॉइस बनाएं",
+      "title": "इनवॉइस बनाएं",
+      "patientLabel": "मरीज़:",
+      "amount": "राशि (₹)",
+      "amountPlaceholder": "जैसे 500",
+      "paymentMethod": "भुगतान विधि",
+      "methods": {
+        "cash": "नकद",
+        "card": "कार्ड",
+        "upi": "UPI",
+        "insurance": "बीमा",
+        "other": "अन्य"
+      },
+      "notes": "नोट्स (वैकल्पिक)",
+      "notesPlaceholder": "जैसे परामर्श शुल्क",
+      "invalidAmount": "कृपया मान्य राशि दर्ज करें।",
+      "createFailed": "इनवॉइस नहीं बनाया जा सका।",
+      "saving": "सहेजा जा रहा है…",
+      "submit": "इनवॉइस बनाएं"
+    }
+  },
+  "doctorPatients": {
+    "breadcrumb": "मेरे मरीज़",
+    "title": "मेरे मरीज़",
+    "subtitle": "आपकी प्रोफ़ाइल से जुड़े मरीज़",
+    "searchPlaceholder": "नाम, ईमेल या फ़ोन से खोजें...",
+    "loadError": "मरीज़ लोड नहीं हो सके",
+    "loadErrorGeneric": "एक त्रुटि हुई",
+    "emptySearchTitle": "कोई मरीज़ नहीं मिला",
+    "emptyTitle": "अभी कोई मरीज़ नहीं",
+    "emptySearchHint": "कोई दूसरा खोज शब्द आज़माएं।",
+    "emptyHint": "पहला मरीज़ जोड़ने के लिए मेडिकल रिकॉर्ड या प्रिस्क्रिप्शन बनाएं।",
+    "count": "{count, plural, one {# मरीज़} other {# मरीज़}}",
+    "noContact": "कोई संपर्क जानकारी नहीं"
   },
   "pagination": {
     "pageOf": "पृष्ठ {page} / {totalPages}",

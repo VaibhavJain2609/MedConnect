@@ -4,7 +4,9 @@
       "main": "Main",
       "health": "Health",
       "clinics": "Clinics",
-      "account": "Account"
+      "account": "Account",
+      "clinical": "Clinical",
+      "actions": "Actions"
     },
     "healthTimeline": "Health Timeline",
     "appointments": "Appointments",
@@ -24,7 +26,27 @@
     "logout": "Logout",
     "collapseSidebar": "Collapse sidebar",
     "expandSidebar": "Expand sidebar",
-    "closeMenu": "Close menu"
+    "closeMenu": "Close menu",
+    "doctorDashboard": "Dashboard",
+    "doctorMyPatients": "My Patients",
+    "doctorSchedule": "Schedule",
+    "doctorEncounters": "Encounters",
+    "doctorMyPrescriptions": "My Prescriptions",
+    "doctorRefillRequests": "Refill Requests",
+    "doctorTemplates": "Templates",
+    "doctorQueue": "Queue",
+    "doctorMyClinic": "My Clinic",
+    "doctorStaffInvites": "Staff & Invites",
+    "doctorLinkPatient": "Link Patient",
+    "doctorNewPrescription": "New Prescription",
+    "doctorNewRecord": "New Record"
+  },
+  "common": {
+    "retry": "Retry",
+    "loadFailed": "Failed to load. Please try again.",
+    "close": "Close",
+    "cancel": "Cancel",
+    "unknownPatient": "Unknown Patient"
   },
   "timeline": {
     "breadcrumb": "Health Timeline",
@@ -262,6 +284,212 @@
     "loadFailedHint": "Please check your connection and try again.",
     "tryAgain": "Try again",
     "retrying": "Retrying…"
+  },
+  "doctorDashboard": {
+    "breadcrumb": "Dashboard",
+    "title": "Dashboard",
+    "welcome": "Welcome back, Doctor — {date}",
+    "welcomeNamed": "Welcome back, Dr. {name} — {date}",
+    "quickActions": {
+      "title": "Quick Actions",
+      "newPrescription": "New Prescription",
+      "newPrescriptionHint": "Write a prescription",
+      "newRecord": "New Record",
+      "newRecordHint": "Create a medical record",
+      "checkSchedule": "Check Schedule",
+      "checkScheduleHint": "View your appointments"
+    },
+    "schedule": {
+      "title": "Today's Schedule",
+      "viewAll": "View all",
+      "loadError": "Couldn't load today's schedule.",
+      "emptyTitle": "No appointments today",
+      "emptyHint": "Your schedule is clear. New bookings will appear here.",
+      "countSuffix": "{count, plural, one {appointment today} other {appointments today}}",
+      "walkIn": "(walk-in)",
+      "noneLeft": "No upcoming appointments left today."
+    },
+    "queue": {
+      "title": "Queue",
+      "openQueue": "Open queue",
+      "loadError": "Couldn't load the queue.",
+      "noClinicTitle": "No clinic selected",
+      "noClinicHint": "Select a clinic to see today's queue.",
+      "noClinicAction": "Go to clinic settings →",
+      "emptyTitle": "No patients waiting",
+      "emptyHint": "Your queue is clear right now.",
+      "waitingSuffix": "{count, plural, one {patient waiting} other {patients waiting}}",
+      "nextUp": "Next up"
+    },
+    "patients": {
+      "title": "Your Patients",
+      "viewAll": "View all",
+      "loadError": "Couldn't load your patients.",
+      "emptyTitle": "No patients yet",
+      "emptyHint": "Create a medical record or prescription to add your first patient.",
+      "view": "View →",
+      "addRecord": "Add record →"
+    }
+  },
+  "doctorAppointments": {
+    "breadcrumb": "Appointments",
+    "title": "Appointments",
+    "todaysSchedule": "Today's schedule",
+    "dateAriaLabel": "Appointments date",
+    "today": "Today",
+    "newAppointment": "New Appointment",
+    "summary": "{count, plural, one {# appointment} other {# appointments}} scheduled",
+    "emptyTitle": "No appointments",
+    "emptyToday": "You have no appointments scheduled for today.",
+    "emptyDate": "No appointments on {date}.",
+    "walkIn": "Walk-in",
+    "chiefComplaint": "Chief complaint: {complaint}",
+    "newPrescription": "New Prescription",
+    "newRecord": "New Record",
+    "joinCall": "Join Call",
+    "getLink": "Get Link",
+    "generating": "Generating…",
+    "linkAccount": "Link Account",
+    "edit": "Edit",
+    "cancel": "Cancel",
+    "actions": {
+      "markArrived": "Mark Arrived",
+      "noShow": "No Show",
+      "start": "Start",
+      "complete": "Complete"
+    },
+    "search": {
+      "placeholder": "Search patient by name or phone...",
+      "empty": "No patients found."
+    },
+    "booking": {
+      "ariaLabel": "New appointment",
+      "title": "New Appointment",
+      "tabExisting": "Existing Patient",
+      "tabWalkin": "Walk-in / Call-in",
+      "patient": "Patient *",
+      "clearPatient": "Clear selected patient",
+      "patientName": "Patient Name *",
+      "patientNamePlaceholder": "Full name",
+      "phone": "Phone Number *",
+      "date": "Date *",
+      "time": "Time *",
+      "duration": "Duration",
+      "durationOption": "{count} min",
+      "type": "Type *",
+      "chiefComplaint": "Chief Complaint",
+      "chiefComplaintPlaceholder": "e.g., Fever, headache for 2 days",
+      "clinic": "Clinic",
+      "clinicRequired": "Clinic *",
+      "selectClinic": "Select clinic",
+      "noClinic": "No clinic (private)",
+      "doctor": "Doctor *",
+      "selectDoctor": "Select doctor",
+      "branch": "Branch",
+      "loadingBranches": "Loading branches...",
+      "anyBranch": "Any branch",
+      "submit": "Book Appointment",
+      "submitting": "Booking...",
+      "errorName": "Patient name is required",
+      "errorPhone": "Phone number is required",
+      "errorClinic": "A clinic must be selected for walk-in bookings",
+      "errorDoctor": "Please select a doctor",
+      "errorPatient": "Please select a patient",
+      "errorFailed": "Failed to create appointment"
+    },
+    "editModal": {
+      "ariaLabel": "Edit appointment",
+      "title": "Edit Appointment",
+      "patient": "Patient",
+      "saving": "Saving...",
+      "submit": "Save Changes",
+      "errorFailed": "Failed to update appointment"
+    },
+    "cancelModal": {
+      "ariaLabel": "Cancel appointment",
+      "title": "Cancel Appointment",
+      "body": "Cancel appointment for <strong>{name}</strong>?",
+      "reason": "Reason (optional)",
+      "reasonPlaceholder": "e.g., Doctor unavailable, patient requested...",
+      "confirm": "Cancel Appointment",
+      "cancelling": "Cancelling...",
+      "keep": "Keep",
+      "errorFailed": "Failed to cancel appointment"
+    },
+    "linkModal": {
+      "ariaLabel": "Link patient account",
+      "title": "Link patient account",
+      "body": "Linking walk-in record for <strong>{name}</strong>. Ask the patient to open MedConnect, go to <b>My Clinics</b>, and share their link code.",
+      "codeLabel": "Patient's link code",
+      "codePlaceholder": "e.g., ABC1234567",
+      "errorCode": "Please enter the link code",
+      "submit": "Link Account",
+      "submitting": "Linking...",
+      "errorFailed": "Failed to link account"
+    }
+  },
+  "doctorQueue": {
+    "title": "Queue",
+    "subtitle": "Today's waiting room — auto-refreshes every 30s",
+    "summary": "{waiting} waiting · {inConsultation} in consultation",
+    "refresh": "Refresh",
+    "nextUp": "Next up",
+    "callNext": "Call Next Patient",
+    "sections": {
+      "inConsultation": "In Consultation",
+      "waiting": "Waiting ({count})",
+      "completedToday": "Completed Today ({count})"
+    },
+    "status": {
+      "waiting": "Waiting",
+      "in_consultation": "In Consultation",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
+    },
+    "empty": "No patients in queue today.",
+    "loadFailed": "Failed to load queue.",
+    "noClinic": "No active clinic selected. Set clinic from the clinic page.",
+    "updateFailed": "Failed to update status.",
+    "actions": {
+      "callIn": "Call In",
+      "complete": "Complete",
+      "billPatient": "Bill Patient"
+    },
+    "bill": {
+      "ariaLabel": "Create invoice",
+      "title": "Create Invoice",
+      "patientLabel": "Patient:",
+      "amount": "Amount (₹)",
+      "amountPlaceholder": "e.g. 500",
+      "paymentMethod": "Payment Method",
+      "methods": {
+        "cash": "Cash",
+        "card": "Card",
+        "upi": "UPI",
+        "insurance": "Insurance",
+        "other": "Other"
+      },
+      "notes": "Notes (optional)",
+      "notesPlaceholder": "e.g. Consultation fee",
+      "invalidAmount": "Please enter a valid amount.",
+      "createFailed": "Failed to create invoice.",
+      "saving": "Saving…",
+      "submit": "Create Invoice"
+    }
+  },
+  "doctorPatients": {
+    "breadcrumb": "My Patients",
+    "title": "My Patients",
+    "subtitle": "Patients linked to your profile",
+    "searchPlaceholder": "Search by name, email or phone...",
+    "loadError": "Failed to load patients",
+    "loadErrorGeneric": "An error occurred",
+    "emptySearchTitle": "No patients found",
+    "emptyTitle": "No patients yet",
+    "emptySearchHint": "Try a different search term.",
+    "emptyHint": "Create a medical record or prescription to add your first patient.",
+    "count": "{count, plural, one {# patient} other {# patients}}",
+    "noContact": "No contact info"
   },
   "pagination": {
     "pageOf": "Page {page} of {totalPages}",
