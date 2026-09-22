@@ -213,5 +213,18 @@
   "languageSwitcher": {
     "label": "Language",
     "switchTo": "Switch to {language}"
+  },
+  "pwa": {
+    "installPrompt": {
+      "title": "Install MedConnect",
+      "subtitle": "Quick access from your home screen",
+      "install": "Install",
+      "dismiss": "Dismiss install prompt"
+    }
+  },
+  "offline": {
+    "title": "You're offline",
+    "body": "MedConnect needs an internet connection to show your health records. Check your connection and try again.",
+    "retry": "Try again"
   }
 }
