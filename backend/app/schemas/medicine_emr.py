@@ -158,8 +158,7 @@ class PackFormResponse(BaseModel):
     is_liquid: bool | None = None
     requires_reconstitution: bool | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class BrandPackagingResponse(BaseModel):
@@ -173,8 +172,7 @@ class BrandPackagingResponse(BaseModel):
     barcode: str | None = None
     is_primary_pack: bool = True
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class BrandBase(BaseModel):
