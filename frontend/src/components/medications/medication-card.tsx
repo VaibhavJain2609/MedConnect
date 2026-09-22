@@ -1,10 +1,11 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, Circle, Infinity as InfinityIcon, Pill } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Circle, Infinity as InfinityIcon, Pill, RefreshCcw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { PrescriptionAdherence } from "@/lib/api/prescriptions";
 import type { PrescriptionMedicine } from "@/lib/api/patient-portal";
+import type { RefillStatus } from "@/lib/api/refills";
 
 /**
  * One flattened medicine item from a prescription's `medicines` JSONB array,
@@ -13,6 +14,10 @@ import type { PrescriptionMedicine } from "@/lib/api/patient-portal";
 export interface MedicationEntry {
   /** `${prescriptionId}:${itemIndex}` — stable React key + localStorage key. */
   key: string;
+  /** Owning prescription — refill requests are per-prescription. */
+  prescriptionId: string;
+  /** Index of this item inside the prescription's medicines array. */
+  itemIndex: number;
   name: string;
   dose: string;
   frequency: string;
@@ -46,6 +51,20 @@ interface MedicationCardProps {
   /** Whether the patient has marked this item taken today (client-side only). */
   takenToday: boolean;
   onToggleTaken?: (key: string) => void;
+  /**
+   * Prescription-level refill affordance — rendered only when provided
+   * (the page passes it on the first medicine card of each prescription).
+   */
+  refillStatus?: RefillStatus | null;
+  refillPending?: boolean;
+  onRequestRefill?: () => void;
+  /** i18n labels — optional so the card stays usable without intl context. */
+  refillLabels?: {
+    request: string;
+    pending: string;
+    approved: string;
+    declined: string;
+  };
 }
 
 /**
@@ -54,7 +73,15 @@ interface MedicationCardProps {
  * expiry warning badge when `valid_until` is within the backend
  * notification window (3 days).
  */
-export function MedicationCard({ entry, takenToday, onToggleTaken }: MedicationCardProps) {
+export function MedicationCard({
+  entry,
+  takenToday,
+  onToggleTaken,
+  refillStatus,
+  refillPending,
+  onRequestRefill,
+  refillLabels,
+}: MedicationCardProps) {
   const { adherence } = entry;
   const expired = adherence.status === "expired";
   const expiring = adherence.status === "expiring";
@@ -146,6 +173,36 @@ export function MedicationCard({ entry, takenToday, onToggleTaken }: MedicationC
                 <>{" · "}{adherence.daysRemaining} {adherence.daysRemaining === 1 ? "day" : "days"} left</>
               )}
             </p>
+          </div>
+        )}
+
+        {/* Refill request affordance — shown on the prescription's first card */}
+        {onRequestRefill && (
+          <div className="mt-3 flex items-center gap-2">
+            {refillStatus === "pending" ? (
+              <Badge variant="pending" className="gap-1">
+                <RefreshCcw className="h-3 w-3" aria-hidden />
+                {refillLabels?.pending ?? "Refill requested"}
+              </Badge>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={onRequestRefill}
+                  disabled={refillPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-dreams-lightBg text-dreams-blue hover:bg-dreams-blue hover:text-white transition-colors disabled:opacity-50"
+                >
+                  <RefreshCcw className="h-3.5 w-3.5" aria-hidden />
+                  {refillLabels?.request ?? "Request refill"}
+                </button>
+                {refillStatus === "approved" && (
+                  <Badge variant="completed">{refillLabels?.approved ?? "Refill approved"}</Badge>
+                )}
+                {refillStatus === "declined" && (
+                  <Badge variant="cancelled">{refillLabels?.declined ?? "Refill declined"}</Badge>
+                )}
+              </>
+            )}
           </div>
         )}
       </div>

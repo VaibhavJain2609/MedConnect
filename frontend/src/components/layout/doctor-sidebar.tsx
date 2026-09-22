@@ -22,6 +22,7 @@ import {
   BookOpen,
   ClipboardList,
   Link2,
+  RefreshCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/auth";
@@ -66,6 +67,7 @@ const navSections: NavSection[] = [
       { href: "/doctor/schedule", label: "Schedule", icon: CalendarClock, clinicalOnly: true },
       { href: "/doctor/visits", label: "Encounters", icon: ClipboardList, clinicalOnly: true },
       { href: "/doctor/prescriptions", label: "My Prescriptions", icon: Pill, clinicalOnly: true },
+      { href: "/doctor/refill-requests", label: "Refill Requests", icon: RefreshCcw, clinicalOnly: true },
       { href: "/doctor/prescriptions/templates", label: "Templates", icon: BookOpen, clinicalOnly: true },
       { href: "/doctor/queue", label: "Queue", icon: ListOrdered },
       { href: "/doctor/clinic", label: "My Clinic", icon: Building2 },
