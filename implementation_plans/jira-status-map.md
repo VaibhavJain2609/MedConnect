@@ -134,7 +134,16 @@
   - Queue-position notifications (called/next-up, meta-deduped, kill-switch gated)
   - billing_items table + itemized create/detail/list + receipt lines + admin bill-create modal
   - OCR/AI lab ingest scaffold (provider protocol, human-review ingest, disabled by default)
-- **Round-11 queue:** ABDM (BLOCKED pending approval), remaining 9 lint warnings, datetime.utcnow() deprecation sweep, real LLM-OCR provider impl when creds exist, e2e CI run validation, production secrets/config audit
+- **Round-11 — ALL LANDED (1007 backend tests green, warnings 519→12):**
+  - datetime.utcnow() sweep — 19 medicine-model sites → shared utcnow() helper (naive-UTC for naive TIMESTAMP cols)
+  - Production config guards — fail-fast on dev creds/http URLs/wildcard CORS/DEBUG/audience-check/weak admin creds; LOG_LEVEL + ALLOWED_HOSTS/TrustedHostMiddleware; RUNBOOK §10 prod checklist
+  - e2e CI now real — Keycloak password-grant fixture (real token+refresh), seeded demo users in realm export, full compose→migrate→seed→serve→playwright workflow; fixed PLAYWRIGHT_BASE_URL '' bug
+  - Vitals/records/health/search coverage — 112 tests; verified revoked-link cutoff + per-role search scoping
+  - Patient records filters — record_type/from_date/to_date/q params + debounced filter bar w/ URL sync
+  - Prescription refill flow — request → doctor approve(clones rx)/decline(notify), partial-unique dedup, cross-clinic deny
+  - Outbound webhooks — endpoints CRUD + HMAC-signed ARQ delivery + deliveries log, flag-gated, PHI-minimal payloads
+  - PWA — manifest+icons, install prompt (patient portal), /offline nav fallback, API never cached
+- **Round-12 queue:** ABDM (BLOCKED), real LLM-OCR provider when creds exist, first real e2e CI run validation, doctor calendar view, lab-result trend charts, family-member profiles, remaining react lint warnings
 - **BLOCKED — ABDM/ABHA: awaiting regulatory approval (user-confirmed)** — do not implement: ABHA creation/linking, NRCeS-conformant FHIR, HIP module (tickets 107–116)
 - **Blocked/external:** SMS/WhatsApp live provider accounts (code adapters anyway), OCR/AI features, load testing env, i18n assets, barcode data source, push VAPID/service
 
