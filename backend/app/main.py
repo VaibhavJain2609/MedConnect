@@ -7,6 +7,7 @@ import sentry_sdk
 import structlog
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
 from starlette.datastructures import MutableHeaders
@@ -80,7 +81,7 @@ _stdlib_handler.setFormatter(_stdlib_formatter)
 _root_logger = logging.getLogger()
 if not _root_logger.handlers:
     _root_logger.addHandler(_stdlib_handler)
-    _root_logger.setLevel(logging.INFO)
+_root_logger.setLevel(settings.LOG_LEVEL)
 
 if settings.SENTRY_DSN:
     sentry_sdk.init(dsn=settings.SENTRY_DSN, traces_sample_rate=0.1)
@@ -266,6 +267,18 @@ class RequestIDMiddleware:
         finally:
             structlog.contextvars.clear_contextvars()
 
+
+# Optional Host-header allowlist (ALLOWED_HOSTS, comma-separated). Empty =
+# middleware not installed — the ingress/ALB remains the enforcement point.
+# Registered before RequestIDMiddleware so even a rejected host still gets a
+# request_id + security headers on its 400 response.
+if settings.ALLOWED_HOSTS:
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=[
+            host.strip() for host in settings.ALLOWED_HOSTS.split(",") if host.strip()
+        ],
+    )
 
 # Registered last → outermost middleware, so request_id is bound before
 # CORS/rate-limit/security-header handling and reaches every log call.
