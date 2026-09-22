@@ -18,6 +18,7 @@ from app.models.billing import Billing, BillingItem
 from app.models.vital import PatientVital, VITAL_TYPES
 from app.models.audit import AuditLog
 from app.models.lab_result import LabResult
+from app.models.webhook import WebhookEndpoint, WebhookDelivery
 
 # EMR Medicine Models
 from app.models.medicine import (
@@ -85,6 +86,8 @@ __all__ = [
     "VITAL_TYPES",
     "AuditLog",
     "LabResult",
+    "WebhookEndpoint",
+    "WebhookDelivery",
     # Medicine models
     "ChemicalClass",
     "TherapeuticClass",

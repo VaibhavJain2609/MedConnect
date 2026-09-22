@@ -335,3 +335,55 @@ root `.env` — never commit it; `.env.example` ships `CHANGE_ME` placeholders):
 - Notification channels — `SMTP_*`, `MSG91_*`, `WHATSAPP_*`, `VAPID_*`;
   unset = channel skipped with a logged `channel_unavailable`.
 - `OCR_*` — only when enabling lab ingest (§9).
+
+## 11. Outbound clinic webhooks (optional, off by default)
+
+Clinics can subscribe HTTPS endpoints to receive outbound event POSTs.
+Feature flag: `WEBHOOKS_ENABLED=false` by default — when off,
+`webhook_service.emit_event` is a no-op (no delivery rows, no ARQ jobs).
+The ARQ `deliver_webhook` task is registered on the reminder worker.
+
+```bash
+# backend env — to enable
+WEBHOOKS_ENABLED=true
+WEBHOOK_TIMEOUT_SECONDS=5    # optional, per-request timeout
+WEBHOOK_MAX_ATTEMPTS=3       # optional, in-job retries with 1s/2s backoff
+```
+
+Events emitted (PHI-minimal payloads — **IDs, statuses and timestamps only**;
+never names, diagnoses, medicines, notes or free text):
+
+- `appointment.booked` — appointment created (patient/staff/guest booking)
+- `appointment.status_changed` — status transition (includes `previous_status`)
+- `prescription.issued` — prescription created
+
+Request format: `POST <endpoint.url>` with JSON body and headers
+`X-MedConnect-Event: <event_type>` and
+`X-MedConnect-Signature: sha256=<HMAC-SHA256 hex of the raw body, keyed by the
+endpoint secret>`. Receivers must recompute the signature over the exact raw
+request body.
+
+Admin config (clinic-scoped; requires `owner|admin` clinic membership):
+
+```
+POST   /api/v1/clinics/{id}/webhooks            — create; full `secret` returned ONCE
+GET    /api/v1/clinics/{id}/webhooks            — list (secret masked whsec_****last4)
+GET    /api/v1/clinics/{id}/webhooks/deliveries — delivery log (?status=&page=&limit=)
+GET    /api/v1/clinics/{id}/webhooks/{ep}       — detail (masked)
+PATCH  /api/v1/clinics/{id}/webhooks/{ep}       — update url/event_types/is_active
+DELETE /api/v1/clinics/{id}/webhooks/{ep}       — deactivate (soft delete)
+```
+
+Delivery state machine: `pending` → `sent` | `failed` (after
+`WEBHOOK_MAX_ATTEMPTS` tries). Inspect failures via the deliveries endpoint or:
+
+```sql
+SELECT id, event_type, status, attempts, last_error
+FROM webhook_deliveries ORDER BY created_at DESC LIMIT 20;
+```
+
+Failure modes: rows stuck `pending` → enqueue failed or worker down (check
+`arq:health:reminder-worker` / `webhook_enqueue_failed` logs); `failed` with
+`last_error` → receiver 4xx/5xx or network error. Re-delivery is not
+implemented — create a new endpoint or replay manually.
+

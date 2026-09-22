@@ -11,6 +11,7 @@ from arq.connections import RedisSettings
 from app.config import settings
 from app.workers.tasks.appointment_reminders import send_appointment_reminder
 from app.workers.tasks.prescription_expiry import check_prescription_expiry
+from app.workers.tasks.webhook_delivery import deliver_webhook
 
 logger = structlog.get_logger()
 
@@ -56,7 +57,7 @@ if settings.REDIS_URL.startswith("rediss://"):
 
 
 class WorkerSettings:
-    functions = [send_appointment_reminder]
+    functions = [send_appointment_reminder, deliver_webhook]
     # Daily prescription-expiry sweep. arq cron uses the worker machine's
     # local time — containers run UTC, so hour=8 == 08:00 UTC. The explicit
     # timeout overrides job_timeout (60s): a 500-row sweep with external
