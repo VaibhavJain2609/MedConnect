@@ -108,6 +108,27 @@ export function isVitalAbnormal(vitalType: VitalType, value: number): boolean {
   return false;
 }
 
+/**
+ * Numeric form of the `normalRange` display strings in VITAL_META — used to
+ * shade the healthy band on trend charts. These are the clinical *normal*
+ * ranges, deliberately narrower than the backend's VITAL_VALUE_BOUNDS
+ * (backend/app/routers/vitals.py), which are input-validation limits, and
+ * different from VITAL_THRESHOLDS, which are critical-alert boundaries.
+ * Types without a universal healthy range (weight_kg) are omitted — no band
+ * is drawn for them.
+ */
+export const VITAL_NORMAL_RANGES: Partial<
+  Record<VitalType, { min?: number; max?: number }>
+> = {
+  bp_systolic:     { min: 90,   max: 120 },
+  bp_diastolic:    { min: 60,   max: 80 },
+  glucose_fasting: { min: 70,   max: 100 },
+  glucose_pp:      { max: 140 },
+  spo2:            { min: 95,   max: 100 },
+  pulse:           { min: 60,   max: 100 },
+  temperature_c:   { min: 36.1, max: 37.2 },
+};
+
 export interface VitalsListResponse {
   data: Vital[];
   total: number;

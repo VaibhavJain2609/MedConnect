@@ -291,5 +291,29 @@
     "title": "You're offline",
     "body": "MedConnect needs an internet connection to show your health records. Check your connection and try again.",
     "retry": "Try again"
+  },
+  "vitals": {
+    "viewLabel": "Vitals view",
+    "byVital": "By vital",
+    "trends": "Trends",
+    "trendsTitle": "Vitals Trends",
+    "trendsSubtitle": "One chart per vital type with at least 2 readings in the window",
+    "windowLabel": "Time window",
+    "days7": "Last 7 days",
+    "days30": "Last 30 days",
+    "days90": "Last 90 days",
+    "notEnoughData": "No vital type has 2 or more readings in this window yet.",
+    "readingCount": "{count, plural, one {# reading} other {# readings}}",
+    "abnormalCount": "{count, plural, one {# abnormal} other {# abnormal}}",
+    "abnormalTag": "Critical",
+    "direction": {
+      "rising": "rising",
+      "falling": "falling",
+      "stable": "stable"
+    },
+    "chartAriaLabel": "{label} {direction}: {first} → {last} {unit} over {days} days. {count} readings, {abnormalCount} abnormal.",
+    "tableCaption": "Data table for {label} readings",
+    "colDate": "Date & time",
+    "colValue": "Value"
   }
 }

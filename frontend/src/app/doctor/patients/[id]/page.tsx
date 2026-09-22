@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
+import { VitalsTrendsGrid } from "@/components/vitals/vitals-trend-chart";
 import { FileText, Pill, Activity, User, AlertCircle, Edit2, X, ShieldCheck, ShieldAlert, ShieldOff } from "lucide-react";
 import { getMyRecordAccessConsent, requestRecordAccess } from "@/lib/api/record-access";
 
@@ -185,11 +186,12 @@ export default function DoctorPatientProfilePage() {
     enabled: !!patientId,
   });
 
+  // 30-day window — feeds both the latest-value cards and the trend charts.
   const { data: vitalsData, isLoading: vitalsLoading } = useQuery({
     queryKey: ["doctor-patient-vitals", patientId],
     queryFn: async () => {
       const res = await api.get(`/api/v1/doctors/patients/${patientId}/vitals`, {
-        params: { days: 7 },
+        params: { days: 30 },
       });
       return res.data;
     },
@@ -428,7 +430,7 @@ export default function DoctorPatientProfilePage() {
         <div className="mb-4 flex items-center gap-2">
           <Activity className="h-4 w-4 text-dreams-textSecondary" />
           <h2 className="text-base font-semibold text-dreams-textPrimary">Recent Vitals</h2>
-          <span className="text-xs text-dreams-textSecondary">(last 7 days)</span>
+          <span className="text-xs text-dreams-textSecondary">(last 30 days)</span>
         </div>
         {vitalsLoading ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -438,7 +440,7 @@ export default function DoctorPatientProfilePage() {
           </div>
         ) : Object.keys(latestVitals).length === 0 ? (
           <div className="rounded-lg border border-dashed border-dreams-border p-4 text-center">
-            <p className="text-sm text-dreams-textSecondary">No vitals recorded in the last 7 days</p>
+            <p className="text-sm text-dreams-textSecondary">No vitals recorded in the last 30 days</p>
             <p className="mt-1 text-xs text-dreams-textSecondary">
               Patient can add vitals from their portal
             </p>
@@ -467,6 +469,17 @@ export default function DoctorPatientProfilePage() {
                 </div>
               );
             })}
+          </div>
+        )}
+        {/* Trend charts — one compact chart per vital type with ≥2 readings */}
+        {!vitalsLoading && vitalsData?.data && (
+          <div className="mt-4">
+            <VitalsTrendsGrid
+              vitals={vitalsData.data}
+              days={30}
+              compact
+              showEmptyState={false}
+            />
           </div>
         )}
       </div>

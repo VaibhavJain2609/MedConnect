@@ -291,5 +291,29 @@
     "title": "आप ऑफ़लाइन हैं",
     "body": "आपके स्वास्थ्य रिकॉर्ड दिखाने के लिए MedConnect को इंटरनेट कनेक्शन की आवश्यकता है। अपना कनेक्शन जांचें और पुनः प्रयास करें।",
     "retry": "पुनः प्रयास करें"
+  },
+  "vitals": {
+    "viewLabel": "विटल्स दृश्य",
+    "byVital": "विटल के अनुसार",
+    "trends": "रुझान",
+    "trendsTitle": "विटल रुझान",
+    "trendsSubtitle": "विंडो में कम से कम 2 रीडिंग वाले प्रत्येक विटल प्रकार के लिए एक चार्ट",
+    "windowLabel": "समय अवधि",
+    "days7": "पिछले 7 दिन",
+    "days30": "पिछले 30 दिन",
+    "days90": "पिछले 90 दिन",
+    "notEnoughData": "इस अवधि में अभी किसी भी विटल प्रकार की 2 या अधिक रीडिंग नहीं हैं।",
+    "readingCount": "{count} रीडिंग",
+    "abnormalCount": "{count} असामान्य",
+    "abnormalTag": "गंभीर",
+    "direction": {
+      "rising": "बढ़ रहा है",
+      "falling": "घट रहा है",
+      "stable": "स्थिर"
+    },
+    "chartAriaLabel": "{label} {direction}: {days} दिनों में {first} से {last} {unit}। {count} रीडिंग, {abnormalCount} असामान्य।",
+    "tableCaption": "{label} रीडिंग की डेटा तालिका",
+    "colDate": "तारीख़ और समय",
+    "colValue": "मान"
   }
 }

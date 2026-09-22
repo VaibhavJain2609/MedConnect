@@ -11,8 +11,10 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import { useTranslations } from "next-intl";
 import { AlertTriangle, Plus, TrendingUp, TrendingDown, Minus, X } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
+import { VitalsTrendsGrid } from "@/components/vitals/vitals-trend-chart";
 import {
   VITAL_META,
   VITAL_TYPES,
@@ -342,8 +344,10 @@ function AddBloodPressureForm({
 }
 
 export default function VitalsPage() {
+  const t = useTranslations("vitals");
   const [selectedType, setSelectedType] = useState<VitalType>("bp_systolic");
   const [days, setDays] = useState(30);
+  const [view, setView] = useState<"single" | "trends">("single");
   const [showAddForm, setShowAddForm] = useState(false);
   const [showBpForm, setShowBpForm] = useState(false);
   const queryClient = useQueryClient();
@@ -366,6 +370,13 @@ export default function VitalsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["patient-vitals", selectedType, days],
     queryFn: () => getMyVitals({ type: selectedType, days, limit: 200 }),
+  });
+
+  // Trends view — all vital types in one window (no `type` filter).
+  const { data: trendsData, isLoading: trendsLoading } = useQuery({
+    queryKey: ["patient-vitals-trends", days],
+    queryFn: () => getMyVitals({ days, limit: 500 }),
+    enabled: view === "trends",
   });
 
   const vitals = data?.data || [];
@@ -489,6 +500,78 @@ export default function VitalsPage() {
         </div>
       )}
 
+      {/* View toggle — per-vital chart vs. all-vitals trends */}
+      <div
+        role="tablist"
+        aria-label={t("viewLabel")}
+        className="inline-flex rounded-lg border border-dreams-border bg-white p-1"
+      >
+        <button
+          role="tab"
+          aria-selected={view === "single"}
+          onClick={() => setView("single")}
+          className={cn(
+            "px-4 py-1.5 text-sm font-medium rounded-md transition-colors",
+            view === "single"
+              ? "bg-dreams-blue text-white"
+              : "text-dreams-textSecondary hover:text-dreams-textPrimary"
+          )}
+        >
+          {t("byVital")}
+        </button>
+        <button
+          role="tab"
+          aria-selected={view === "trends"}
+          onClick={() => setView("trends")}
+          className={cn(
+            "px-4 py-1.5 text-sm font-medium rounded-md transition-colors",
+            view === "trends"
+              ? "bg-dreams-blue text-white"
+              : "text-dreams-textSecondary hover:text-dreams-textPrimary"
+          )}
+        >
+          {t("trends")}
+        </button>
+      </div>
+
+      {view === "trends" ? (
+        /* Trends — one line chart per vital type with >= 2 readings */
+        <div className="bg-white rounded-xl shadow-card border border-dreams-border p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-dreams-textPrimary">
+                {t("trendsTitle")}
+              </h2>
+              <p className="text-sm text-dreams-textSecondary">
+                {t("trendsSubtitle")}
+              </p>
+            </div>
+            <select
+              value={days}
+              onChange={(e) => setDays(Number(e.target.value))}
+              aria-label={t("windowLabel")}
+              className="text-sm border border-dreams-border rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-dreams-blue"
+            >
+              <option value={7}>{t("days7")}</option>
+              <option value={30}>{t("days30")}</option>
+              <option value={90}>{t("days90")}</option>
+            </select>
+          </div>
+          {trendsLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="h-56 animate-pulse rounded-lg bg-gray-100"
+                />
+              ))}
+            </div>
+          ) : (
+            <VitalsTrendsGrid vitals={trendsData?.data ?? []} days={days} />
+          )}
+        </div>
+      ) : (
+      <>
       {/* Vital Type Selector */}
       <div className="bg-white rounded-xl shadow-card border border-dreams-border p-4">
         <div className="flex flex-wrap gap-2">
@@ -525,9 +608,9 @@ export default function VitalsPage() {
             onChange={(e) => setDays(Number(e.target.value))}
             className="text-sm border border-dreams-border rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-dreams-blue"
           >
-            <option value={7}>Last 7 days</option>
-            <option value={30}>Last 30 days</option>
-            <option value={90}>Last 90 days</option>
+            <option value={7}>{t("days7")}</option>
+            <option value={30}>{t("days30")}</option>
+            <option value={90}>{t("days90")}</option>
           </select>
         </div>
 
@@ -657,6 +740,8 @@ export default function VitalsPage() {
           </div>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }
