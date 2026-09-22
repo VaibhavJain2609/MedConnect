@@ -88,6 +88,13 @@ class Settings(BaseSettings):
     OCR_LLM_MODEL: str | None = None
     OCR_LLM_TIMEOUT_SECONDS: float = 30.0
 
+    # Outbound clinic webhooks — disabled by default. When False,
+    # services.webhook_service.emit_event is a no-op (no delivery rows, no ARQ
+    # jobs). See RUNBOOK.md § webhooks.
+    WEBHOOKS_ENABLED: bool = False
+    WEBHOOK_TIMEOUT_SECONDS: float = 5.0
+    WEBHOOK_MAX_ATTEMPTS: int = 3
+
     @model_validator(mode="after")
     def check_production_config(self) -> "Settings":
         if self.APP_ENV == "production":

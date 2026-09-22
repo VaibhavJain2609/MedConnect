@@ -337,6 +337,32 @@ async def _enqueue_appointment_reminders(appt: Appointment) -> None:
         pass  # reminder scheduling is non-critical
 
 
+async def _emit_appointment_webhook(
+    db: AsyncSession, appt: Appointment, event_type: str, extra: dict | None = None
+) -> None:
+    """Emit a clinic webhook for an appointment. Never raises (non-critical).
+
+    PHI minimization: payload carries IDs + status + timestamps only — no
+    names, chief complaints or notes.
+    """
+    from app.services import webhook_service
+
+    await webhook_service.emit_event_safe(
+        db,
+        appt.clinic_id,
+        event_type,
+        {
+            "appointment_id": str(appt.id),
+            "patient_id": str(appt.patient_id),
+            "doctor_id": str(appt.doctor_id),
+            "branch_id": str(appt.branch_id) if appt.branch_id else None,
+            "status": appt.status,
+            "scheduled_at": appt.scheduled_at.isoformat() if appt.scheduled_at else None,
+            **(extra or {}),
+        },
+    )
+
+
 async def _unschedule_appointment_reminders(appt: Appointment) -> None:
     """Abort existing deferred reminder jobs. Never raises (non-critical)."""
     try:
@@ -577,6 +603,10 @@ async def create_appointment(
     # Schedule reminders — awaited so enqueue failures are surfaced to logs
     # before the response is returned (the helper never raises).
     await _enqueue_appointment_reminders(appt)
+
+    # Outbound webhook — PHI-minimal payload (IDs/status/timestamps only),
+    # fire-and-forget; emit failures never break booking.
+    await _emit_appointment_webhook(db, appt, "appointment.booked")
 
     return await _load_appointment_with_names(db, appt)
 
@@ -1011,11 +1041,18 @@ async def update_appointment_status(
     if req.status == "cancelled":
         await _unschedule_appointment_reminders(appt)
 
+    previous_status = appt.status
     appt.status = req.status
     if req.cancelled_reason is not None:
         appt.cancelled_reason = req.cancelled_reason
     await db.flush()
     await db.refresh(appt)
+
+    # Outbound webhook — IDs + statuses only, fire-and-forget.
+    await _emit_appointment_webhook(
+        db, appt, "appointment.status_changed", {"previous_status": previous_status}
+    )
+
     return await _load_appointment_with_names(db, appt)
 
 
@@ -1200,6 +1237,10 @@ async def create_guest_appointment(
             detail={"error": {"code": "DOCTOR_UNAVAILABLE", "message": "Doctor has a conflicting appointment at this time"}},
         )
     await db.refresh(appt)
+
+    # Outbound webhook — guest bookings are always clinic-scoped.
+    await _emit_appointment_webhook(db, appt, "appointment.booked")
+
     return await _load_appointment_with_names(db, appt)
 
 

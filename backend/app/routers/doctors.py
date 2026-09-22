@@ -897,6 +897,23 @@ async def create_rx(
         override_reason=override_reason if overrides_applied else None,
     )
 
+    # Outbound webhook — PHI-minimal payload (IDs/timestamps only; no
+    # medicines or diagnosis). Fire-and-forget; never breaks issuance.
+    from app.services import webhook_service
+    await webhook_service.emit_event_safe(
+        db,
+        clinic_id,
+        "prescription.issued",
+        {
+            "prescription_id": str(prescription.id),
+            "patient_id": str(prescription.patient_id),
+            "doctor_id": str(prescription.doctor_id),
+            "branch_id": str(prescription.branch_id) if prescription.branch_id else None,
+            "appointment_id": str(prescription.appointment_id) if prescription.appointment_id else None,
+            "created_at": prescription.created_at.isoformat() if prescription.created_at else None,
+        },
+    )
+
     response = PrescriptionResponse.model_validate(prescription)
     response.safety = SafetyResult(
         checked=not gate.unresolved_items,  # False when items bypassed salt resolution
