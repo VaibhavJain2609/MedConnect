@@ -1,12 +1,22 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { Archive, ChevronDown, Pill } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 import {
   MedicationCard,
   type MedicationEntry,
@@ -17,6 +27,11 @@ import {
   type PatientPrescription,
   type PrescriptionMedicine,
 } from "@/lib/api/prescriptions";
+import {
+  getMyRefillRequests,
+  requestRefill,
+  type RefillStatus,
+} from "@/lib/api/refills";
 import { cn } from "@/lib/utils";
 
 function flattenMedications(
@@ -27,6 +42,8 @@ function flattenMedications(
     (p.medicines ?? []).forEach((m: PrescriptionMedicine, idx: number) => {
       entries.push({
         key: `${p.id}:${idx}`,
+        prescriptionId: p.id,
+        itemIndex: idx,
         name: m.brand_name ?? m.name ?? "Medication",
         dose: m.dose ?? m.dosage ?? "—",
         frequency: m.frequency ?? "—",
@@ -120,14 +137,65 @@ function SectionHeader({
 }
 
 export default function PatientMedicationsPage() {
+  const t = useTranslations("refills");
+  const queryClient = useQueryClient();
   const [showPast, setShowPast] = useState(false);
   const { taken, toggle } = useTakenToday();
+  const [refillTarget, setRefillTarget] = useState<MedicationEntry | null>(null);
+  const [refillNote, setRefillNote] = useState("");
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ["patient-medications"],
     queryFn: () => getAllMyPrescriptions(),
     staleTime: 60_000,
   });
+
+  const { data: refillRequests } = useQuery({
+    queryKey: ["my-refill-requests"],
+    queryFn: getMyRefillRequests,
+    staleTime: 30_000,
+  });
+
+  // Latest request per prescription (API returns newest first).
+  const refillByPrescription = useMemo(() => {
+    const map = new Map<string, RefillStatus>();
+    for (const r of refillRequests ?? []) {
+      if (!map.has(r.prescription_id)) map.set(r.prescription_id, r.status);
+    }
+    return map;
+  }, [refillRequests]);
+
+  const refillMutation = useMutation({
+    mutationFn: ({ prescriptionId, note }: { prescriptionId: string; note: string }) =>
+      requestRefill(prescriptionId, note),
+    onSuccess: () => {
+      setRefillTarget(null);
+      setRefillNote("");
+      queryClient.invalidateQueries({ queryKey: ["my-refill-requests"] });
+    },
+  });
+
+  const refillLabels = {
+    request: t("requestRefill"),
+    pending: t("statusPending"),
+    approved: t("statusApproved"),
+    declined: t("statusDeclined"),
+  };
+
+  const refillProps = (med: MedicationEntry) =>
+    med.itemIndex === 0
+      ? {
+          refillStatus: refillByPrescription.get(med.prescriptionId) ?? null,
+          refillPending:
+            refillMutation.isPending &&
+            refillMutation.variables?.prescriptionId === med.prescriptionId,
+          onRequestRefill: () => {
+            setRefillNote("");
+            setRefillTarget(med);
+          },
+          refillLabels,
+        }
+      : {};
 
   const medications = useMemo(() => flattenMedications(data ?? []), [data]);
 
@@ -217,6 +285,7 @@ export default function PatientMedicationsPage() {
                     entry={med}
                     takenToday={taken.has(med.key)}
                     onToggleTaken={toggle}
+                    {...refillProps(med)}
                   />
                 ))}
               </div>
@@ -253,6 +322,7 @@ export default function PatientMedicationsPage() {
                       key={med.key}
                       entry={med}
                       takenToday={false}
+                      {...refillProps(med)}
                     />
                   ))}
                 </div>
@@ -261,6 +331,57 @@ export default function PatientMedicationsPage() {
           )}
         </div>
       )}
+
+      {/* Request-refill dialog — the request is per prescription, note optional */}
+      <Dialog
+        open={refillTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRefillTarget(null);
+            setRefillNote("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("dialogTitle")}</DialogTitle>
+            <DialogDescription>
+              {t("dialogDescription", { name: refillTarget?.name ?? "" })}
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={refillNote}
+            onChange={(e) => setRefillNote(e.target.value)}
+            placeholder={t("notePlaceholder")}
+            maxLength={1000}
+            rows={3}
+          />
+          {refillMutation.isError && (
+            <p className="text-sm text-red-600">{t("requestFailed")}</p>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setRefillTarget(null)}
+              disabled={refillMutation.isPending}
+            >
+              {t("cancel")}
+            </Button>
+            <Button
+              onClick={() =>
+                refillTarget &&
+                refillMutation.mutate({
+                  prescriptionId: refillTarget.prescriptionId,
+                  note: refillNote,
+                })
+              }
+              disabled={refillMutation.isPending}
+            >
+              {refillMutation.isPending ? t("submitting") : t("submit")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

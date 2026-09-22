@@ -3,3 +3,4 @@
 /test-results/
 /playwright/.cache/
 /e2e/.auth/
+tsconfig.tsbuildinfo
