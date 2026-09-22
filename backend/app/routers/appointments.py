@@ -1,3 +1,4 @@
+import logging
 import secrets
 import uuid
 from datetime import date, datetime, timedelta, timezone
@@ -30,6 +31,11 @@ from app.services import access_service
 from app.services.notification_service import create_notification
 
 router = APIRouter(prefix="/api/v1/appointments", tags=["appointments"])
+
+logger = logging.getLogger(__name__)
+
+# Max waitlist entries notified per freed slot — first-come by created_at.
+WAITLIST_NOTIFY_LIMIT = 5
 
 VALID_TYPES = {"in-person", "teleconsult", "follow-up"}
 VALID_STATUSES = {"scheduled", "arrived", "in-progress", "completed", "cancelled", "no-show"}
@@ -370,6 +376,59 @@ async def _unschedule_appointment_reminders(appt: Appointment) -> None:
         await unschedule_appointment_reminders(str(appt.id))
     except Exception:
         pass  # reminder scheduling is non-critical
+
+
+async def _notify_waitlist_on_cancellation(db: AsyncSession, appt: Appointment) -> None:
+    """Notify waitlisted patients that a slot freed for this doctor+date.
+
+    Notify-only — nothing is auto-booked. Runs inside a SAVEPOINT so a
+    waitlist failure can never abort the cancellation itself, and commits
+    atomically with it via the request-scoped session.
+    """
+    from app.models.appointment_waitlist import AppointmentWaitlist
+
+    try:
+        async with db.begin_nested():
+            res = await db.execute(
+                select(AppointmentWaitlist)
+                .where(
+                    AppointmentWaitlist.doctor_id == appt.doctor_id,
+                    AppointmentWaitlist.desired_date == appt.scheduled_at.date(),
+                    AppointmentWaitlist.status == "pending",
+                    AppointmentWaitlist.deleted_at.is_(None),
+                )
+                .order_by(AppointmentWaitlist.created_at.asc())
+                .limit(WAITLIST_NOTIFY_LIMIT)
+            )
+            entries = res.scalars().all()
+            if not entries:
+                return
+
+            now = datetime.now(tz=timezone.utc)
+            date_label = appt.scheduled_at.date().isoformat()
+            for entry in entries:
+                entry.status = "notified"
+                entry.notified_at = now
+                await create_notification(
+                    db=db,
+                    user_id=entry.patient_id,
+                    notif_type="appointment",
+                    title="A slot opened up",
+                    body=(
+                        f"An appointment slot opened on {date_label} — "
+                        "book now before it's taken."
+                    ),
+                    action_url="/patient/appointments",
+                    metadata={
+                        "waitlist_id": str(entry.id),
+                        "doctor_id": str(appt.doctor_id),
+                        "desired_date": date_label,
+                    },
+                )
+    except Exception:
+        # Waitlist fan-out is best-effort — cancellation must never fail
+        # because of it. The SAVEPOINT rollback keeps the outer txn usable.
+        logger.exception("waitlist notify failed for appointment %s", appt.id)
 
 
 # ─── Conflict helpers ─────────────────────────────────────────────────────────
@@ -1048,6 +1107,10 @@ async def update_appointment_status(
     await db.flush()
     await db.refresh(appt)
 
+    # A freed slot may have patients waiting — notify-only, never raises.
+    if req.status == "cancelled":
+        await _notify_waitlist_on_cancellation(db, appt)
+
     # Outbound webhook — IDs + statuses only, fire-and-forget.
     await _emit_appointment_webhook(
         db, appt, "appointment.status_changed", {"previous_status": previous_status}
@@ -1110,6 +1173,9 @@ async def delete_appointment(
     appt.status = "cancelled"
     await _unschedule_appointment_reminders(appt)
     await db.flush()
+
+    # A freed slot may have patients waiting — notify-only, never raises.
+    await _notify_waitlist_on_cancellation(db, appt)
 
 
 @router.post("/guest", response_model=AppointmentResponse, status_code=status.HTTP_201_CREATED)

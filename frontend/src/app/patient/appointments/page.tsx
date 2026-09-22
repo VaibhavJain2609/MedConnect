@@ -4,12 +4,13 @@ import * as React from "react";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { Calendar, Clock, Stethoscope, Building2, XCircle, Plus, X, Link2, Video, BadgeCheck } from "lucide-react";
+import { Calendar, CalendarClock, Clock, Stethoscope, Building2, XCircle, Plus, X, Link2, Video, BadgeCheck } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
 import { Pagination } from "@/components/ui/pagination";
 import { getAppointments, updateAppointmentStatus, createAppointment, generateMeetingLink, type Appointment } from "@/lib/api/appointments";
 import { getDoctorSlots, type AvailabilitySlot } from "@/lib/api/availability";
+import { joinWaitlist, getMyWaitlist, cancelWaitlistEntry, type WaitlistEntry } from "@/lib/api/waitlist";
 import { SlotPicker, slotDurationMinutes } from "@/components/appointments/slot-picker";
 import { useAuthStore } from "@/stores/auth-store";
 import api from "@/lib/api";
@@ -226,6 +227,8 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
   const [customTime, setCustomTime] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [waitlistState, setWaitlistState] = useState<"idle" | "joining" | "joined" | "already">("idle");
+  const [waitlistError, setWaitlistError] = useState("");
 
   // Close modal on Escape
   useEffect(() => {
@@ -274,10 +277,37 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
   // Slot picker governs scheduled_at/duration whenever it's shown and the
   // user hasn't fallen back to manual entry.
   const requireSlot = slotsEnabled && !showManualTime;
+  // The waitlist offer only makes sense once we KNOW the day has no bookable
+  // slots (fetch completed, no error, empty list).
+  const noSlotsForDay = slotsEnabled && slotsQuery.isFetched && !slotsQuery.isError && slots.length === 0;
 
   const resetTimeSelection = () => {
     setSelectedSlot(null);
     setCustomTime(false);
+    setWaitlistState("idle");
+    setWaitlistError("");
+  };
+
+  const handleJoinWaitlist = async () => {
+    if (!selectedDoctor) return;
+    setWaitlistState("joining");
+    setWaitlistError("");
+    try {
+      await joinWaitlist({
+        doctor_id: selectedDoctor.id,
+        desired_date: date,
+        clinic_id: selectedClinicId || undefined,
+      });
+      setWaitlistState("joined");
+    } catch (err: any) {
+      // 409 = already waiting on this doctor+day — show the friendly state.
+      if (err?.response?.status === 409) {
+        setWaitlistState("already");
+      } else {
+        setWaitlistState("idle");
+        setWaitlistError(t("waitlist.joinError"));
+      }
+    }
   };
 
   // Reset doctor when clinic changes
@@ -503,6 +533,37 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
               }}
               onShowSlots={() => setCustomTime(false)}
             />
+          )}
+
+          {/* Waitlist offer — only when the day has no bookable slots */}
+          {noSlotsForDay && (
+            <div className="rounded-lg border border-dreams-border bg-dreams-lightBg px-4 py-3">
+              {waitlistState === "joined" || waitlistState === "already" ? (
+                <p className="flex items-center gap-2 text-sm text-dreams-textSecondary">
+                  <CalendarClock className="h-4 w-4 flex-shrink-0 text-dreams-blue" />
+                  {waitlistState === "joined"
+                    ? t("waitlist.joined")
+                    : t("waitlist.alreadyJoined")}
+                </p>
+              ) : (
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm text-dreams-textSecondary">
+                    {t("waitlist.offerHint")}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleJoinWaitlist}
+                    disabled={waitlistState === "joining"}
+                    className="flex-shrink-0 rounded-lg bg-dreams-blue px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+                  >
+                    {waitlistState === "joining" ? t("waitlist.joining") : t("waitlist.joinForDay")}
+                  </button>
+                </div>
+              )}
+              {waitlistError && (
+                <p className="mt-1.5 text-xs text-red-600">{waitlistError}</p>
+              )}
+            </div>
           )}
 
           {/* Manual time + duration fallback */}
@@ -740,6 +801,77 @@ function AppointmentCard({
 }
 
 // ---------------------------------------------------------------------------
+// Waitlist section
+// ---------------------------------------------------------------------------
+
+const WAITLIST_WINDOW_KEYS: Record<string, "morning" | "afternoon" | "any"> = {
+  morning: "morning",
+  afternoon: "afternoon",
+  any: "any",
+};
+
+function WaitlistSection({
+  entries,
+  onCancel,
+  cancellingId,
+}: {
+  entries: WaitlistEntry[];
+  onCancel: (id: string) => void;
+  cancellingId: string | null;
+}) {
+  const t = useTranslations("appointments.waitlist");
+  const format = useFormatter();
+
+  if (entries.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-dreams-border bg-white p-4 shadow-card">
+      <div className="flex items-center gap-2">
+        <CalendarClock className="h-4 w-4 text-dreams-blue" />
+        <h2 className="text-sm font-semibold text-dreams-textPrimary">{t("sectionTitle")}</h2>
+      </div>
+      <p className="mt-0.5 text-xs text-dreams-textSecondary">{t("sectionHint")}</p>
+      <ul className="mt-3 divide-y divide-dreams-border">
+        {entries.map((entry) => {
+          const dateLabel = format.dateTime(new Date(`${entry.desired_date}T00:00:00`), {
+            weekday: "short",
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          });
+          const windowKey = WAITLIST_WINDOW_KEYS[entry.slot_window] ?? "any";
+          return (
+            <li key={entry.id} className="flex items-center justify-between gap-3 py-2.5">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-dreams-textPrimary">
+                  {entry.doctor_name ?? t("unknownDoctor")}
+                </p>
+                <p className="text-xs text-dreams-textSecondary">
+                  {dateLabel} · {t(`window.${windowKey}`)}
+                </p>
+              </div>
+              <div className="flex flex-shrink-0 items-center gap-2">
+                <Badge variant={entry.status === "notified" ? "inProgress" : "pending"} className="text-xs">
+                  {entry.status === "notified" ? t("statusNotified") : t("statusPending")}
+                </Badge>
+                <button
+                  type="button"
+                  disabled={cancellingId === entry.id}
+                  onClick={() => onCancel(entry.id)}
+                  className="rounded-md bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 transition-colors"
+                >
+                  {cancellingId === entry.id ? t("cancelling") : t("cancelRequest")}
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main page
 // ---------------------------------------------------------------------------
 
@@ -759,6 +891,21 @@ export default function PatientAppointmentsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["patient-appointments"],
     queryFn: fetchAllAppointments,
+  });
+
+  const waitlistQuery = useQuery({
+    queryKey: ["patient-waitlist"],
+    queryFn: () => getMyWaitlist(),
+  });
+  const activeWaitlist = (waitlistQuery.data ?? []).filter(
+    (e) => e.status === "pending" || e.status === "notified"
+  );
+
+  const cancelWaitlistMutation = useMutation({
+    mutationFn: (id: string) => cancelWaitlistEntry(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["patient-waitlist"] });
+    },
   });
 
   const cancelMutation = useMutation({
@@ -912,6 +1059,17 @@ export default function PatientAppointmentsPage() {
           />
         </div>
       )}
+
+      {/* Waitlist — pending/notified requests with cancel */}
+      <WaitlistSection
+        entries={activeWaitlist}
+        onCancel={(id) => cancelWaitlistMutation.mutate(id)}
+        cancellingId={
+          cancelWaitlistMutation.isPending
+            ? cancelWaitlistMutation.variables ?? null
+            : null
+        }
+      />
 
       {/* Cancel confirmation dialog */}
       {cancelTarget && (
