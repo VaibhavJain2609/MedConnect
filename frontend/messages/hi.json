@@ -2140,5 +2140,114 @@
     "markPaid": "भुगतान चिह्नित करें",
     "saving": "सहेजा जा रहा है…",
     "markPaidError": "भुगतान चिह्नित नहीं हो सका।"
+  },
+  "adminVisits": {
+    "breadcrumb": "विज़िट",
+    "title": "विज़िट",
+    "subtitle": "मरीज़ों के परामर्श और कंसल्टेशन नोट्स",
+    "newVisit": "नई विज़िट",
+    "comingSoon": "जल्द आ रहा है",
+    "loadError": "विज़िट लोड करने में विफल",
+    "searchPlaceholder": "मरीज़, डॉक्टर या क्लिनिक से खोजें...",
+    "unknown": "अज्ञात",
+    "deleteConfirm": "क्या यह विज़िट हटाएं? इससे एनकाउंटर रिकॉर्ड सॉफ्ट-डिलीट हो जाएगा।",
+    "deleteTitle": "विज़िट हटाएं",
+    "pageInfo": "पृष्ठ {page} / {totalPages} · {count, plural, other {# विज़िट}}",
+    "table": {
+      "visitId": "विज़िट ID",
+      "patientName": "मरीज़ का नाम",
+      "doctorName": "डॉक्टर का नाम",
+      "clinic": "क्लिनिक",
+      "visitDate": "विज़िट तिथि",
+      "assessment": "मूल्यांकन"
+    }
+  },
+  "adminLabResults": {
+    "breadcrumb": "लैब रिपोर्ट",
+    "title": "लैब रिपोर्ट",
+    "subtitle": "प्रयोगशाला जांच परिणाम और रिपोर्ट प्रबंधित करें",
+    "newTest": "नई जांच",
+    "comingSoon": "जल्द आ रहा है",
+    "loadError": "लैब रिपोर्ट लोड करने में विफल",
+    "searchPlaceholder": "मरीज़, जांच या ID से खोजें...",
+    "allStatus": "सभी स्थिति",
+    "pageInfo": "पृष्ठ {page} / {totalPages} · {count, plural, other {# लैब रिपोर्ट}}",
+    "table": {
+      "testId": "जांच ID",
+      "patientName": "मरीज़ का नाम",
+      "gender": "लिंग",
+      "appointmentDate": "अपॉइंटमेंट तिथि",
+      "referredBy": "द्वारा भेजा गया",
+      "testName": "जांच का नाम",
+      "status": "स्थिति"
+    }
+  },
+  "adminClinics": {
+    "breadcrumbDashboard": "डैशबोर्ड",
+    "breadcrumb": "क्लिनिक",
+    "title": "क्लिनिक",
+    "subtitle": "सभी पंजीकृत क्लिनिक प्रबंधित करें",
+    "createClinic": "क्लिनिक बनाएं",
+    "searchPlaceholder": "क्लिनिक खोजें...",
+    "allStatus": "सभी स्थिति",
+    "empty": "कोई क्लिनिक नहीं मिला",
+    "table": {
+      "clinic": "क्लिनिक",
+      "location": "स्थान",
+      "members": "सदस्य",
+      "sharingMode": "शेयरिंग मोड",
+      "status": "स्थिति"
+    },
+    "sharing": {
+      "perClinic": "प्रति क्लिनिक",
+      "perDoctor": "प्रति डॉक्टर"
+    },
+    "createModal": {
+      "title": "क्लिनिक बनाएं",
+      "nameLabel": "क्लिनिक का नाम",
+      "address": "पता",
+      "city": "शहर",
+      "state": "राज्य",
+      "phone": "फ़ोन",
+      "email": "ईमेल",
+      "creating": "बनाया जा रहा है...",
+      "submit": "क्लिनिक बनाएं",
+      "errorFallback": "क्लिनिक बनाने में विफल।"
+    },
+    "detail": {
+      "edit": "संपादित करें",
+      "delete": "हटाएं",
+      "deleteTitle": "क्लिनिक हटाएं",
+      "deleteDesc": "क्लिनिक \"{name}\" हटाएं? इसे पूर्ववत नहीं किया जा सकता।",
+      "deleting": "हटाया जा रहा है...",
+      "metricsTitle": "उपयोग मेट्रिक्स",
+      "infoTitle": "क्लिनिक जानकारी",
+      "recordSharing": "रिकॉर्ड शेयरिंग",
+      "branchesTitle": "शाखाएं ({count})",
+      "noBranches": "कोई शाखा नहीं",
+      "saveChanges": "परिवर्तन सहेजें",
+      "saving": "सहेजा जा रहा है...",
+      "stats": {
+        "members": "सदस्य",
+        "records": "रिकॉर्ड",
+        "prescriptions": "प्रिस्क्रिप्शन"
+      },
+      "metrics": {
+        "doctors": "डॉक्टर",
+        "patientsLinked": "जुड़े मरीज़",
+        "pendingLinks": "लंबित लिंक",
+        "appointments30d": "अपॉइंटमेंट (30 दिन)",
+        "inQueueToday": "आज कतार में",
+        "branches": "शाखाएं"
+      },
+      "fields": {
+        "name": "नाम",
+        "address": "पता",
+        "city": "शहर",
+        "state": "राज्य",
+        "phone": "फ़ोन",
+        "email": "ईमेल"
+      }
+    }
   }
 }
