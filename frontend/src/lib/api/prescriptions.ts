@@ -313,6 +313,44 @@ export async function getDoctorPatientProfile(
   return (await api.get(`/api/v1/doctors/patients/${patientId}/profile`)).data;
 }
 
+// ─── Prescription safety check (R13) ─────────────────────────────────────────
+
+/**
+ * One alert from the persisted safety-gate snapshot. `severity` uses the
+ * normalized scale: minor | moderate | major | contraindicated.
+ */
+export interface SafetyCheckAlert {
+  severity: string;
+  kind: string; // interaction | allergy | duplicate_therapy | contraindication | unresolved_item
+  detail: string;
+  salts?: string[] | null;
+  salt_ids?: string[];
+  medicine?: string | null;
+  [key: string]: unknown;
+}
+
+/** Shape returned by GET /api/v1/prescriptions/{id}/safety-check. */
+export interface PrescriptionSafetyCheck {
+  id: string;
+  prescription_id: string;
+  checked_at: string;
+  items: Record<string, unknown>[];
+  alerts: SafetyCheckAlert[];
+  override_reason: string | null;
+  created_at: string;
+}
+
+/**
+ * Latest safety-gate snapshot for a prescription — which alerts were shown
+ * (and whether a major alert was overridden) at issue time.
+ * Throws axios error with response.status 404 when no check was recorded.
+ */
+export async function getPrescriptionSafetyCheck(
+  prescriptionId: string
+): Promise<PrescriptionSafetyCheck> {
+  return (await api.get(`/api/v1/prescriptions/${prescriptionId}/safety-check`)).data;
+}
+
 // ─── Patient prescriptions (cursor-exhausting fetch) ─────────────────────────
 
 /** Re-exported so adherence UI can type items without importing the portal module. */

@@ -562,6 +562,39 @@
     "count": "{count, plural, one {# मरीज़} other {# मरीज़}}",
     "noContact": "कोई संपर्क जानकारी नहीं"
   },
+  "doctorPrescriptionDetail": {
+    "breadcrumb": "प्रिस्क्रिप्शन",
+    "title": "प्रिस्क्रिप्शन",
+    "print": "प्रिंट करें",
+    "loadError": "प्रिस्क्रिप्शन लोड नहीं हो सका।",
+    "patient": "मरीज़",
+    "date": "तारीख",
+    "diagnosis": "निदान",
+    "notes": "नोट्स",
+    "validUntil": "तक मान्य",
+    "medicines": "दवाएं",
+    "safetyCheck": {
+      "title": "सुरक्षा जांच",
+      "checkedAt": "जांचा गया {timestamp}",
+      "loadError": "सुरक्षा जांच लोड नहीं हो सकी।",
+      "empty": "इस प्रिस्क्रिप्शन के लिए कोई सुरक्षा जांच दर्ज नहीं है।",
+      "noAlerts": "कोई अलर्ट नहीं — सभी जांचें पास हुईं।",
+      "overrideReason": "ओवरराइड कारण",
+      "severity": {
+        "minor": "मामूली",
+        "moderate": "मध्यम",
+        "major": "गंभीर",
+        "contraindicated": "वर्जित"
+      },
+      "kind": {
+        "interaction": "ड्रग इंटरैक्शन",
+        "allergy": "एलर्जी",
+        "duplicate_therapy": "दोहरी दवा",
+        "contraindication": "वर्जित संयोजन",
+        "unresolved_item": "कैटलॉग में नहीं"
+      }
+    }
+  },
   "pagination": {
     "pageOf": "पृष्ठ {page} / {totalPages}",
     "totalSuffix": "· कुल {count}",

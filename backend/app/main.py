@@ -42,7 +42,7 @@ from app.routers import appointments
 from app.routers import waitlist
 from app.routers import uploads
 from app.routers import vitals
-from app.routers import prescriptions_pdf
+from app.routers import prescriptions_pdf, prescription_safety
 from app.routers import refill_requests
 from app.routers import billing, revenue, queue, push
 from app.routers import availability
@@ -330,6 +330,7 @@ app.include_router(appointments.router)
 app.include_router(uploads.router)
 app.include_router(vitals.router)
 app.include_router(prescriptions_pdf.router)
+app.include_router(prescription_safety.router)
 app.include_router(refill_requests.router)
 app.include_router(billing.router)
 app.include_router(revenue.router)

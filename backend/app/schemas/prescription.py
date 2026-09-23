@@ -58,6 +58,22 @@ class SafetyResult(BaseModel):
     overrides_applied: bool = False
 
 
+class PrescriptionSafetyCheckResponse(BaseModel):
+    """Persisted safety-gate snapshot for one prescription (R13).
+
+    Returned by GET /api/v1/prescriptions/{id}/safety-check — the latest
+    check row written at prescription creation.
+    """
+
+    id: UUID
+    prescription_id: UUID
+    checked_at: datetime
+    items: list[dict]
+    alerts: list[dict]
+    override_reason: Optional[str] = None
+    created_at: datetime
+
+
 class PrescriptionResponse(BaseModel):
     id: UUID
     record_id: UUID

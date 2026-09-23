@@ -12,6 +12,7 @@ from app.models.clinic import ClinicMembership
 from app.models.doctor import Doctor
 from app.models.medical_record import MedicalRecord
 from app.models.patient_link import PatientClinicLink
+from app.models.prescription_safety_check import PrescriptionSafetyCheck
 from app.models.user import User
 from app.schemas.common import PaginatedResponse, PaginationMeta
 from app.schemas.prescription import (
@@ -805,11 +806,12 @@ async def create_rx(
     # --- Clinical safety gate (runs after authz, before persistence) ---
     # Enforcement: contraindicated -> hard block; major -> requires
     # safety_override_reason; moderate/minor -> warn-only in the response.
+    medicines_payload = [m.model_dump() for m in req.medicines]
     gate = await run_safety_gate(
         db=db,
         medicine_db=medicine_db,
         patient_id=req.patient_id,
-        medicines=[m.model_dump() for m in req.medicines],
+        medicines=medicines_payload,
     )
 
     blocking = [a for a in gate.alerts if a["severity"] == "contraindicated"]
@@ -871,7 +873,7 @@ async def create_rx(
             db=db,
             doctor_id=doctor.id,
             patient_id=req.patient_id,
-            medicines=[m.model_dump() for m in req.medicines],
+            medicines=medicines_payload,
             diagnosis=req.diagnosis,
             notes=req.notes,
             valid_until=req.valid_until,
@@ -896,6 +898,20 @@ async def create_rx(
         alerts=gate.alerts,
         override_reason=override_reason if overrides_applied else None,
     )
+
+    # R13: persist the gate snapshot (checked items + computed alerts +
+    # override reason) so the alerted/overridden history is retrievable via
+    # GET /api/v1/prescriptions/{id}/safety-check. Committed with the request
+    # by the get_db dependency.
+    db.add(
+        PrescriptionSafetyCheck(
+            prescription_id=prescription.id,
+            items_json=medicines_payload,
+            alerts_json=gate.alerts,
+            override_reason=override_reason if overrides_applied else None,
+        )
+    )
+    await db.flush()
 
     # Outbound webhook — PHI-minimal payload (IDs/timestamps only; no
     # medicines or diagnosis). Fire-and-forget; never breaks issuance.
