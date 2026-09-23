@@ -53,4 +53,10 @@ class MedicalRecord(Base):
         Index("idx_records_clinic", "clinic_id", postgresql_where=(deleted_at.is_(None))),
         Index("idx_records_amended_from", "amended_from_id", postgresql_where=(amended_from_id.isnot(None))),
         Index("idx_records_family_member", "family_member_id", postgresql_where=(family_member_id.isnot(None))),
+        # Uploads download-auth path: document_url = object_key lookups.
+        Index(
+            "idx_records_document_url",
+            "document_url",
+            postgresql_where=(document_url.isnot(None) & deleted_at.is_(None)),
+        ),
     )

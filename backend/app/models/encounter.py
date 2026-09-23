@@ -51,4 +51,9 @@ class Encounter(Base):
             "created_at",
             postgresql_where=(deleted_at.is_(None)),
         ),
+        Index(
+            "idx_encounters_created_at",
+            "created_at",
+            postgresql_where=(deleted_at.is_(None)),
+        ),
     )
