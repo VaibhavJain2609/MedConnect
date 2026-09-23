@@ -931,5 +931,51 @@
       "showMore": "Show more",
       "showLess": "Show less"
     }
+  },
+  "adminAuditLogs": {
+    "title": "Audit Trail",
+    "subtitle": "Immutable log of all data changes in the system",
+    "breadcrumbDashboard": "Dashboard",
+    "breadcrumbCurrent": "Audit Trail",
+    "tabs": {
+      "live": "Live",
+      "archive": "Archive"
+    },
+    "filters": {
+      "allTables": "All Tables",
+      "from": "From",
+      "to": "To",
+      "searchUser": "Search by user name...",
+      "filterRecordId": "Filter by record ID...",
+      "clear": "Clear filters"
+    },
+    "export": {
+      "button": "Export CSV",
+      "exporting": "Exporting...",
+      "failedTitle": "Export failed",
+      "failedDesc": "Could not download the audit log CSV. Please try again."
+    },
+    "table": {
+      "when": "When",
+      "action": "Action",
+      "table": "Table",
+      "recordId": "Record ID",
+      "changedBy": "Changed By",
+      "changes": "Changes",
+      "empty": "No audit logs found",
+      "emptyArchive": "No archived audit logs found",
+      "system": "System",
+      "archivedAt": "Archived {time}"
+    },
+    "tables": {
+      "medical_records": "Medical Records",
+      "prescriptions": "Prescriptions",
+      "users": "Users",
+      "patient_clinic_links": "Patient Clinic Links"
+    },
+    "error": {
+      "loadFailed": "Failed to load audit logs",
+      "generic": "An error occurred"
+    }
   }
 }

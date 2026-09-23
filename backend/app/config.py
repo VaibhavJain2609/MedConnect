@@ -130,6 +130,11 @@ class Settings(BaseSettings):
     WEBHOOK_TIMEOUT_SECONDS: float = 5.0
     WEBHOOK_MAX_ATTEMPTS: int = 3
 
+    # Audit-log retention — the daily ``audit_retention`` ARQ cron task moves
+    # audit_logs rows older than this many days into audit_log_archive and
+    # deletes them from the live table. 0 disables retention (keep forever).
+    AUDIT_RETENTION_DAYS: int = 365
+
     @field_validator("APP_ENV")
     @classmethod
     def _check_app_env(cls, v: str) -> str:

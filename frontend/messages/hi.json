@@ -931,5 +931,51 @@
       "showMore": "और दिखाएं",
       "showLess": "कम दिखाएं"
     }
+  },
+  "adminAuditLogs": {
+    "title": "ऑडिट ट्रेल",
+    "subtitle": "सिस्टम में सभी डेटा परिवर्तनों का अपरिवर्तनीय लॉग",
+    "breadcrumbDashboard": "डैशबोर्ड",
+    "breadcrumbCurrent": "ऑडिट ट्रेल",
+    "tabs": {
+      "live": "लाइव",
+      "archive": "आर्काइव"
+    },
+    "filters": {
+      "allTables": "सभी तालिकाएँ",
+      "from": "से",
+      "to": "तक",
+      "searchUser": "उपयोगकर्ता नाम से खोजें...",
+      "filterRecordId": "रिकॉर्ड ID से फ़िल्टर करें...",
+      "clear": "फ़िल्टर साफ़ करें"
+    },
+    "export": {
+      "button": "CSV निर्यात करें",
+      "exporting": "निर्यात हो रहा है...",
+      "failedTitle": "निर्यात विफल",
+      "failedDesc": "ऑडिट लॉग CSV डाउनलोड नहीं हो सका। कृपया पुनः प्रयास करें।"
+    },
+    "table": {
+      "when": "समय",
+      "action": "क्रिया",
+      "table": "तालिका",
+      "recordId": "रिकॉर्ड ID",
+      "changedBy": "द्वारा परिवर्तित",
+      "changes": "परिवर्तन",
+      "empty": "कोई ऑडिट लॉग नहीं मिला",
+      "emptyArchive": "कोई आर्काइव किया गया ऑडिट लॉग नहीं मिला",
+      "system": "सिस्टम",
+      "archivedAt": "{time} आर्काइव किया गया"
+    },
+    "tables": {
+      "medical_records": "चिकित्सा रिकॉर्ड",
+      "prescriptions": "नुस्खे",
+      "users": "उपयोगकर्ता",
+      "patient_clinic_links": "रोगी-क्लिनिक लिंक"
+    },
+    "error": {
+      "loadFailed": "ऑडिट लॉग लोड करने में विफल",
+      "generic": "एक त्रुटि हुई"
+    }
   }
 }

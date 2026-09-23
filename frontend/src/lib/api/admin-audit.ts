@@ -18,6 +18,8 @@ export interface AdminAuditLogEntry {
   old_values: Record<string, any> | null;
   new_values: Record<string, any> | null;
   changes_summary: string | null;
+  /** Set only on rows returned by the archived-logs endpoint. */
+  archived_at?: string | null;
 }
 
 export interface AdminAuditLogsResponse {
@@ -44,6 +46,20 @@ export async function getAdminAuditLogs(
   params: AdminAuditLogsParams = {}
 ): Promise<AdminAuditLogsResponse> {
   const response = await api.get("/api/v1/admin/audit", { params });
+  return response.data;
+}
+
+/**
+ * List archived audit logs — same filters/pagination as getAdminAuditLogs,
+ * reading audit_log_archive (populated by the daily retention sweep).
+ * Rows carry archived_at recording when they left the live table.
+ */
+export async function getAdminArchivedAuditLogs(
+  params: AdminAuditLogsParams = {}
+): Promise<AdminAuditLogsResponse> {
+  const response = await api.get("/api/v1/admin/audit-logs/archived", {
+    params,
+  });
   return response.data;
 }
 
