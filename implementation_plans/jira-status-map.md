@@ -152,7 +152,16 @@
   - Appointment waitlist — join on full days, notify on cancellation (never auto-books)
   - Doctor portal i18n — dashboard/appointments/queue/patients/sidebar fully EN/HI
   - N+1 audit — query-count harness + real fixes (uploads ACL 24→7 queries, clinical-safety batching ~30→5)
-- **Round-13 queue:** ABDM (BLOCKED), real LLM-OCR provider when creds exist, first real e2e CI run validation, remaining react lint warnings, admin portal i18n, webhook delivery replay UI
+- **Round-13 — ALL LANDED (1107 backend + 64 frontend tests green, lint 9→0):**
+  - Admin portal i18n — dashboard/users/doctors/audit-logs/sidebar, ~137 keys/locale, LanguageSwitcher in admin sidebar
+  - Webhook redelivery — single + bulk(50) failed replay w/ enqueue-failure revert; /doctor/clinic/webhooks admin UI
+  - e2e validation — 4 public specs run live & pass; REAL BUG FIXED: login/signup fired keycloak.login() before init() (would break on next start); @auth specs await real CI
+  - Lint warnings 9→0 (useWatch migration, set-state-in-effect fixes, next/image avatar; 2 documented targeted disables)
+  - Notification prefs — queue_updates opt-out wired into queue notify path; prefs page i18n'd + push status badge/denied hint
+  - Bulk catalog import — POST /admin/catalog/import CSV (dry-run, per-row SAVEPOINT, idempotent upserts, 13 tests) + import UI
+  - Audit retention — audit_log_archive table + daily 09:00 worker (1k-row batches, 100k/run cap) + archived endpoint + Archive tab
+  - Prescription safety checks — prescription_safety_checks snapshot per rx (alerts+override_reason) + GET endpoint + detail page
+- **Round-14 queue:** ABDM (BLOCKED), real LLM-OCR provider when creds exist, first real e2e CI run (@auth specs), remaining admin page i18n, medicine_import_sample.csv cleanup, doctor availability UX
 - **BLOCKED — ABDM/ABHA: awaiting regulatory approval (user-confirmed)** — do not implement: ABHA creation/linking, NRCeS-conformant FHIR, HIP module (tickets 107–116)
 - **Blocked/external:** SMS/WhatsApp live provider accounts (code adapters anyway), OCR/AI features, load testing env, i18n assets, barcode data source, push VAPID/service
 
