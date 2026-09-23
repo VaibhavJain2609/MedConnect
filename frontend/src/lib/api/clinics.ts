@@ -25,6 +25,9 @@ export interface Clinic {
   logo_url: string | null
   is_active: boolean
   record_sharing_mode: 'per_clinic' | 'per_doctor'
+  /** IANA timezone name (e.g. "Asia/Kolkata") — availability window
+   * wall-times and slot computation are interpreted in this zone. */
+  timezone: string
   created_by: string | null
   created_at: string
   updated_at: string

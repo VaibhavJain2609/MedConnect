@@ -139,6 +139,26 @@ export async function getDoctorSpecialties(): Promise<string[]> {
   return response.data;
 }
 
+/** Own doctor profile (GET /api/v1/doctors/profile). */
+export interface DoctorProfile {
+  id: string;
+  user_id: string;
+  specialization: string | null;
+  license_number: string | null;
+  facility_name: string | null;
+  facility_city: string | null;
+  verified: boolean;
+}
+
+/**
+ * Get the authenticated doctor's profile — the `id` here is the Doctor
+ * profile id used by availability/slot endpoints (not the User id).
+ */
+export async function getMyDoctorProfile(): Promise<DoctorProfile> {
+  const response = await api.get("/api/v1/doctors/profile");
+  return response.data;
+}
+
 export interface DoctorPatient {
   id: string;
   full_name: string;
