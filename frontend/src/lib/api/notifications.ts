@@ -112,6 +112,7 @@ export interface NotificationPreferences {
   sms_notifications: boolean;
   whatsapp_notifications: boolean;
   appointment_reminders: boolean;
+  queue_updates: boolean;
   lab_results: boolean;
   prescription_alerts: boolean;
   system_alerts: boolean;

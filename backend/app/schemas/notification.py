@@ -70,6 +70,7 @@ class NotificationPreferencesResponse(BaseModel):
     sms_notifications: bool = False
     whatsapp_notifications: bool = False
     appointment_reminders: bool = True
+    queue_updates: bool = True
     lab_results: bool = True
     prescription_alerts: bool = True
     system_alerts: bool = True
@@ -83,6 +84,7 @@ class NotificationPreferencesUpdate(BaseModel):
     sms_notifications: bool = False
     whatsapp_notifications: bool = False
     appointment_reminders: bool = True
+    queue_updates: bool = True
     lab_results: bool = True
     prescription_alerts: bool = True
     system_alerts: bool = True

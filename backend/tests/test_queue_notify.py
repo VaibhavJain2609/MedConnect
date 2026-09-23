@@ -19,7 +19,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.clinic import Clinic, ClinicMembership
-from app.models.notification import Notification
+from app.models.notification import Notification, NotificationPreferences
 from app.models.queue import QueueEntry
 from app.models.user import User
 from app.routers.queue import _notify_queue_patient
@@ -293,6 +293,29 @@ class TestSkipsAndAuth:
         entry_id = await _check_in(doctor_client, clinic, patient_user.id)
 
         patient_user.is_active = False
+        await db.commit()
+
+        resp = await doctor_client.patch(
+            f"/api/v1/queue/{entry_id}/status",
+            json={"status": "in_consultation"},
+            headers=_headers(clinic),
+        )
+        assert resp.status_code == 200, resp.text
+        assert await _all_notifs(db, patient_user.id) == []
+
+    async def test_queue_updates_opt_out_skips_notification(
+        self, doctor_client, db, clinic, owner_membership, patient_user
+    ):
+        """Patient with queue_updates=False gets no "called" notification —
+        the per-type opt-out mirrors appointment_reminders/prescription_alerts."""
+        entry_id = await _check_in(doctor_client, clinic, patient_user.id)
+
+        db.add(
+            NotificationPreferences(
+                user_id=patient_user.id,
+                preferences={"queue_updates": False},
+            )
+        )
         await db.commit()
 
         resp = await doctor_client.patch(
