@@ -23,6 +23,7 @@ import {
   Ticket,
   SlidersHorizontal,
   Users,
+  MessageSquare,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
@@ -60,6 +61,7 @@ const navSections: NavSection[] = [
     items: [
       { href: "/patient/timeline", labelKey: "healthTimeline", icon: Activity },
       { href: "/patient/appointments", labelKey: "appointments", icon: Calendar },
+      { href: "/patient/messages", labelKey: "messages", icon: MessageSquare },
       { href: "/patient/notifications", labelKey: "notifications", icon: Bell },
     ],
   },

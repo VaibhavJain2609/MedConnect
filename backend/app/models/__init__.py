@@ -27,6 +27,7 @@ from app.models.lab_order import LabOrder
 from app.models.webhook import WebhookEndpoint, WebhookDelivery
 from app.models.family import FamilyMember
 from app.models.idempotency import IdempotencyKey
+from app.models.message import MessageThread, ThreadMessage
 
 # EMR Medicine Models
 from app.models.medicine import (
@@ -105,6 +106,8 @@ __all__ = [
     "WebhookDelivery",
     "FamilyMember",
     "IdempotencyKey",
+    "MessageThread",
+    "ThreadMessage",
     # Medicine models
     "ChemicalClass",
     "TherapeuticClass",
