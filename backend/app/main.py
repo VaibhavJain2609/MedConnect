@@ -44,6 +44,7 @@ from app.routers import uploads
 from app.routers import vitals
 from app.routers import prescriptions_pdf, prescription_safety
 from app.routers import refill_requests
+from app.routers import medication_reminders
 from app.routers import billing, revenue, queue, push
 from app.routers import availability
 from app.routers import encounters
@@ -333,6 +334,7 @@ app.include_router(vitals.router)
 app.include_router(prescriptions_pdf.router)
 app.include_router(prescription_safety.router)
 app.include_router(refill_requests.router)
+app.include_router(medication_reminders.router)
 app.include_router(billing.router)
 app.include_router(revenue.router)
 app.include_router(queue.router)

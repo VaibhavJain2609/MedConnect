@@ -1140,5 +1140,23 @@
       "error": "त्रुटि"
     },
     "importButton": "CSV आयात करें"
+  },
+  "medReminders": {
+    "remindMe": "मुझे याद दिलाएं",
+    "remindersOn": "रिमाइंडर चालू",
+    "dialogTitle": "दवा रिमाइंडर",
+    "dialogDescription": "{name} के लिए आपके चुने समय पर सूचना पाएं।",
+    "pickTimes": "रिमाइंडर का समय",
+    "morning": "सुबह",
+    "afternoon": "दोपहर",
+    "evening": "शाम",
+    "night": "रात",
+    "enableLabel": "रिमाइंडर सक्रिय",
+    "save": "सहेजें",
+    "saving": "सहेजा जा रहा है...",
+    "turnOff": "रिमाइंडर बंद करें",
+    "cancel": "रद्द करें",
+    "saveFailed": "रिमाइंडर सहेजा नहीं जा सका। कृपया पुनः प्रयास करें।",
+    "needOneTime": "कम से कम एक समय चुनें"
   }
 }

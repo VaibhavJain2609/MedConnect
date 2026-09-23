@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, Circle, Infinity as InfinityIcon, Pill, RefreshCcw } from "lucide-react";
+import { AlertTriangle, Bell, BellRing, CheckCircle2, Circle, Infinity as InfinityIcon, Pill, RefreshCcw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { PrescriptionAdherence } from "@/lib/api/prescriptions";
@@ -65,6 +65,16 @@ interface MedicationCardProps {
     approved: string;
     declined: string;
   };
+  /**
+   * Medication-reminder affordance — rendered only when provided (the page
+   * passes it on the first medicine card of each prescription).
+   */
+  reminderActive?: boolean;
+  onManageReminders?: () => void;
+  reminderLabels?: {
+    remind: string;
+    on: string;
+  };
 }
 
 /**
@@ -81,6 +91,9 @@ export function MedicationCard({
   refillPending,
   onRequestRefill,
   refillLabels,
+  reminderActive,
+  onManageReminders,
+  reminderLabels,
 }: MedicationCardProps) {
   const { adherence } = entry;
   const expired = adherence.status === "expired";
@@ -176,32 +189,56 @@ export function MedicationCard({
           </div>
         )}
 
-        {/* Refill request affordance — shown on the prescription's first card */}
-        {onRequestRefill && (
-          <div className="mt-3 flex items-center gap-2">
-            {refillStatus === "pending" ? (
-              <Badge variant="pending" className="gap-1">
-                <RefreshCcw className="h-3 w-3" aria-hidden />
-                {refillLabels?.pending ?? "Refill requested"}
-              </Badge>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={onRequestRefill}
-                  disabled={refillPending}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-dreams-lightBg text-dreams-blue hover:bg-dreams-blue hover:text-white transition-colors disabled:opacity-50"
-                >
-                  <RefreshCcw className="h-3.5 w-3.5" aria-hidden />
-                  {refillLabels?.request ?? "Request refill"}
-                </button>
-                {refillStatus === "approved" && (
-                  <Badge variant="completed">{refillLabels?.approved ?? "Refill approved"}</Badge>
+        {/* Prescription-level affordances — shown on the first card:
+            refill request + medication-reminder toggle */}
+        {(onRequestRefill || onManageReminders) && (
+          <div className="mt-3 flex items-center gap-2 flex-wrap">
+            {onRequestRefill &&
+              (refillStatus === "pending" ? (
+                <Badge variant="pending" className="gap-1">
+                  <RefreshCcw className="h-3 w-3" aria-hidden />
+                  {refillLabels?.pending ?? "Refill requested"}
+                </Badge>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={onRequestRefill}
+                    disabled={refillPending}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-dreams-lightBg text-dreams-blue hover:bg-dreams-blue hover:text-white transition-colors disabled:opacity-50"
+                  >
+                    <RefreshCcw className="h-3.5 w-3.5" aria-hidden />
+                    {refillLabels?.request ?? "Request refill"}
+                  </button>
+                  {refillStatus === "approved" && (
+                    <Badge variant="completed">{refillLabels?.approved ?? "Refill approved"}</Badge>
+                  )}
+                  {refillStatus === "declined" && (
+                    <Badge variant="cancelled">{refillLabels?.declined ?? "Refill declined"}</Badge>
+                  )}
+                </>
+              ))}
+            {onManageReminders && (
+              <button
+                type="button"
+                onClick={onManageReminders}
+                aria-pressed={reminderActive ?? false}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                  reminderActive
+                    ? "bg-dreams-blue text-white hover:bg-dreams-blue/90"
+                    : "bg-dreams-lightBg text-dreams-textSecondary hover:text-dreams-textPrimary"
                 )}
-                {refillStatus === "declined" && (
-                  <Badge variant="cancelled">{refillLabels?.declined ?? "Refill declined"}</Badge>
+              >
+                {reminderActive ? (
+                  <BellRing className="h-3.5 w-3.5" aria-hidden />
+                ) : (
+                  <Bell className="h-3.5 w-3.5" aria-hidden />
                 )}
-              </>
+                {reminderActive
+                  ? reminderLabels?.on ?? "Reminders on"
+                  : reminderLabels?.remind ?? "Remind me"}
+              </button>
             )}
           </div>
         )}
