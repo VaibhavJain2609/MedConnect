@@ -24,12 +24,25 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 }
 
 export function pushSupported(): boolean {
+  // Undefined-valued globals (jsdom, some webviews) fail `in` checks only —
+  // compare values so a present-but-undefined property doesn't count.
   return (
     typeof window !== "undefined" &&
-    "serviceWorker" in navigator &&
-    "PushManager" in window &&
-    "Notification" in window
+    typeof navigator !== "undefined" &&
+    navigator.serviceWorker !== undefined &&
+    window.PushManager !== undefined &&
+    window.Notification !== undefined
   );
+}
+
+/**
+ * Browser notification permission for this origin, or "unsupported" when
+ * the Notifications API is absent. "denied" is sticky — the user must
+ * re-enable notifications in browser site settings before push can work.
+ */
+export function getPushPermission(): NotificationPermission | "unsupported" {
+  if (!pushSupported()) return "unsupported";
+  return Notification.permission;
 }
 
 /** Current browser subscription, or null. */

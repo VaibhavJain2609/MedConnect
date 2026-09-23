@@ -149,6 +149,12 @@ async def _notify_queue_patient(
     if patient is None:
         return
 
+    # Per-type opt-out — patients can silence queue notifications from
+    # /patient/preferences without touching channel toggles.
+    prefs = await notification_channels.get_preferences(patient.id, db=db)
+    if not prefs.get("queue_updates", True):
+        return
+
     already = (
         await db.execute(
             select(Notification.id).where(
@@ -171,6 +177,7 @@ async def _notify_queue_patient(
         title,
         body,
         db=db,
+        prefs=prefs,
         notif_type=NotificationType.SYSTEM.value,
         action_url="/patient/queue",
         metadata={

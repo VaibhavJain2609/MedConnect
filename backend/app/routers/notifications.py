@@ -26,6 +26,7 @@ DEFAULT_NOTIFICATION_PREFERENCES: dict = {
     "email_notifications": True,
     "push_notifications": True,
     "appointment_reminders": True,
+    "queue_updates": True,
     "lab_results": True,
     "prescription_alerts": True,
     "system_alerts": True,

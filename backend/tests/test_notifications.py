@@ -313,6 +313,8 @@ async def test_get_notification_preferences_default(patient_client: AsyncClient,
     data = response.json()
     # Should return default preferences
     assert isinstance(data, dict)
+    assert data["queue_updates"] is True
+    assert data["appointment_reminders"] is True
 
 
 @pytest.mark.asyncio
@@ -322,6 +324,7 @@ async def test_update_notification_preferences(patient_client: AsyncClient, pati
         "email_notifications": True,
         "push_notifications": False,
         "appointment_reminders": True,
+        "queue_updates": False,
         "lab_results": True,
         "prescription_alerts": False,
     }
@@ -332,12 +335,14 @@ async def test_update_notification_preferences(patient_client: AsyncClient, pati
     data = response.json()
     assert data["email_notifications"] is True
     assert data["push_notifications"] is False
+    assert data["queue_updates"] is False
 
     # Verify preferences are persisted
     response = await patient_client.get("/api/v1/notifications/preferences")
     data = response.json()
     assert data["email_notifications"] is True
     assert data["appointment_reminders"] is True
+    assert data["queue_updates"] is False
 
 
 @pytest.mark.asyncio
