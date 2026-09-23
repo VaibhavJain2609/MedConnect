@@ -19,6 +19,7 @@ import {
   type Notification,
 } from "@/lib/api/notifications";
 import { actOnRecordAccessRequest } from "@/lib/api/record-access";
+import { toast } from "@/hooks/use-toast";
 
 const PAGE_SIZE = 20;
 
@@ -106,6 +107,10 @@ export default function PatientNotificationsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
       queryClient.invalidateQueries({ queryKey: ["notifications-all"] });
+      toast({ title: t("markedAllRead") });
+    },
+    onError: () => {
+      toast({ title: t("markAllReadError"), variant: "destructive" });
     },
   });
 

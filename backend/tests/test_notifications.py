@@ -120,6 +120,30 @@ async def test_get_notifications_filter_by_type(patient_client: AsyncClient, use
 
 
 @pytest.mark.asyncio
+async def test_get_notifications_invalid_type(patient_client: AsyncClient, user_with_notifications):
+    """GET /api/v1/notifications?type=<invalid> returns 400."""
+    response = await patient_client.get("/api/v1/notifications?type=not_a_type")
+    assert response.status_code == 400
+    data = response.json()
+    assert data["error"]["code"] == "INVALID_TYPE"
+
+
+@pytest.mark.asyncio
+async def test_get_notifications_combined_filters(patient_client: AsyncClient, user_with_notifications):
+    """unread_only + type filters compose (unread appointment only)."""
+    response = await patient_client.get(
+        "/api/v1/notifications?unread_only=true&type=appointment"
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1
+    assert data["notifications"][0]["type"] == "appointment"
+    assert data["notifications"][0]["read"] is False
+    # unread_count still reports the user's global unread total
+    assert data["unread_count"] == 3
+
+
+@pytest.mark.asyncio
 async def test_get_notifications_pagination(patient_client: AsyncClient, user_with_notifications):
     """GET /api/v1/notifications supports limit and offset pagination."""
     user, notifications = user_with_notifications
@@ -259,6 +283,50 @@ async def test_mark_all_as_read(patient_client: AsyncClient, user_with_notificat
     response = await patient_client.get("/api/v1/notifications/unread-count")
     data = response.json()
     assert data["count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_mark_all_as_read_scoped_to_current_user(
+    patient_client: AsyncClient, user_with_notifications, db: AsyncSession
+):
+    """POST /read-all must not touch other users' notifications."""
+    user, notifications = user_with_notifications
+
+    other_user = User(
+        keycloak_sub="other-user-readall",
+        email="other-readall@test.com",
+        full_name="Other User",
+        role="patient",
+    )
+    db.add(other_user)
+    await db.commit()
+    await db.refresh(other_user)
+
+    other_notif = Notification(
+        user_id=other_user.id,
+        type=NotificationType.SYSTEM,
+        title="Other User's Notification",
+        message="Must stay unread",
+        read=False,
+    )
+    db.add(other_notif)
+    await db.commit()
+    await db.refresh(other_notif)
+
+    response = await patient_client.post("/api/v1/notifications/read-all")
+    assert response.status_code == 200
+
+    # Own notifications all read; other user's notification untouched
+    await db.refresh(other_notif)
+    assert other_notif.read is False
+    assert other_notif.read_at is None
+
+
+@pytest.mark.asyncio
+async def test_mark_all_as_read_idempotent(patient_client: AsyncClient, patient_user: User):
+    """POST /read-all succeeds even with nothing to mark."""
+    response = await patient_client.post("/api/v1/notifications/read-all")
+    assert response.status_code == 200
 
 
 @pytest.mark.asyncio
