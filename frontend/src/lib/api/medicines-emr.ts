@@ -576,3 +576,40 @@ export async function autocompleteMedicines(
 
   return (await api.get(`/api/v1/medicines/autocomplete?${params}`)).data;
 }
+
+// ============================================================================
+// ADMIN CATALOG CSV IMPORT (R13)
+// ============================================================================
+
+export type CatalogImportRowStatus = "created" | "updated" | "skipped" | "error";
+
+export interface CatalogImportRowResult {
+  row: number;
+  brand_name: string | null;
+  status: CatalogImportRowStatus;
+  message: string | null;
+}
+
+export interface CatalogImportResponse {
+  dry_run: boolean;
+  total: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: CatalogImportRowResult[];
+  rows: CatalogImportRowResult[];
+}
+
+/**
+ * Bulk-import brands + pack rows from a CSV file (Admin only).
+ * dryRun=true returns the same per-row report without writing anything.
+ */
+export async function importCatalogCsv(
+  file: File,
+  dryRun: boolean
+): Promise<CatalogImportResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const url = `/api/v1/admin/catalog/import${dryRun ? "?dry_run=true" : ""}`;
+  return (await api.post(url, formData)).data;
+}

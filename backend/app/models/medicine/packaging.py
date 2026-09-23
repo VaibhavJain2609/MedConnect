@@ -57,6 +57,7 @@ class BrandPackaging(MedicineBase):
     pack_type: Mapped[str | None] = mapped_column(String(100), nullable=True)  # "strip of 10 tablets", "bottle of 100ml"
     sku: Mapped[str | None] = mapped_column(String(100), nullable=True)
     barcode: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)  # GTIN/EAN, digits 8-14
+    mrp_paise: Mapped[int | None] = mapped_column(Integer, nullable=True)  # MRP in paise (₹1 = 100)
     is_primary_pack: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
 

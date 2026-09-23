@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Search, Plus, Pill, Loader2, AlertCircle, Beaker, Package, Info, List, Upload, Building2, Edit, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -73,6 +74,7 @@ export default function MedicinesPageEMR() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const tImport = useTranslations("catalogImport");
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [includeDiscontinued, setIncludeDiscontinued] = useState(false);
@@ -445,7 +447,7 @@ export default function MedicinesPageEMR() {
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => router.push("/admin/medicines/import")}>
             <Upload className="h-4 w-4 mr-2" />
-            Bulk Import
+            {tImport("importButton")}
           </Button>
           <Button onClick={() => router.push("/admin/medicines/new")}>
             <Plus className="h-4 w-4 mr-2" />
