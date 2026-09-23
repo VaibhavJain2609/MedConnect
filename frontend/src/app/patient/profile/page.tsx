@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
-import { getPrivacyStatus, requestErasure } from "@/lib/api/patients";
+import { exportMyData, getPrivacyStatus, requestErasure } from "@/lib/api/patients";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { useFormatter, useTranslations } from "next-intl";
 import {
@@ -56,6 +56,10 @@ export default function PatientProfilePage() {
       queryClient.invalidateQueries({ queryKey: ["patient-privacy"] });
       queryClient.invalidateQueries({ queryKey: ["patient-profile"] });
     },
+  });
+
+  const exportMutation = useMutation({
+    mutationFn: exportMyData,
   });
 
   const [form, setForm] = useState({
@@ -255,6 +259,26 @@ export default function PatientProfilePage() {
             <p className="text-dreams-textSecondary">
               {t("noConsent")}
             </p>
+          )}
+        </div>
+
+        <div className="space-y-2 border-t border-dreams-border pt-4">
+          <label className="text-sm font-medium text-dreams-textSecondary">
+            {t("dataExport")}
+          </label>
+          <p className="text-sm text-dreams-textSecondary">
+            {t("exportExplanation")}
+          </p>
+          <button
+            type="button"
+            onClick={() => exportMutation.mutate()}
+            disabled={exportMutation.isPending}
+            className="h-10 px-4 rounded-lg border border-dreams-border text-dreams-textPrimary text-sm font-medium hover:bg-dreams-lightBg disabled:opacity-60 transition-colors"
+          >
+            {exportMutation.isPending ? t("downloading") : t("downloadMyData")}
+          </button>
+          {exportMutation.isError && (
+            <p className="text-sm text-red-600">{t("exportFailed")}</p>
           )}
         </div>
 

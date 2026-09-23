@@ -51,19 +51,34 @@ _LIMITS: dict[str, int] = {
     "read": 100,
 }
 
-# Per-endpoint limits for expensive routes (requests per minute). Each gets a
-# dedicated counter on the caller bucket, independent of the generic
-# read/write/auth categories. For authenticated callers the same limit is
-# ALSO enforced on the per-user bucket so rotating access tokens cannot
-# evade it.
-_ENDPOINT_LIMITS: dict[str, int] = {
+# Per-endpoint limits for expensive routes. Each gets a dedicated counter
+# on the caller bucket, independent of the generic read/write/auth
+# categories. For authenticated callers the same limit is ALSO enforced on
+# the per-user bucket so rotating access tokens cannot evade it.
+#
+# Value is either ``int`` (max requests per minute) or a
+# ``(max_requests, window_seconds)`` tuple for longer windows.
+_ENDPOINT_LIMITS: dict[str, int | tuple[int, int]] = {
     "/api/v1/uploads/presign": 20,
     "/api/v1/interactions/check": 60,
     # Global search fans out to multiple ILIKE scans across PHI tables —
     # keep it well below the generic read limit.
     "/api/v1/search": 30,
     "/api/v1/search/suggestions": 30,
+    # DPDP self data export is a full-PHI dump — a few per hour, not per
+    # minute.
+    "/api/v1/patients/me/export": (3, 3600),
 }
+
+
+def _endpoint_limit(path: str) -> tuple[int, int] | None:
+    """Return (max_requests, window_seconds) for a configured path, else None."""
+    cfg = _ENDPOINT_LIMITS.get(path)
+    if cfg is None:
+        return None
+    if isinstance(cfg, tuple):
+        return cfg
+    return cfg, 60
 
 _redis_client: aioredis.Redis | None = None
 
@@ -165,14 +180,17 @@ async def _check_limit(
         return True, 0
 
 
-def _too_many_requests(limit: int, label: str, retry_after: int, bucket: str) -> JSONResponse:
+def _too_many_requests(
+    limit: int, label: str, retry_after: int, bucket: str, window: int = 60
+) -> JSONResponse:
     """Build the shared 429 body; ``bucket`` identifies which limit tripped."""
+    period = "hour" if window >= 3600 else "minute"
     return JSONResponse(
         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
         content={
             "error": {
                 "code": "RATE_LIMIT_EXCEEDED",
-                "message": f"Rate limit exceeded. Maximum {limit} {label} requests per minute.",
+                "message": f"Rate limit exceeded. Maximum {limit} {label} requests per {period}.",
             }
         },
         headers={
@@ -200,15 +218,25 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         # Bucket 1 (outer bound): per-caller limit. Expensive endpoints get a
         # dedicated counter/limit instead of the generic category bucket.
-        endpoint_limit = _ENDPOINT_LIMITS.get(path)
-        if endpoint_limit is not None:
-            bucket_name, limit, label = f"endpoint:{path}", endpoint_limit, "endpoint"
+        endpoint_cfg = _endpoint_limit(path)
+        if endpoint_cfg is not None:
+            endpoint_limit, endpoint_window = endpoint_cfg
+            bucket_name, limit, label, window = (
+                f"endpoint:{path}",
+                endpoint_limit,
+                "endpoint",
+                endpoint_window,
+            )
         else:
-            bucket_name, limit, label = category, _LIMITS[category], category
+            endpoint_limit = None
+            endpoint_window = 60
+            bucket_name, limit, label, window = category, _LIMITS[category], category, 60
 
-        allowed, retry_after = await _check_limit(redis, user_key, bucket_name, limit)
+        allowed, retry_after = await _check_limit(
+            redis, user_key, bucket_name, limit, window=window
+        )
         if not allowed:
-            return _too_many_requests(limit, label, retry_after, bucket="ip")
+            return _too_many_requests(limit, label, retry_after, bucket="ip", window=window)
 
         # Bucket 2: flat per-user limit keyed on the JWT `sub` (unverified
         # decode — see _get_jwt_sub). Skipped entirely without a usable token.
@@ -222,11 +250,16 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     f"user:{sub}",
                     f"endpoint:{path}",
                     endpoint_limit,
+                    window=endpoint_window,
                     key_prefix="rl",
                 )
                 if not allowed:
                     return _too_many_requests(
-                        endpoint_limit, "endpoint", retry_after, bucket="user"
+                        endpoint_limit,
+                        "endpoint",
+                        retry_after,
+                        bucket="user",
+                        window=endpoint_window,
                     )
             allowed, retry_after = await _check_limit(
                 redis,
