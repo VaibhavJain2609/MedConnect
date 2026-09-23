@@ -17,6 +17,7 @@ import {
   UserPlus,
   Calendar,
   CalendarClock,
+  BarChart3,
   ListOrdered,
   Bell,
   BookOpen,
@@ -66,6 +67,7 @@ const navSections: NavSection[] = [
     labelKey: "main",
     items: [
       { href: "/doctor/dashboard", labelKey: "doctorDashboard", icon: LayoutDashboard },
+      { href: "/doctor/analytics", labelKey: "doctorAnalytics", icon: BarChart3, clinicalOnly: true },
       { href: "/doctor/appointments", labelKey: "appointments", icon: Calendar },
       { href: "/doctor/notifications", labelKey: "notifications", icon: Bell },
     ],

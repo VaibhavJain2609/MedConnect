@@ -1260,3 +1260,177 @@ async def delete_prescription_template(
     template.deleted_at = datetime.now(timezone.utc)
     await db.flush()
     return None
+
+
+# ---------------------------------------------------------------------------
+# Doctor analytics
+# ---------------------------------------------------------------------------
+
+APPOINTMENT_STATUSES = (
+    "scheduled",
+    "arrived",
+    "in-progress",
+    "completed",
+    "cancelled",
+    "no-show",
+)
+QUEUE_STATUSES = ("waiting", "in_consultation", "completed", "cancelled")
+WEEKLY_COMPLETION_WEEKS = 8
+
+
+@router.get("/analytics")
+async def get_doctor_analytics(
+    doctor_info: tuple[User, Doctor] = Depends(get_current_doctor),
+    db: AsyncSession = Depends(get_db),
+    clinic_context: tuple | None = Depends(get_active_clinic),
+):
+    """
+    Aggregated analytics for the authenticated doctor. Everything is scoped
+    to ``doctor.id`` — no other doctor's data is included.
+
+    Response shape::
+
+        {
+          "appointments_by_status": {"scheduled": n, "arrived": n, ...},
+          "weekly_completions": [{"week_start": "YYYY-MM-DD", "count": n}, ...8],
+          "avg_consult_minutes": 14.5,        # omitted when not derivable
+          "top_medicines": [{"name": "...", "count": n}, ...max 10],
+          "queue_today": {"waiting": n, "in_consultation": n, "completed": n,
+                          "cancelled": n, "total": n}   # only with clinic ctx
+        }
+
+    ``avg_consult_minutes`` is derived from queue entries that have both
+    ``called_at`` and ``completed_at``; it is omitted when no such rows exist.
+    ``queue_today`` is only present when the request carries an X-Clinic-Id
+    context (queue entries filtered to this clinic AND this doctor).
+    """
+    from collections import Counter
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import func, select
+
+    from app.models.appointment import Appointment
+    from app.models.prescription import Prescription
+    from app.models.queue import QueueEntry
+
+    _, doctor = doctor_info
+    now = datetime.now(timezone.utc)
+
+    # --- Appointments by status (all-time, this doctor only) ----------------
+    status_res = await db.execute(
+        select(Appointment.status, func.count())
+        .where(Appointment.doctor_id == doctor.id, Appointment.deleted_at.is_(None))
+        .group_by(Appointment.status)
+    )
+    status_counts = {row[0]: row[1] for row in status_res.all()}
+    appointments_by_status = {s: status_counts.get(s, 0) for s in APPOINTMENT_STATUSES}
+    # Keep any unexpected status values rather than silently dropping them.
+    for s, c in status_counts.items():
+        appointments_by_status.setdefault(s, c)
+
+    # --- Completed appointments per week (last 8 ISO weeks, Monday start) ---
+    this_monday = (now - timedelta(days=now.weekday())).date()
+    window_start = this_monday - timedelta(weeks=WEEKLY_COMPLETION_WEEKS - 1)
+    window_start_dt = datetime(
+        window_start.year, window_start.month, window_start.day, tzinfo=timezone.utc
+    )
+    # date_trunc on timestamptz buckets in the session timezone — force UTC so
+    # week boundaries match the Python-side bucket computation below.
+    weekly_res = await db.execute(
+        select(
+            func.date_trunc(
+                "week",
+                Appointment.scheduled_at.op("AT TIME ZONE")("UTC"),
+            ).label("week_start"),
+            func.count(),
+        )
+        .where(
+            Appointment.doctor_id == doctor.id,
+            Appointment.deleted_at.is_(None),
+            Appointment.status == "completed",
+            Appointment.scheduled_at >= window_start_dt,
+        )
+        .group_by("week_start")
+    )
+    per_week = {row[0].date(): row[1] for row in weekly_res.all()}
+    weekly_completions = [
+        {
+            "week_start": (window_start + timedelta(weeks=i)).isoformat(),
+            "count": per_week.get(window_start + timedelta(weeks=i), 0),
+        }
+        for i in range(WEEKLY_COMPLETION_WEEKS)
+    ]
+
+    # --- Avg consultation length (queue called_at -> completed_at) ----------
+    # Same measure the queue's wait-estimate uses; omitted when the doctor has
+    # no completed consultations with both timestamps recorded.
+    avg_res = await db.execute(
+        select(
+            func.avg(
+                func.extract("epoch", QueueEntry.completed_at - QueueEntry.called_at)
+                / 60
+            )
+        ).where(
+            QueueEntry.doctor_id == doctor.id,
+            QueueEntry.deleted_at.is_(None),
+            QueueEntry.status == "completed",
+            QueueEntry.called_at.isnot(None),
+            QueueEntry.completed_at.isnot(None),
+        )
+    )
+    avg_consult = avg_res.scalar_one_or_none()
+
+    # --- Top medicines (prescriptions.medicines JSONB list) -----------------
+    # medicines is a list of PrescriptionMedicineItem dicts (brand_name key);
+    # count occurrences in Python — the per-doctor row count is modest and this
+    # avoids JSONB lateral-join portability issues.
+    meds_res = await db.execute(
+        select(Prescription.medicines).where(
+            Prescription.doctor_id == doctor.id,
+            Prescription.deleted_at.is_(None),
+        )
+    )
+    medicine_counter: Counter[str] = Counter()
+    for (medicines,) in meds_res.all():
+        if not isinstance(medicines, list):
+            continue
+        for item in medicines:
+            if isinstance(item, dict):
+                name = item.get("brand_name") or item.get("name")
+                if name:
+                    medicine_counter[str(name)] += 1
+    top_medicines = [
+        {"name": name, "count": count}
+        for name, count in medicine_counter.most_common(10)
+    ]
+
+    analytics: dict = {
+        "appointments_by_status": appointments_by_status,
+        "weekly_completions": weekly_completions,
+        "top_medicines": top_medicines,
+    }
+    if avg_consult is not None:
+        analytics["avg_consult_minutes"] = round(float(avg_consult), 1)
+
+    # --- Today's queue for this doctor (requires clinic context) ------------
+    if clinic_context:
+        clinic_id, _membership_role = clinic_context
+        today = now.date()
+        day_start = datetime(today.year, today.month, today.day, tzinfo=timezone.utc)
+        queue_res = await db.execute(
+            select(QueueEntry.status, func.count())
+            .where(
+                QueueEntry.clinic_id == clinic_id,
+                QueueEntry.doctor_id == doctor.id,
+                QueueEntry.deleted_at.is_(None),
+                QueueEntry.created_at >= day_start,
+                QueueEntry.created_at < day_start + timedelta(days=1),
+            )
+            .group_by(QueueEntry.status)
+        )
+        queue_counts = {row[0]: row[1] for row in queue_res.all()}
+        queue_today = {s: queue_counts.get(s, 0) for s in QUEUE_STATUSES}
+        queue_today["total"] = sum(queue_today.values())
+        analytics["queue_today"] = queue_today
+
+    return analytics

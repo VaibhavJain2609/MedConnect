@@ -159,6 +159,39 @@ export async function getMyDoctorProfile(): Promise<DoctorProfile> {
   return response.data;
 }
 
+/**
+ * Doctor analytics payload (GET /api/v1/doctors/analytics).
+ * Everything is scoped to the authenticated doctor.
+ */
+export interface DoctorAnalytics {
+  /** All-time appointment counts keyed by status. */
+  appointments_by_status: Record<string, number>;
+  /** Completed appointments per ISO week, oldest → newest (8 entries). */
+  weekly_completions: { week_start: string; count: number }[];
+  /** Mean queue consultation time; absent when not derivable. */
+  avg_consult_minutes?: number;
+  /** Up to 10 most-prescribed medicine names. */
+  top_medicines: { name: string; count: number }[];
+  /** Today's queue counts — only present with an active clinic context. */
+  queue_today?: {
+    waiting: number;
+    in_consultation: number;
+    completed: number;
+    cancelled: number;
+    total: number;
+  };
+}
+
+/**
+ * Get aggregated analytics for the authenticated doctor.
+ * Passes X-Clinic-Id automatically via the api interceptor when a clinic is
+ * selected, which enables the `queue_today` section of the response.
+ */
+export async function getDoctorAnalytics(): Promise<DoctorAnalytics> {
+  const response = await api.get("/api/v1/doctors/analytics");
+  return response.data;
+}
+
 export interface DoctorPatient {
   id: string;
   full_name: string;
