@@ -1,5 +1,11 @@
 import axios from "axios";
 import keycloak from "./keycloak";
+import {
+  markRetried,
+  notifyRateLimited,
+  shouldAutoRetry,
+  toRateLimitError,
+} from "./rate-limit";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -52,6 +58,22 @@ api.interceptors.response.use(
     if (error.response) {
       // Server responded with error status
       const { status, data } = error.response;
+
+      // Handle 429 Too Many Requests — the rate-limit middleware answers
+      // { error: { code: "RATE_LIMIT_EXCEEDED", ... } } with Retry-After
+      // and X-RateLimit-Bucket headers. Idempotent GET/HEAD requests with a
+      // short Retry-After get one transparent retry; everything else
+      // rejects as a typed RateLimitError (see src/lib/rate-limit.ts).
+      if (status === 429) {
+        const rateLimitError = toRateLimitError(error);
+        if (shouldAutoRetry(error.config, rateLimitError.retryAfter)) {
+          const delayMs = (rateLimitError.retryAfter ?? 0) * 1000;
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          return api(markRetried(error.config!));
+        }
+        notifyRateLimited(rateLimitError);
+        return Promise.reject(rateLimitError);
+      }
 
       // Handle 401 Unauthorized
       if (status === 401) {
