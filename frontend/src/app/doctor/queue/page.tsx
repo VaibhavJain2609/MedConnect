@@ -59,6 +59,9 @@ function BillPatientModal({
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // Double-submit protection: one key per form-mount; regenerated after a
+  // successful submit so a deliberate second bill is a fresh operation.
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
 
   // Close on Escape
   useEffect(() => {
@@ -80,13 +83,18 @@ function BillPatientModal({
     setError("");
     try {
       // X-Clinic-Id header is attached automatically by the axios interceptor
-      await api.post("/api/v1/billing", {
-        patient_id: state.patientId,
-        clinic_id: clinicId || undefined,
-        amount: amt,
-        payment_method: paymentMethod,
-        notes: notes || undefined,
-      });
+      await api.post(
+        "/api/v1/billing",
+        {
+          patient_id: state.patientId,
+          clinic_id: clinicId || undefined,
+          amount: amt,
+          payment_method: paymentMethod,
+          notes: notes || undefined,
+        },
+        { headers: { "Idempotency-Key": idempotencyKey } }
+      );
+      setIdempotencyKey(crypto.randomUUID());
       onClose();
     } catch (err: unknown) {
       const axiosError = err as { response?: { data?: { detail?: { error?: { message?: string } } | string } } };

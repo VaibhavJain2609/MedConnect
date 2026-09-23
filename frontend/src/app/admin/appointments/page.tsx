@@ -263,6 +263,9 @@ function CreateAppointmentModal({ onClose, onSuccess }: { onClose: () => void; o
   const [clinics, setClinics] = useState<ClinicOption[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  // Double-submit protection: one key per form-mount; regenerated after a
+  // successful submit so a deliberate second booking is a fresh operation.
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
 
   useEffect(() => {
     api.get("/api/v1/clinics/my")
@@ -294,7 +297,8 @@ function CreateAppointmentModal({ onClose, onSuccess }: { onClose: () => void; o
         duration_minutes: duration,
         type,
         chief_complaint: chiefComplaint || undefined,
-      });
+      }, idempotencyKey);
+      setIdempotencyKey(crypto.randomUUID());
       onSuccess();
       onClose();
     } catch (err: any) {

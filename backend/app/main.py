@@ -14,6 +14,7 @@ from starlette.datastructures import MutableHeaders
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import settings
+from app.idempotency import IdempotentReplay
 from app.middleware.audit_middleware import AuditReadMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
@@ -222,8 +223,8 @@ app.add_middleware(
     allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Clinic-Id", "X-Forwarded-For", "X-Request-Id"],
-    expose_headers=["X-Total-Count", "X-Next-Cursor", "X-Request-Id"],
+    allow_headers=["Authorization", "Content-Type", "X-Clinic-Id", "X-Forwarded-For", "X-Request-Id", "Idempotency-Key"],
+    expose_headers=["X-Total-Count", "X-Next-Cursor", "X-Request-Id", "Idempotent-Replay"],
 )
 
 
@@ -399,6 +400,20 @@ async def health():
             "redis": "ok" if redis_ok else "error",
             "version": "0.1.0",
         },
+    )
+
+
+@app.exception_handler(IdempotentReplay)
+async def idempotent_replay_handler(request: Request, exc: IdempotentReplay):
+    """Replay the stored response for a previously-completed Idempotency-Key.
+
+    The original status code + body are returned verbatim so a retry is
+    indistinguishable from the first response; ``Idempotent-Replay: true``
+    marks it for clients/monitoring."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=exc.response_json,
+        headers={"Idempotent-Replay": "true"},
     )
 
 

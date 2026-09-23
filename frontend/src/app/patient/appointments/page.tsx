@@ -227,6 +227,9 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
   const [customTime, setCustomTime] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  // Double-submit protection: one key per form-mount; regenerated after a
+  // successful submit so a deliberate second booking is a fresh operation.
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const [waitlistState, setWaitlistState] = useState<"idle" | "joining" | "joined" | "already">("idle");
   const [waitlistError, setWaitlistError] = useState("");
 
@@ -359,7 +362,8 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
         duration_minutes: durationMinutes,
         type,
         chief_complaint: chiefComplaint || undefined,
-      });
+      }, idempotencyKey);
+      setIdempotencyKey(crypto.randomUUID());
       onSuccess();
       onClose();
     } catch (err: any) {

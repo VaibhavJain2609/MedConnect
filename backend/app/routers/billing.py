@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_current_doctor, get_current_user, require_admin
+from app.idempotency import IdempotentRoute, idempotent
 from app.models.appointment import Appointment
 from app.models.billing import BILLING_STATUSES, PAYMENT_METHODS, Billing, BillingItem
 from app.models.clinic import Clinic, ClinicMembership
@@ -32,7 +33,13 @@ from app.models.user import User
 from app.schemas.billing import BillingCreate, BillingListResponse, BillingResponse, BillingUpdate
 from app.utils.pdf import fmt_date as _fmt_date
 
-router = APIRouter(prefix="/api/v1/billing", tags=["billing"])
+router = APIRouter(
+    prefix="/api/v1/billing",
+    tags=["billing"],
+    # IdempotentRoute fulfils/discards claims created by the idempotent()
+    # dependency below; routes without the dep pass straight through.
+    route_class=IdempotentRoute,
+)
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -124,7 +131,11 @@ async def _require_bill_clinic_access(db: AsyncSession, user: User, bill: Billin
 
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(idempotent("billing.create"))],
+)
 async def create_bill(
     req: BillingCreate,
     current_user: User = Depends(get_current_user),

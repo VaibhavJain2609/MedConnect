@@ -399,6 +399,9 @@ function NewRecordForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  // Double-submit protection: one key per form-mount; regenerated after a
+  // successful submit so a deliberate second record is a fresh operation.
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -411,12 +414,17 @@ function NewRecordForm() {
 
     setLoading(true);
     try {
-      await api.post("/api/v1/doctors/records", {
-        patient_id: selectedPatient.id,
-        record_type: recordType,
-        title,
-        description: description || undefined,
-      });
+      await api.post(
+        "/api/v1/doctors/records",
+        {
+          patient_id: selectedPatient.id,
+          record_type: recordType,
+          title,
+          description: description || undefined,
+        },
+        { headers: { "Idempotency-Key": idempotencyKey } }
+      );
+      setIdempotencyKey(crypto.randomUUID());
       setSuccess(true);
       setTimeout(() => router.push(`/doctor/patients/${selectedPatient.id}`), 1500);
     } catch (err: any) {

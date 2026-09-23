@@ -24,6 +24,7 @@ from app.models.audit import AuditLog, AuditLogArchive
 from app.models.lab_result import LabResult
 from app.models.webhook import WebhookEndpoint, WebhookDelivery
 from app.models.family import FamilyMember
+from app.models.idempotency import IdempotencyKey
 
 # EMR Medicine Models
 from app.models.medicine import (
@@ -99,6 +100,7 @@ __all__ = [
     "WebhookEndpoint",
     "WebhookDelivery",
     "FamilyMember",
+    "IdempotencyKey",
     # Medicine models
     "ChemicalClass",
     "TherapeuticClass",

@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import require_patient
+from app.idempotency import IdempotentRoute, idempotent
 from app.models.doctor import Doctor
 from app.models.lab_result import LabResult
 from app.models.medical_record import MedicalRecord
@@ -21,7 +22,13 @@ from app.services.export_service import build_records_export_bundle
 from app.services.prescription_service import get_patient_prescriptions
 from app.services.record_service import create_record, get_patient_timeline, get_record_detail
 
-router = APIRouter(prefix="/api/v1/patients", tags=["patients"])
+router = APIRouter(
+    prefix="/api/v1/patients",
+    tags=["patients"],
+    # IdempotentRoute fulfils/discards claims created by the idempotent()
+    # dependency below; routes without the dep pass straight through.
+    route_class=IdempotentRoute,
+)
 
 
 @router.get("/timeline")
@@ -477,7 +484,12 @@ class PatientRecordCreate(BaseModel):
         return _validate_document_url(v)
 
 
-@router.post("/records", response_model=RecordResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/records",
+    response_model=RecordResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(idempotent("patients.records.create"))],
+)
 async def create_patient_record(
     body: PatientRecordCreate,
     user: User = Depends(require_patient),
