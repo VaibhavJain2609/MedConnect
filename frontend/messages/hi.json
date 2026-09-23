@@ -1140,5 +1140,25 @@
       "error": "त्रुटि"
     },
     "importButton": "CSV आयात करें"
+  },
+  "labOrders": {
+    "title": "लैब ऑर्डर",
+    "patientTitle": "लैब ऑर्डर",
+    "testNameLabel": "टेस्ट का नाम",
+    "testNamePlaceholder": "जैसे: कंप्लीट ब्लड काउंट",
+    "notesLabel": "नोट्स (वैकल्पिक)",
+    "notesPlaceholder": "जैसे: खाली पेट आवश्यक",
+    "orderButton": "टेस्ट ऑर्डर करें",
+    "createFailed": "लैब ऑर्डर बनाने में विफल। कृपया पुनः प्रयास करें।",
+    "loadFailed": "लैब ऑर्डर लोड करने में विफल।",
+    "empty": "अभी कोई लैब ऑर्डर नहीं।",
+    "emptyPatient": "अभी कोई लैब ऑर्डर नहीं।",
+    "markCompleted": "पूर्ण चिह्नित करें",
+    "cancelOrder": "रद्द करें",
+    "status": {
+      "ordered": "ऑर्डर किया गया",
+      "completed": "पूर्ण",
+      "cancelled": "रद्द"
+    }
   }
 }
