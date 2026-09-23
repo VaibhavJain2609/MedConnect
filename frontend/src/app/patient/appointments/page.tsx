@@ -8,11 +8,12 @@ import { Calendar, CalendarClock, Clock, Stethoscope, Building2, XCircle, Plus, 
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
 import { Pagination } from "@/components/ui/pagination";
-import { getAppointments, updateAppointmentStatus, createAppointment, generateMeetingLink, type Appointment } from "@/lib/api/appointments";
+import { getAppointments, updateAppointmentStatus, createAppointment, generateMeetingLink, rescheduleAppointment, type Appointment } from "@/lib/api/appointments";
 import { getDoctorSlots, type AvailabilitySlot } from "@/lib/api/availability";
 import { joinWaitlist, getMyWaitlist, cancelWaitlistEntry, type WaitlistEntry } from "@/lib/api/waitlist";
 import { SlotPicker, slotDurationMinutes } from "@/components/appointments/slot-picker";
 import { useAuthStore } from "@/stores/auth-store";
+import { toast } from "@/hooks/use-toast";
 import api from "@/lib/api";
 import { useFormatter, useTranslations } from "next-intl";
 
@@ -658,6 +659,178 @@ function BookAppointmentModal({ onClose, onSuccess, patientId }: BookAppointment
 }
 
 // ---------------------------------------------------------------------------
+// RescheduleModal — patient moves a 'scheduled' appointment to a new time.
+// Doctor/clinic/type stay fixed; only date/time (+ optional duration) change.
+// ---------------------------------------------------------------------------
+
+function RescheduleModal({
+  appt,
+  onClose,
+  onSuccess,
+}: {
+  appt: Appointment;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const t = useTranslations("appointments.rescheduleDialog");
+  const tBooking = useTranslations("appointments.booking");
+  // Pre-fill with the current slot so an accidental open+submit is a no-op.
+  const [date, setDate] = useState(() => formatDateInput(new Date(appt.scheduled_at)));
+  const [time, setTime] = useState(() => {
+    const d = new Date(appt.scheduled_at);
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  });
+  const [duration, setDuration] = useState(appt.duration_minutes);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  // Close modal on Escape
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSubmitting(true);
+    try {
+      await rescheduleAppointment(appt.id, {
+        scheduled_at: new Date(`${date}T${time}:00`).toISOString(),
+        duration_minutes: duration,
+      });
+      toast({ title: t("success") });
+      onSuccess();
+      onClose();
+    } catch (err: any) {
+      const msg =
+        err.response?.data?.error?.message ||
+        err.response?.data?.detail?.error?.message ||
+        err.response?.data?.detail ||
+        t("errorFailed");
+      setError(typeof msg === "string" ? msg : JSON.stringify(msg));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("ariaLabel")}
+        className="w-[calc(100%-2rem)] sm:w-full sm:max-w-md rounded-xl bg-white shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-dreams-border px-6 py-4">
+          <h2 className="text-lg font-semibold text-dreams-textPrimary">{t("title")}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={tBooking("close")}
+            className="text-dreams-textSecondary hover:text-dreams-textPrimary"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
+          {error && (
+            <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          {/* Doctor (read-only) */}
+          {appt.doctor_name && (
+            <div className="flex items-center gap-1.5 text-sm text-dreams-textSecondary">
+              <Stethoscope className="h-4 w-4 flex-shrink-0" />
+              {t("withDoctor", { doctor: appt.doctor_name })}
+            </div>
+          )}
+
+          {/* Date + Time */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="reschedule-date" className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+                {t("date")}
+              </label>
+              <input
+                id="reschedule-date"
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                min={formatDateInput(new Date())}
+                required
+                className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+              />
+            </div>
+            <div>
+              <label htmlFor="reschedule-time" className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+                {t("time")}
+              </label>
+              <input
+                id="reschedule-time"
+                type="time"
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+                required
+                className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+              />
+            </div>
+          </div>
+
+          {/* Duration */}
+          <div>
+            <label htmlFor="reschedule-duration" className="mb-1 block text-sm font-medium text-dreams-textPrimary">
+              {t("duration")}
+            </label>
+            <select
+              id="reschedule-duration"
+              value={duration}
+              onChange={(e) => setDuration(Number(e.target.value))}
+              className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+            >
+              {[15, 30, 45, 60].map((mins) => (
+                <option key={mins} value={mins}>
+                  {tBooking("durationOption", { count: mins })}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-3 pt-2">
+            <button
+              type="submit"
+              disabled={submitting}
+              className="flex-1 rounded-lg bg-dreams-blue px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+            >
+              {submitting ? t("submitting") : t("submit")}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-dreams-border px-4 py-2.5 text-sm font-medium text-dreams-textPrimary hover:bg-dreams-lightBg transition-colors"
+            >
+              {tBooking("cancel")}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Appointment card
 // ---------------------------------------------------------------------------
 
@@ -667,12 +840,14 @@ function AppointmentCard({
   isCancelling,
   onGenerateLink,
   isGeneratingLink,
+  onReschedule,
 }: {
   appt: Appointment;
   onCancel: (id: string) => void;
   isCancelling: boolean;
   onGenerateLink: (id: string) => void;
   isGeneratingLink: boolean;
+  onReschedule: (appt: Appointment) => void;
 }) {
   const t = useTranslations("appointments");
   const format = useFormatter();
@@ -779,16 +954,25 @@ function AppointmentCard({
                 </button>
               ))}
 
-            {/* Cancel button */}
+            {/* Reschedule + Cancel — only while still 'scheduled' */}
             {canCancel && (
-              <button
-                disabled={isCancelling}
-                onClick={() => onCancel(appt.id)}
-                className="mt-2 flex items-center gap-1 rounded-md bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 transition-colors"
-              >
-                <XCircle className="h-3.5 w-3.5" />
-                {t("cancelAppointment")}
-              </button>
+              <div className="mt-2 flex items-center gap-2">
+                <button
+                  onClick={() => onReschedule(appt)}
+                  className="flex items-center gap-1 rounded-md border border-dreams-blue px-2.5 py-1 text-xs font-medium text-dreams-blue hover:bg-dreams-blue/10 transition-colors"
+                >
+                  <CalendarClock className="h-3.5 w-3.5" />
+                  {t("reschedule")}
+                </button>
+                <button
+                  disabled={isCancelling}
+                  onClick={() => onCancel(appt.id)}
+                  className="flex items-center gap-1 rounded-md bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 transition-colors"
+                >
+                  <XCircle className="h-3.5 w-3.5" />
+                  {t("cancelAppointment")}
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -888,6 +1072,7 @@ export default function PatientAppointmentsPage() {
   const [page, setPage] = useState(1);
   const [showBooking, setShowBooking] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<string | null>(null);
+  const [rescheduleTarget, setRescheduleTarget] = useState<Appointment | null>(null);
   const [linkError, setLinkError] = useState<string | null>(null);
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
@@ -975,6 +1160,16 @@ export default function PatientAppointmentsPage() {
         />
       )}
 
+      {rescheduleTarget && (
+        <RescheduleModal
+          appt={rescheduleTarget}
+          onClose={() => setRescheduleTarget(null)}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ["patient-appointments"] });
+          }}
+        />
+      )}
+
       <Breadcrumb
         items={[
           { label: tNav("healthTimeline"), href: "/patient/timeline" },
@@ -1053,6 +1248,7 @@ export default function PatientAppointmentsPage() {
               isCancelling={cancelMutation.isPending && cancelTarget === appt.id}
               onGenerateLink={(id) => { setLinkError(null); meetingLinkMutation.mutate(id); }}
               isGeneratingLink={meetingLinkMutation.isPending && meetingLinkMutation.variables === appt.id}
+              onReschedule={(a) => setRescheduleTarget(a)}
             />
           ))}
           <Pagination

@@ -213,6 +213,24 @@ export async function cancelAppointment(id: string, reason?: string): Promise<vo
   });
 }
 
+export interface RescheduleAppointmentData {
+  scheduled_at: string;
+  duration_minutes?: number;
+}
+
+/**
+ * Patient-initiated reschedule — moves a 'scheduled' appointment to a new
+ * time (optionally a new duration). Doctor/clinic/type stay unchanged.
+ * Only the appointment's own patient may call this.
+ */
+export async function rescheduleAppointment(
+  id: string,
+  data: RescheduleAppointmentData
+): Promise<Appointment> {
+  const response = await api.post(`/api/v1/appointments/${id}/reschedule`, data);
+  return response.data;
+}
+
 /**
  * (Re)generate the teleconsult meeting link for an appointment.
  * Only the appointment's patient or doctor participant may call this.

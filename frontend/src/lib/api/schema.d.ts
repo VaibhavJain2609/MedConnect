@@ -108,6 +108,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/appointments/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Admin Appointments
+         * @description Export the admin appointments list as CSV.
+         *
+         *     Backs the /admin/appointments page, which lists every appointment
+         *     (GET /api/v1/appointments?all=true). Honors that page's filters:
+         *     ``status``; ``date`` (single day) or ``from``/``to`` (inclusive
+         *     YYYY-MM-DD bounds on scheduled_at, applied independently); ``clinic``
+         *     (clinic name, exact match — the page's dropdown) or ``clinic_id``;
+         *     and ``search`` matching patient name, doctor name, or appointment id.
+         */
+        get: operations["export_admin_appointments_api_v1_admin_appointments_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/audit": {
         parameters: {
             query?: never;
@@ -824,6 +851,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/patients/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Admin Patients
+         * @description Export the admin patient list as CSV.
+         *
+         *     Mirrors the filters of GET /api/v1/admin/users?role=patient (the list
+         *     backing the /admin/patients page): ``search`` matches full_name /
+         *     email / phone, ``is_active`` filters account state, and ``clinic_id``
+         *     scopes to patients linked to that clinic via patient_clinic_links
+         *     (optionally narrowed by ``consent_status``). ``status`` accepts the
+         *     page's frontend status values (completed→active, pending→inactive).
+         *     Columns match what the admin list shows — no PHI.
+         */
+        get: operations["export_admin_patients_api_v1_admin_patients_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/reports/export": {
         parameters: {
             query?: never;
@@ -1374,6 +1429,33 @@ export interface paths {
          *     patient participant or doctor participant may call this.
          */
         post: operations["generate_meeting_link_api_v1_appointments__appointment_id__meeting_link_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/appointments/{appointment_id}/reschedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reschedule Appointment
+         * @description Patient reschedules their own appointment. Only the time (and
+         *     optionally the duration) changes — doctor/clinic/branch/type are kept.
+         *
+         *     Guards mirror create: the appointment must still be ``scheduled``, the
+         *     new time must be in the future, the doctor must be free, and — for
+         *     clinic-scoped appointments — the patient's clinic link must still be
+         *     approved and the new slot must not collide with another of the
+         *     patient's appointments at that clinic.
+         */
+        post: operations["reschedule_appointment_api_v1_appointments__appointment_id__reschedule_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2251,6 +2333,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/doctors/analytics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Doctor Analytics
+         * @description Aggregated analytics for the authenticated doctor. Everything is scoped
+         *     to ``doctor.id`` — no other doctor's data is included.
+         *
+         *     Response shape::
+         *
+         *         {
+         *           "appointments_by_status": {"scheduled": n, "arrived": n, ...},
+         *           "weekly_completions": [{"week_start": "YYYY-MM-DD", "count": n}, ...8],
+         *           "avg_consult_minutes": 14.5,        # omitted when not derivable
+         *           "top_medicines": [{"name": "...", "count": n}, ...max 10],
+         *           "queue_today": {"waiting": n, "in_consultation": n, "completed": n,
+         *                           "cancelled": n, "total": n}   # only with clinic ctx
+         *         }
+         *
+         *     ``avg_consult_minutes`` is derived from queue entries that have both
+         *     ``called_at`` and ``completed_at``; it is omitted when no such rows exist.
+         *     ``queue_today`` is only present when the request carries an X-Clinic-Id
+         *     context (queue entries filtered to this clinic AND this doctor).
+         */
+        get: operations["get_doctor_analytics_api_v1_doctors_analytics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/doctors/patients": {
         parameters: {
             query?: never;
@@ -2622,6 +2741,37 @@ export interface paths {
         patch: operations["update_encounter_api_v1_encounters__encounter_id__patch"];
         trace?: never;
     };
+    "/api/v1/encounters/{encounter_id}/follow-up": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Encounter Follow Up
+         * @description Book a follow-up appointment from an encounter.
+         *
+         *     Creates a ``scheduled`` Appointment for the encounter's patient with the
+         *     encounter's doctor (and clinic, when set), linked back via
+         *     ``appointments.source_encounter_id``.
+         *
+         *     Allowed: the authoring doctor or any active member of the encounter's
+         *     clinic (callers are always verified doctors via the dependency).
+         *
+         *     Idempotent: a live follow-up appointment already linked to this
+         *     encounter is returned unchanged with 200 — repeat submissions and
+         *     double-clicks never create duplicates.
+         */
+        post: operations["create_encounter_follow_up_api_v1_encounters__encounter_id__follow_up_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/encounters/{encounter_id}/summary-pdf": {
         parameters: {
             query?: never;
@@ -2838,6 +2988,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lab-orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Lab Orders */
+        get: operations["list_lab_orders_api_v1_lab_orders_get"];
+        put?: never;
+        /** Create Lab Order */
+        post: operations["create_lab_order_api_v1_lab_orders_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lab-orders/{order_id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Lab Order Status */
+        patch: operations["update_lab_order_status_api_v1_lab_orders__order_id__status_patch"];
+        trace?: never;
+    };
+    "/api/v1/lab-orders/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Lab Orders
+         * @description Patient-facing list — returns only the caller's own orders.
+         */
+        get: operations["list_my_lab_orders_api_v1_lab_orders_mine_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lab-results/ingest": {
         parameters: {
             query?: never;
@@ -2896,6 +3101,58 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/medication-reminders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Reminders
+         * @description List the patient's own reminders (newest first, capped).
+         */
+        get: operations["list_reminders_api_v1_medication_reminders_get"];
+        put?: never;
+        /**
+         * Upsert Reminder
+         * @description Create a reminder for a prescription — or update the existing one.
+         *
+         *     One live reminder per (patient, prescription); a repeated POST replaces
+         *     the schedule and returns 200 instead of 201 so the "Remind me" toggle
+         *     stays idempotent.
+         */
+        post: operations["upsert_reminder_api_v1_medication_reminders_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/medication-reminders/{reminder_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Reminder
+         * @description Soft-delete the reminder — the worker stops dispatching immediately.
+         */
+        delete: operations["delete_reminder_api_v1_medication_reminders__reminder_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Reminder
+         * @description Update the schedule and/or enabled flag of the patient's own reminder.
+         */
+        patch: operations["update_reminder_api_v1_medication_reminders__reminder_id__patch"];
         trace?: never;
     };
     "/api/v1/medicines/autocomplete": {
@@ -3850,6 +4107,31 @@ export interface paths {
          *     a consultation — those stay with clinical staff (owner | admin | doctor).
          */
         patch: operations["update_queue_status_api_v1_queue__entry_id__status_patch"];
+        trace?: never;
+    };
+    "/api/v1/queue/display": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Queue Display
+         * @description Anonymized waiting-room board for a clinic TV (any clinic staff).
+         *
+         *     Returns today's active queue as token numbers only — now-serving
+         *     (in_consultation) plus up to ``limit`` upcoming waiting tokens. Completed
+         *     and cancelled entries drop off the board. ``waiting_count`` is the full
+         *     waiting total so the UI can show "+N more" when up_next is truncated.
+         */
+        get: operations["get_queue_display_api_v1_queue_display_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/queue/my-position": {
@@ -4878,6 +5160,20 @@ export interface components {
             /** Reason */
             reason?: string | null;
         };
+        /**
+         * AppointmentReschedule
+         * @description Patient-initiated reschedule — only the time (and optionally the
+         *     duration) changes; doctor/clinic/branch/type stay put.
+         */
+        AppointmentReschedule: {
+            /** Duration Minutes */
+            duration_minutes?: number | null;
+            /**
+             * Scheduled At
+             * Format: date-time
+             */
+            scheduled_at: string;
+        };
         /** AppointmentResponse */
         AppointmentResponse: {
             /** Branch Id */
@@ -4939,6 +5235,8 @@ export interface components {
              * Format: date-time
              */
             scheduled_at: string;
+            /** Source Encounter Id */
+            source_encounter_id?: string | null;
             /** Status */
             status: string;
             /** Teleconsult Url */
@@ -5756,6 +6054,32 @@ export interface components {
             /** Relationship */
             relationship?: string | null;
         };
+        /**
+         * FollowUpCreate
+         * @description Book a follow-up appointment from an encounter.
+         *
+         *     ``scheduled_at`` is the combined date+time (ISO-8601; naive values are
+         *     treated as UTC). ``type`` defaults to "follow-up".
+         */
+        FollowUpCreate: {
+            /**
+             * Duration Minutes
+             * @default 30
+             */
+            duration_minutes: number;
+            /** Notes */
+            notes?: string | null;
+            /**
+             * Scheduled At
+             * Format: date-time
+             */
+            scheduled_at: string;
+            /**
+             * Type
+             * @default follow-up
+             */
+            type: string;
+        };
         /** GuestAppointmentCreate */
         GuestAppointmentCreate: {
             /** Branch Id */
@@ -5858,6 +6182,28 @@ export interface components {
             patient_id?: string | null;
             /** Upload Key */
             upload_key: string;
+        };
+        /** LabOrderCreate */
+        LabOrderCreate: {
+            /** Notes */
+            notes?: string | null;
+            /**
+             * Patient Id
+             * Format: uuid
+             */
+            patient_id: string;
+            /** Test Name */
+            test_name: string;
+        };
+        /** LabOrderStatusUpdate */
+        LabOrderStatusUpdate: {
+            /** Result Record Id */
+            result_record_id?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "completed" | "cancelled";
         };
         /** LabResultCreate */
         LabResultCreate: {
@@ -6060,6 +6406,34 @@ export interface components {
             height_cm?: number | null;
             /** Weight Kg */
             weight_kg?: number | null;
+        };
+        /**
+         * MedicationReminderCreate
+         * @description Enable (or replace) a reminder schedule on one of the patient's prescriptions.
+         */
+        MedicationReminderCreate: {
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Prescription Id
+             * Format: uuid
+             */
+            prescription_id: string;
+            /** Times Of Day */
+            times_of_day: string[];
+        };
+        /**
+         * MedicationReminderUpdate
+         * @description Partial update — change the schedule and/or pause the reminder.
+         */
+        MedicationReminderUpdate: {
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Times Of Day */
+            times_of_day?: string[] | null;
         };
         /**
          * NotificationPreferencesResponse
@@ -6473,6 +6847,41 @@ export interface components {
         PushUnsubscribeRequest: {
             /** Endpoint */
             endpoint: string;
+        };
+        /**
+         * QueueDisplayResponse
+         * @description Clinic waiting-room board payload (GET /queue/display).
+         */
+        QueueDisplayResponse: {
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Now Serving */
+            now_serving: components["schemas"]["QueueDisplayToken"][];
+            /** Up Next */
+            up_next: components["schemas"]["QueueDisplayToken"][];
+            /** Waiting Count */
+            waiting_count: number;
+        };
+        /**
+         * QueueDisplayToken
+         * @description One anonymized token on the waiting-room board.
+         *
+         *     Token labels are derived from the daily queue_number only — no patient
+         *     identifiers, names, or notes ever leave this payload (PHI-safe by
+         *     construction, suitable for a public TV).
+         */
+        QueueDisplayToken: {
+            /** Called At */
+            called_at?: string | null;
+            /** Position */
+            position?: number | null;
+            /** Status */
+            status: string;
+            /** Token */
+            token: string;
         };
         /** QueueEntryCreate */
         QueueEntryCreate: {
@@ -7229,6 +7638,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    export_admin_appointments_api_v1_admin_appointments_export_get: {
+        parameters: {
+            query?: {
+                clinic?: string | null;
+                clinic_id?: string | null;
+                date?: string | null;
+                from?: string | null;
+                search?: string | null;
+                status?: string | null;
+                to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -8626,6 +9072,41 @@ export interface operations {
             };
         };
     };
+    export_admin_patients_api_v1_admin_patients_export_get: {
+        parameters: {
+            query?: {
+                clinic_id?: string | null;
+                consent_status?: string | null;
+                is_active?: boolean | null;
+                search?: string | null;
+                status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     export_report_api_v1_admin_reports_export_get: {
         parameters: {
             query?: {
@@ -9712,6 +10193,41 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppointmentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reschedule_appointment_api_v1_appointments__appointment_id__reschedule_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                appointment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AppointmentReschedule"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -11492,6 +12008,37 @@ export interface operations {
             };
         };
     };
+    get_doctor_analytics_api_v1_doctors_analytics_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Clinic-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_patients_api_v1_doctors_patients_get: {
         parameters: {
             query?: {
@@ -12301,6 +12848,41 @@ export interface operations {
             };
         };
     };
+    create_encounter_follow_up_api_v1_encounters__encounter_id__follow_up_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                encounter_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FollowUpCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_encounter_summary_pdf_api_v1_encounters__encounter_id__summary_pdf_get: {
         parameters: {
             query?: {
@@ -12678,6 +13260,129 @@ export interface operations {
             };
         };
     };
+    list_lab_orders_api_v1_lab_orders_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                patient_id?: string | null;
+                status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_lab_order_api_v1_lab_orders_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Clinic-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LabOrderCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_lab_order_status_api_v1_lab_orders__order_id__status_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                order_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LabOrderStatusUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_my_lab_orders_api_v1_lab_orders_mine_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     ingest_lab_report_image_api_v1_lab_results_ingest_post: {
         parameters: {
             query?: never;
@@ -12763,6 +13468,134 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["app__schemas__medicine_emr__ManufacturerResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_reminders_api_v1_medication_reminders_get: {
+        parameters: {
+            query?: {
+                prescription_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upsert_reminder_api_v1_medication_reminders_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MedicationReminderCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_reminder_api_v1_medication_reminders__reminder_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reminder_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_reminder_api_v1_medication_reminders__reminder_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reminder_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MedicationReminderUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -14367,6 +15200,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QueueEntryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_queue_display_api_v1_queue_display_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: {
+                "X-Clinic-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueDisplayResponse"];
                 };
             };
             /** @description Validation Error */
