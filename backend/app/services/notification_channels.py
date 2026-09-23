@@ -15,10 +15,15 @@ Channels:
     email    — SMTP via stdlib ``smtplib`` in ``asyncio.to_thread`` (no extra
                dependency). Requires ``SMTP_HOST`` + ``SMTP_FROM`` and a
                ``user.email``; unconfigured -> skipped(channel_unavailable).
-    sms      — MSG91 flow API adapter (``services/providers/sms.py``), gated
-               on ``MSG91_AUTHKEY``/``MSG91_AUTH_KEY`` + ``MSG91_TEMPLATE_ID``;
+    sms      — when ``SMS_ENABLED`` is set, routed through the
+               provider-agnostic comm layer (``services/comms`` —
+               ``get_comm_provider()``; Twilio reference impl, NullProvider
+               when creds are absent). Otherwise the MSG91 flow API adapter
+               (``services/providers/sms.py``), gated on
+               ``MSG91_AUTHKEY``/``MSG91_AUTH_KEY`` + ``MSG91_TEMPLATE_ID``;
                unconfigured -> skipped(provider_not_configured).
-    whatsapp — WhatsApp Business Cloud API adapter
+    whatsapp — when ``WHATSAPP_ENABLED`` is set, routed through the comm
+               layer; otherwise the WhatsApp Business Cloud API adapter
                (``services/providers/whatsapp.py``), gated on
                ``WHATSAPP_ACCESS_TOKEN`` + ``WHATSAPP_PHONE_NUMBER_ID`` +
                ``WHATSAPP_TEMPLATE_NAME``; unconfigured -> skipped.
@@ -48,6 +53,7 @@ from app.config import settings
 from app.models.notification import NotificationPreferences, NotificationType
 from app.models.user import User
 from app.services import notification_service
+from app.services.comms import get_comm_provider, to_e164
 from app.services.providers import sms as sms_provider
 from app.services.providers import webpush as webpush_provider
 from app.services.providers import whatsapp as whatsapp_provider
@@ -117,6 +123,7 @@ async def send(
     action_url: Optional[str] = None,
     metadata: Optional[dict] = None,
     prefs: Optional[dict] = None,
+    channel_bodies: Optional[dict[str, str]] = None,
 ) -> ChannelResult:
     """
     Send `title`/`body` to `user` over channel `kind`.
@@ -131,6 +138,9 @@ async def send(
         action_url: click-through URL for in_app metadata and the push
             payload (the only per-channel content push receives, with title).
         prefs: optional pre-fetched preferences dict; fetched when omitted.
+        channel_bodies: optional per-channel body overrides — used to send a
+            PHI-minimal text over sms/whatsapp while in_app/email keep the
+            full body. Unknown keys are ignored.
 
     Returns:
         ChannelResult with status sent/failed/skipped — never raises for
@@ -154,6 +164,8 @@ async def send(
         )
         return ChannelResult(channel=kind, status="skipped", reason="channel_disabled")
 
+    channel_body = (channel_bodies or {}).get(kind, body)
+
     if kind == "in_app":
         return await _send_in_app(
             user,
@@ -167,9 +179,9 @@ async def send(
     if kind == "email":
         return await _send_email(user, title, body)
     if kind == "sms":
-        return await _send_sms(user, body)
+        return await _send_sms(user, channel_body)
     if kind == "whatsapp":
-        return await _send_whatsapp(user, body)
+        return await _send_whatsapp(user, channel_body)
     return await _send_push(user, title, action_url=action_url, db=db)
 
 
@@ -276,13 +288,45 @@ async def _send_email(user: User, title: str, body: str) -> ChannelResult:
         return ChannelResult(channel="email", status="failed", reason="send_error")
 
 
+async def _send_via_comm(
+    user: User, channel: str, body: str
+) -> ChannelResult:
+    """
+    Route a send through the provider-agnostic comm layer
+    (``services/comms``). Normalises ``user.phone`` to E.164 for the
+    provider; maps the neutral ``CommResult`` back to ``ChannelResult``.
+    """
+    to = to_e164(user.phone)
+    if to is None:
+        logger.info(
+            "notification_channel_no_recipient",
+            channel=channel,
+            provider="comms",
+            user_id=str(user.id),
+        )
+        return ChannelResult(channel=channel, status="skipped", reason="no_recipient")
+
+    provider = get_comm_provider()
+    if channel == "sms":
+        result = await provider.send_sms(to, body)
+    else:
+        result = await provider.send_whatsapp(to, body)
+    return ChannelResult(
+        channel=channel, status=result.status, reason=result.reason
+    )
+
+
 async def _send_sms(user: User, body: str) -> ChannelResult:
-    """SMS via the MSG91 provider adapter (services/providers/sms.py)."""
+    """SMS — comm layer when SMS_ENABLED, else the MSG91 adapter."""
+    if settings.SMS_ENABLED:
+        return await _send_via_comm(user, "sms", body)
     return await sms_provider.send(user, body)
 
 
 async def _send_whatsapp(user: User, body: str) -> ChannelResult:
-    """WhatsApp via the Cloud API adapter (services/providers/whatsapp.py)."""
+    """WhatsApp — comm layer when WHATSAPP_ENABLED, else the Cloud API adapter."""
+    if settings.WHATSAPP_ENABLED:
+        return await _send_via_comm(user, "whatsapp", body)
     return await whatsapp_provider.send(user, body)
 
 
