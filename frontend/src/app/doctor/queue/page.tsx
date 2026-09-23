@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
+import { MonitorPlay } from "lucide-react";
 import api from "@/lib/api";
 import { useClinicStore } from "@/stores/clinic-store";
 
@@ -278,6 +280,14 @@ export default function QueuePage() {
             <span className="text-sm text-dreams-textSecondary">
               {t("summary", { waiting: waiting.length, inConsultation: inConsultation.length })}
             </span>
+            <Link
+              href="/doctor/queue/display"
+              target="_blank"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-dreams-border rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <MonitorPlay className="h-4 w-4" />
+              {t("openDisplay")}
+            </Link>
             <button
               onClick={() => void fetchQueue()}
               className="px-3 py-1.5 text-sm border border-dreams-border rounded-lg hover:bg-gray-50 transition-colors"

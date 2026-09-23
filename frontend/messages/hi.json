@@ -636,6 +636,7 @@
     "subtitle": "आज का वेटिंग रूम — हर 30 सेकंड में ऑटो-रिफ्रेश",
     "summary": "{waiting} प्रतीक्षा में · {inConsultation} परामर्श में",
     "refresh": "रिफ्रेश करें",
+    "openDisplay": "डिस्प्ले बोर्ड",
     "nextUp": "अगला मरीज़",
     "callNext": "अगले मरीज़ को बुलाएं",
     "sections": {
@@ -1140,5 +1141,52 @@
       "error": "त्रुटि"
     },
     "importButton": "CSV आयात करें"
+  },
+  "patientQueue": {
+    "title": "कतार की स्थिति",
+    "subtitle": "आज की कतार में आपके स्थान का लाइव व्यू",
+    "refreshing": "रिफ्रेश हो रहा है...",
+    "updated": "अपडेट {time}",
+    "loading": "आपकी कतार स्थिति लोड हो रही है...",
+    "notCheckedInTitle": "आज आप कहीं चेक-इन नहीं हैं",
+    "notCheckedInDescription": "जब क्लीनिक आपको चेक-इन करेगी, आपकी लाइव कतार स्थिति यहाँ दिखेगी।",
+    "viewAppointments": "मेरी अपॉइंटमेंट देखें",
+    "clinicFallback": "क्लीनिक",
+    "doctorLabel": "डॉ. {name}",
+    "status": {
+      "waiting": "प्रतीक्षा में",
+      "in_consultation": "परामर्श में",
+      "completed": "पूर्ण",
+      "cancelled": "रद्द"
+    },
+    "beingSeen": "आपका परामर्श चल रहा है",
+    "yourPosition": "कतार में आपकी स्थिति",
+    "visitComplete": "आपकी विज़िट पूरी हो गई",
+    "entryCancelled": "यह कतार प्रविष्टि रद्द कर दी गई",
+    "tokenNumber": "टोकन #{number}",
+    "peopleAhead": "आपसे पहले लोग",
+    "estimatedWait": "अनुमानित प्रतीक्षा",
+    "waitNow": "कुछ ही क्षणों में",
+    "waitMinutes": "~{minutes} मिनट",
+    "waitHours": "~{hours} घंटे",
+    "waitHoursMinutes": "~{hours} घंटे {minutes} मिनट",
+    "refreshNote": "यह पेज हर 30 सेकंड में अपने आप रिफ्रेश होता है।"
+  },
+  "queueDisplay": {
+    "title": "प्रतीक्षालय",
+    "clinicFallback": "क्लीनिक",
+    "noClinic": "डिस्प्ले बोर्ड दिखाने के लिए क्लीनिक चुनें।",
+    "loadFailed": "कतार बोर्ड लोड नहीं हो सका।",
+    "autoRefresh": "हर {seconds} सेकंड में ऑटो-रिफ्रेश",
+    "updated": "अपडेट {time}",
+    "nowServing": "अभी परामर्श में",
+    "noneServing": "अभी किसी का परामर्श नहीं चल रहा है।",
+    "proceedInside": "कृपया अंदर जाएं",
+    "upNext": "अगले टोकन",
+    "position": "कतार में नं. {position}",
+    "waitingTotal": "आज {count} प्रतीक्षा में",
+    "moreWaiting": "+{count} और",
+    "emptyTitle": "कतार में कोई मरीज़ नहीं है",
+    "emptyHint": "मरीज़ चेक-इन करते ही टोकन यहाँ दिखेंगे।"
   }
 }
