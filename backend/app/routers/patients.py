@@ -13,12 +13,15 @@ from app.idempotency import IdempotentRoute, idempotent
 from app.models.doctor import Doctor
 from app.models.lab_result import LabResult
 from app.models.medical_record import MedicalRecord
+from app.models.notification import NotificationType
 from app.models.user import User
 from app.schemas.common import PaginatedResponse, PaginationMeta
 from app.schemas.record import RecordResponse, VALID_RECORD_TYPES, _validate_document_url
 from app.schemas.user import MedicalHistoryUpdate, PatientProfileUpdate
+from app.services.audit_service import log_change
 from app.services.erasure_service import request_patient_erasure
-from app.services.export_service import build_records_export_bundle
+from app.services.export_service import build_patient_data_export, build_records_export_bundle
+from app.services.notification_service import create_notification
 from app.services.prescription_service import get_patient_prescriptions
 from app.services.record_service import create_record, get_patient_timeline, get_record_detail
 
@@ -435,6 +438,72 @@ async def get_privacy_status(user: User = Depends(require_patient)):
         ),
         "erased_at": user.erased_at.isoformat() if user.erased_at else None,
     }
+
+
+@router.get("/me/export")
+async def export_my_data(
+    user: User = Depends(require_patient),
+    db: AsyncSession = Depends(get_db),
+):
+    """DPDP right to access — download a full JSON dump of the caller's own data.
+
+    Sections: profile, medical_history, medical_records, prescriptions,
+    appointments, vitals, lab_results, queue_history, notifications,
+    family_members, clinic_consents. Strictly own-scoped (patient_id /
+    user_id / owner_user_id == caller). Document file binaries are not
+    embedded — ``document_url`` references only (see ``documents_note``).
+
+    Rate-limited well below generic read limits (see
+    ``_ENDPOINT_LIMITS`` in ``app/middleware/rate_limit.py``) because this
+    is a full-PHI dump. Each export writes an EXPORT audit row (same
+    convention as the admin CSV exports) and a self-notification so the
+    account owner can spot an unexpected export.
+    """
+    export = await build_patient_data_export(db=db, user=user)
+
+    # Audit — metadata only (section counts, never row contents).
+    await log_change(
+        db,
+        table_name="patient_data_export",
+        record_id=user.id,
+        action="EXPORT",
+        old_values=None,
+        new_values={
+            "path": "/api/v1/patients/me/export",
+            "format_version": export["format_version"],
+            "sections": {
+                key: len(value)
+                for key, value in export.items()
+                if isinstance(value, list)
+            },
+        },
+    )
+
+    # Security-visibility notification to the account owner (created after
+    # the dump is built so it appears only in subsequent exports).
+    await create_notification(
+        db,
+        user_id=user.id,
+        notif_type=NotificationType.SYSTEM.value,
+        title="Your data was exported",
+        body=(
+            "A copy of your MedConnect data (profile, records, prescriptions, "
+            "appointments, vitals, lab results, queue history, notifications, "
+            "family members, clinic consents) was downloaded. If this wasn't "
+            "you, change your credentials and contact support."
+        ),
+        action_url="/patient/profile",
+        metadata={"kind": "patient_data_export"},
+    )
+
+    await db.commit()
+
+    filename = f"medconnect-data-export-{datetime.now(timezone.utc).date().isoformat()}.json"
+    return Response(
+        content=json.dumps(export),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/erasure")

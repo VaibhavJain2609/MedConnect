@@ -326,3 +326,12 @@ export async function requestErasure(): Promise<{
   const response = await api.post("/api/v1/patients/erasure");
   return response.data;
 }
+
+/**
+ * DPDP right to access — download the current patient's full data export
+ * (JSON). Filename (medconnect-data-export-<date>.json) is resolved from
+ * the response's Content-Disposition header by downloadFile().
+ */
+export async function exportMyData(): Promise<void> {
+  await downloadFile("/api/v1/patients/me/export");
+}

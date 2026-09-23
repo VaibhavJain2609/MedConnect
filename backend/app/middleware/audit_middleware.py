@@ -61,6 +61,7 @@ _PHI_READ_RULES: tuple[tuple[re.Pattern[str], str], ...] = tuple(
         (rf"^/api/v1/doctors/prescriptions/({_UUID_RE})(?:/|$)", "prescriptions"),
         (r"^/api/v1/doctors/prescriptions$", "prescriptions"),
         # ---- Patient portal: own PHI ----------------------------------
+        (r"^/api/v1/patients/me/export(?:/|$)", "patient_data_export"),  # DPDP self export
         (r"^/api/v1/patients/records/export(?:/|$)", "medical_records"),  # FHIR export
         (rf"^/api/v1/patients/records/({_UUID_RE})(?:/|$)", "medical_records"),
         (r"^/api/v1/patients/records$", "medical_records"),
