@@ -25,8 +25,16 @@ import {
   TrendingUp,
   HeartPulse,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/auth";
+import { LanguageSwitcher } from "@/components/layout/language-switcher";
+
+// Keys validated against messages/en.json — the source of truth for the
+// "nav" namespace (same convention as doctor-sidebar.tsx, see docs/i18n.md).
+type EnMessages = typeof import("../../../messages/en.json");
+type NavLabelKey = Exclude<keyof EnMessages["nav"], "sections">;
+type NavSectionKey = keyof EnMessages["nav"]["sections"];
 
 interface AdminSidebarProps {
   isOpen: boolean;
@@ -37,61 +45,61 @@ interface AdminSidebarProps {
 
 interface NavItem {
   href?: string;
-  label: string;
+  labelKey: NavLabelKey;
   icon: any;
   children?: NavItem[];
 }
 
 interface NavSection {
-  label: string;
+  labelKey: NavSectionKey;
   items: NavItem[];
 }
 
 const navSections: NavSection[] = [
   {
-    label: "MAIN",
+    labelKey: "main",
     items: [
-      { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/admin/dashboard", labelKey: "adminDashboard", icon: LayoutDashboard },
     ],
   },
   {
-    label: "HEALTH CARE",
+    labelKey: "healthCare",
     items: [
-      { href: "/admin/patients", label: "Patients", icon: Users },
-      { href: "/admin/doctors", label: "Doctors", icon: Stethoscope },
-      { href: "/admin/appointments", label: "Appointments", icon: Calendar },
-      { href: "/admin/billing", label: "Billing", icon: CreditCard },
-      { href: "/admin/revenue", label: "Revenue", icon: TrendingUp },
-      { href: "/admin/visits", label: "Visits", icon: Activity },
-      { href: "/admin/lab-results", label: "Lab Results", icon: TestTube },
+      { href: "/admin/patients", labelKey: "adminPatients", icon: Users },
+      { href: "/admin/doctors", labelKey: "adminDoctors", icon: Stethoscope },
+      { href: "/admin/appointments", labelKey: "appointments", icon: Calendar },
+      { href: "/admin/billing", labelKey: "billing", icon: CreditCard },
+      { href: "/admin/revenue", labelKey: "adminRevenue", icon: TrendingUp },
+      { href: "/admin/visits", labelKey: "visits", icon: Activity },
+      { href: "/admin/lab-results", labelKey: "labResults", icon: TestTube },
       {
-        label: "Catalog",
+        labelKey: "adminCatalog",
         icon: Pill,
         children: [
-          { href: "/admin/medicines", label: "Medicines", icon: Pill },
-          { href: "/admin/salts", label: "Salts (APIs)", icon: Activity },
-          { href: "/admin/manufacturers", label: "Manufacturers", icon: Building2 },
-          { href: "/admin/medicines/import", label: "Bulk Import", icon: TrendingUp },
-          { href: "/admin/medicines/new", label: "Add Medicine", icon: Pill },
+          { href: "/admin/medicines", labelKey: "adminMedicines", icon: Pill },
+          { href: "/admin/salts", labelKey: "adminSalts", icon: Activity },
+          { href: "/admin/manufacturers", labelKey: "adminManufacturers", icon: Building2 },
+          { href: "/admin/medicines/import", labelKey: "adminBulkImport", icon: TrendingUp },
+          { href: "/admin/medicines/new", labelKey: "adminAddMedicine", icon: Pill },
         ],
       },
     ],
   },
   {
-    label: "MANAGEMENT",
+    labelKey: "management",
     items: [
-      { href: "/admin/users", label: "Users", icon: Users },
-      { href: "/admin/clinics", label: "Clinics", icon: Building2 },
-      { href: "/admin/notifications", label: "Notifications", icon: Bell },
-      { href: "/admin/settings", label: "Settings", icon: Settings },
+      { href: "/admin/users", labelKey: "adminUsers", icon: Users },
+      { href: "/admin/clinics", labelKey: "adminClinics", icon: Building2 },
+      { href: "/admin/notifications", labelKey: "notifications", icon: Bell },
+      { href: "/admin/settings", labelKey: "adminSettings", icon: Settings },
     ],
   },
   {
-    label: "PAGES",
+    labelKey: "pages",
     items: [
-      { href: "/admin/doctors/pending", label: "Doctor Verification", icon: UserCheck },
-      { href: "/admin/audit-logs", label: "Audit Logs", icon: Shield },
-      { href: "/admin/system", label: "System Health", icon: HeartPulse },
+      { href: "/admin/doctors/pending", labelKey: "adminDoctorVerification", icon: UserCheck },
+      { href: "/admin/audit-logs", labelKey: "adminAuditLogs", icon: Shield },
+      { href: "/admin/system", labelKey: "adminSystemHealth", icon: HeartPulse },
     ],
   },
 ];
@@ -109,7 +117,9 @@ function SidebarNavItem({
   onMobileClose?: () => void;
   depth?: number;
 }) {
+  const t = useTranslations("nav");
   const Icon = item.icon;
+  const label = t(item.labelKey);
   const hasChildren = item.children && item.children.length > 0;
   const isActive = item.href === pathname;
   const childActive =
@@ -132,7 +142,7 @@ function SidebarNavItem({
           <Icon className="h-5 w-5 flex-shrink-0" />
           {isOpen && (
             <>
-              <span className="flex-1 text-left">{item.label}</span>
+              <span className="flex-1 text-left">{label}</span>
               {isExpanded ? (
                 <ChevronDown className="h-4 w-4" />
               ) : (
@@ -145,7 +155,7 @@ function SidebarNavItem({
           <div className="ml-6 mt-1 space-y-1">
             {item.children!.map((child) => (
               <SidebarNavItem
-                key={child.href || child.label}
+                key={child.href || child.labelKey}
                 item={child}
                 isOpen={isOpen}
                 pathname={pathname}
@@ -169,11 +179,11 @@ function SidebarNavItem({
           : "text-gray-300 hover:bg-white/10",
         !isOpen && "justify-center"
       )}
-      title={!isOpen ? item.label : undefined}
+      title={!isOpen ? label : undefined}
       onClick={onMobileClose}
     >
       <Icon className="h-5 w-5 flex-shrink-0" />
-      {isOpen && <span>{item.label}</span>}
+      {isOpen && <span>{label}</span>}
     </Link>
   );
 }
@@ -185,6 +195,7 @@ export function AdminSidebar({
   onMobileClose,
 }: AdminSidebarProps) {
   const pathname = usePathname();
+  const t = useTranslations("nav");
 
   return (
     <>
@@ -209,6 +220,7 @@ export function AdminSidebar({
             variant="ghost"
             size="icon"
             onClick={onToggle}
+            aria-label={isOpen ? t("collapseSidebar") : t("expandSidebar")}
             className={cn(
               "text-gray-400 hover:text-white hover:bg-white/10",
               !isOpen && "mx-auto"
@@ -226,16 +238,16 @@ export function AdminSidebar({
         {/* Navigation */}
         <nav className="flex-1 space-y-6 p-4 overflow-y-auto">
           {navSections.map((section) => (
-            <div key={section.label}>
+            <div key={section.labelKey}>
               {isOpen && (
                 <h3 className="mb-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  {section.label}
+                  {t(`sections.${section.labelKey}`)}
                 </h3>
               )}
               <div className="space-y-1">
                 {section.items.map((item) => (
                   <SidebarNavItem
-                    key={item.href || item.label}
+                    key={item.href || item.labelKey}
                     item={item}
                     isOpen={isOpen}
                     pathname={pathname}
@@ -246,8 +258,9 @@ export function AdminSidebar({
           ))}
         </nav>
 
-        {/* Logout */}
-        <div className="p-4 border-t border-gray-800">
+        {/* Language + Logout */}
+        <div className="p-4 border-t border-gray-800 space-y-2">
+          {isOpen && <LanguageSwitcher className="px-1 pb-1" />}
           <Button
             variant="ghost"
             className={cn(
@@ -257,7 +270,7 @@ export function AdminSidebar({
             onClick={logout}
           >
             <LogOut className="h-5 w-5" />
-            {isOpen && <span>Logout</span>}
+            {isOpen && <span>{t("logout")}</span>}
           </Button>
         </div>
       </aside>
@@ -281,6 +294,7 @@ export function AdminSidebar({
             variant="ghost"
             size="icon"
             onClick={onMobileClose}
+            aria-label={t("closeMenu")}
             className="text-gray-400 hover:text-white hover:bg-white/10"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -290,14 +304,14 @@ export function AdminSidebar({
         {/* Navigation */}
         <nav className="flex-1 space-y-6 p-4 overflow-y-auto">
           {navSections.map((section) => (
-            <div key={section.label}>
+            <div key={section.labelKey}>
               <h3 className="mb-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                {section.label}
+                {t(`sections.${section.labelKey}`)}
               </h3>
               <div className="space-y-1">
                 {section.items.map((item) => (
                   <SidebarNavItem
-                    key={item.href || item.label}
+                    key={item.href || item.labelKey}
                     item={item}
                     isOpen={true}
                     pathname={pathname}
@@ -309,15 +323,16 @@ export function AdminSidebar({
           ))}
         </nav>
 
-        {/* Logout */}
-        <div className="p-4 border-t border-gray-800">
+        {/* Language + Logout */}
+        <div className="p-4 border-t border-gray-800 space-y-2">
+          <LanguageSwitcher className="px-1 pb-1" />
           <Button
             variant="ghost"
             className="w-full justify-start gap-3 text-red-400 hover:text-red-300 hover:bg-red-500/10"
             onClick={logout}
           >
             <LogOut className="h-5 w-5" />
-            <span>Logout</span>
+            <span>{t("logout")}</span>
           </Button>
         </div>
       </aside>

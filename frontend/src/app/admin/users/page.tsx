@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -15,13 +16,10 @@ const roleBadgeVariant: Record<string, string> = {
   patient: "completed",
 };
 
-const roleLabel: Record<string, string> = {
-  admin: "Admin",
-  doctor: "Doctor",
-  patient: "Patient",
-};
-
 export default function AdminUsersPage() {
+  const t = useTranslations("adminUsers");
+  const tCommon = useTranslations("common");
+  const tPagination = useTranslations("pagination");
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
@@ -53,6 +51,19 @@ export default function AdminUsersPage() {
     router.push(`/admin/users/${id}`);
   };
 
+  const roleLabel = (role: string): string => {
+    switch (role) {
+      case "admin":
+        return t("roles.admin");
+      case "doctor":
+        return t("roles.doctor");
+      case "patient":
+        return t("roles.patient");
+      default:
+        return role;
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center py-12">
@@ -64,9 +75,9 @@ export default function AdminUsersPage() {
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center py-12 space-y-4">
-        <p className="text-red-600 font-medium">Failed to load users</p>
+        <p className="text-red-600 font-medium">{t("loadError")}</p>
         <p className="text-dreams-textSecondary text-sm">
-          {error instanceof Error ? error.message : "An error occurred"}
+          {error instanceof Error ? error.message : tCommon("errorGeneric")}
         </p>
       </div>
     );
@@ -74,12 +85,12 @@ export default function AdminUsersPage() {
 
   return (
     <div className="space-y-6">
-      <Breadcrumb items={[{ label: "Users" }]} />
+      <Breadcrumb items={[{ label: t("breadcrumb") }]} />
 
       <div>
-        <h1 className="text-3xl font-bold text-dreams-textPrimary">Users</h1>
+        <h1 className="text-3xl font-bold text-dreams-textPrimary">{t("title")}</h1>
         <p className="text-dreams-textSecondary mt-1">
-          Manage platform users and their access
+          {t("subtitle")}
         </p>
       </div>
 
@@ -89,7 +100,7 @@ export default function AdminUsersPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Search by name, email or phone..."
+            placeholder={t("searchPlaceholder")}
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
@@ -107,10 +118,10 @@ export default function AdminUsersPage() {
           }}
           className="h-10 px-4 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
         >
-          <option value="all">All Roles</option>
-          <option value="patient">Patient</option>
-          <option value="doctor">Doctor</option>
-          <option value="admin">Admin</option>
+          <option value="all">{t("filters.allRoles")}</option>
+          <option value="patient">{t("roles.patient")}</option>
+          <option value="doctor">{t("roles.doctor")}</option>
+          <option value="admin">{t("roles.admin")}</option>
         </select>
 
         <select
@@ -121,9 +132,9 @@ export default function AdminUsersPage() {
           }}
           className="h-10 px-4 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
         >
-          <option value="all">All Status</option>
-          <option value="true">Active</option>
-          <option value="false">Inactive</option>
+          <option value="all">{t("filters.allStatus")}</option>
+          <option value="true">{t("status.active")}</option>
+          <option value="false">{t("status.inactive")}</option>
         </select>
       </div>
 
@@ -133,22 +144,22 @@ export default function AdminUsersPage() {
           <thead className="bg-dreams-lightBg border-b border-dreams-border">
             <tr>
               <th className="px-6 py-3 text-left font-semibold text-dreams-textSecondary">
-                Name
+                {t("table.name")}
               </th>
               <th className="px-6 py-3 text-left font-semibold text-dreams-textSecondary">
-                Email
+                {t("table.email")}
               </th>
               <th className="px-6 py-3 text-left font-semibold text-dreams-textSecondary">
-                Phone
+                {t("table.phone")}
               </th>
               <th className="px-6 py-3 text-left font-semibold text-dreams-textSecondary">
-                Role
+                {t("table.role")}
               </th>
               <th className="px-6 py-3 text-left font-semibold text-dreams-textSecondary">
-                Status
+                {t("table.status")}
               </th>
               <th className="px-6 py-3 text-left font-semibold text-dreams-textSecondary">
-                Joined
+                {t("table.joined")}
               </th>
               <th className="px-6 py-3" />
             </tr>
@@ -157,7 +168,7 @@ export default function AdminUsersPage() {
             {users.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-6 py-12 text-center text-dreams-textSecondary">
-                  No users found
+                  {t("empty")}
                 </td>
               </tr>
             ) : (
@@ -183,12 +194,12 @@ export default function AdminUsersPage() {
                   </td>
                   <td className="px-6 py-4">
                     <Badge variant={roleBadgeVariant[user.role] as any}>
-                      {roleLabel[user.role] ?? user.role}
+                      {roleLabel(user.role)}
                     </Badge>
                   </td>
                   <td className="px-6 py-4">
                     <Badge variant={user.is_active ? "completed" : "pending"}>
-                      {user.is_active ? "Active" : "Inactive"}
+                      {t(user.is_active ? "status.active" : "status.inactive")}
                     </Badge>
                   </td>
                   <td className="px-6 py-4 text-dreams-textSecondary">
@@ -202,7 +213,7 @@ export default function AdminUsersPage() {
                       }}
                       className="text-dreams-blue text-sm font-medium hover:underline"
                     >
-                      View
+                      {t("view")}
                     </button>
                   </td>
                 </tr>
@@ -216,7 +227,8 @@ export default function AdminUsersPage() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-dreams-textSecondary">
-            Page {page} of {totalPages} · {data?.total} total
+            {tPagination("pageOf", { page, totalPages })}{" "}
+            {tPagination("totalSuffix", { count: data?.total ?? 0 })}
           </p>
           <div className="flex gap-2">
             <button
@@ -224,14 +236,14 @@ export default function AdminUsersPage() {
               onClick={() => setPage((p) => p - 1)}
               className="px-4 py-2 text-sm rounded-lg border border-dreams-border bg-white disabled:opacity-40 hover:bg-dreams-lightBg transition-colors"
             >
-              Previous
+              {tPagination("previous")}
             </button>
             <button
               disabled={page >= totalPages}
               onClick={() => setPage((p) => p + 1)}
               className="px-4 py-2 text-sm rounded-lg border border-dreams-border bg-white disabled:opacity-40 hover:bg-dreams-lightBg transition-colors"
             >
-              Next
+              {tPagination("next")}
             </button>
           </div>
         </div>

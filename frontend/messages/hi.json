@@ -6,7 +6,10 @@
       "clinics": "क्लीनिक",
       "account": "खाता",
       "clinical": "क्लीनिकल",
-      "actions": "त्वरित कार्य"
+      "actions": "त्वरित कार्य",
+      "healthCare": "स्वास्थ्य देखभाल",
+      "management": "प्रबंधन",
+      "pages": "पेज"
     },
     "healthTimeline": "स्वास्थ्य टाइमलाइन",
     "appointments": "अपॉइंटमेंट",
@@ -40,14 +43,31 @@
     "doctorStaffInvites": "स्टाफ और आमंत्रण",
     "doctorLinkPatient": "मरीज़ लिंक करें",
     "doctorNewPrescription": "नया प्रिस्क्रिप्शन",
-    "doctorNewRecord": "नया रिकॉर्ड"
+    "doctorNewRecord": "नया रिकॉर्ड",
+    "adminDashboard": "डैशबोर्ड",
+    "adminPatients": "मरीज़",
+    "adminDoctors": "डॉक्टर",
+    "adminRevenue": "राजस्व",
+    "adminCatalog": "कैटलॉग",
+    "adminMedicines": "दवाएं",
+    "adminSalts": "साल्ट (API)",
+    "adminManufacturers": "निर्माता",
+    "adminBulkImport": "बल्क इम्पोर्ट",
+    "adminAddMedicine": "दवा जोड़ें",
+    "adminUsers": "उपयोगकर्ता",
+    "adminClinics": "क्लीनिक",
+    "adminSettings": "सेटिंग्स",
+    "adminDoctorVerification": "डॉक्टर सत्यापन",
+    "adminAuditLogs": "ऑडिट लॉग",
+    "adminSystemHealth": "सिस्टम हेल्थ"
   },
   "common": {
     "retry": "पुनः प्रयास करें",
     "loadFailed": "लोड करने में विफल। कृपया पुनः प्रयास करें।",
     "close": "बंद करें",
     "cancel": "रद्द करें",
-    "unknownPatient": "अज्ञात मरीज़"
+    "unknownPatient": "अज्ञात मरीज़",
+    "errorGeneric": "एक त्रुटि हुई"
   },
   "timeline": {
     "breadcrumb": "स्वास्थ्य टाइमलाइन",
@@ -657,6 +677,189 @@
       "male": "पुरुष",
       "female": "महिला",
       "other": "अन्य"
+    }
+  },
+  "adminDashboard": {
+    "breadcrumb": "डैशबोर्ड",
+    "title": "डैशबोर्ड",
+    "subtitle": "आपके हेल्थकेयर प्लेटफ़ॉर्म का सारांश",
+    "loadError": "डैशबोर्ड डेटा लोड नहीं हो सका",
+    "range": {
+      "7d": "पिछले 7 दिन",
+      "30d": "पिछले 30 दिन",
+      "90d": "पिछले 90 दिन"
+    },
+    "stats": {
+      "totalPatients": "कुल मरीज़",
+      "medicalRecords": "मेडिकल रिकॉर्ड",
+      "totalDoctors": "कुल डॉक्टर",
+      "prescriptions": "प्रिस्क्रिप्शन"
+    },
+    "verification": {
+      "pendingTitle": "{count, plural, one {# डॉक्टर का सत्यापन बाकी है} other {# डॉक्टरों का सत्यापन बाकी है}}",
+      "verifiedSubtitle": "{total} में से {verified} डॉक्टर सत्यापित",
+      "review": "समीक्षा करें"
+    },
+    "recentActivity": {
+      "title": "हाल की गतिविधि",
+      "recentBadge": "{count} हालिया",
+      "viewAll": "सभी देखें",
+      "loadError": "हाल की गतिविधि लोड नहीं हो सकी",
+      "empty": "कोई हालिया गतिविधि नहीं",
+      "approve": "स्वीकृत करें",
+      "reject": "अस्वीकार करें",
+      "approveTitle": "अनुरोध स्वीकृत करें",
+      "rejectTitle": "अनुरोध अस्वीकार करें",
+      "requestedAt": "{date} को {time} बजे"
+    },
+    "status": {
+      "pending": "लंबित",
+      "approved": "स्वीकृत",
+      "rejected": "अस्वीकृत"
+    },
+    "patientActivity": {
+      "title": "मरीज़ों की गतिविधि",
+      "loadError": "मरीज़ों की गतिविधि का डेटा लोड नहीं हो सका",
+      "newPatients": "नए मरीज़",
+      "activePatients": "सक्रिय मरीज़"
+    },
+    "quickStats": {
+      "verifiedDoctors": "सत्यापित डॉक्टर",
+      "pendingVerification": "सत्यापन लंबित",
+      "totalMedicines": "कुल दवाएं"
+    }
+  },
+  "adminUsers": {
+    "breadcrumb": "उपयोगकर्ता",
+    "title": "उपयोगकर्ता",
+    "subtitle": "प्लेटफ़ॉर्म उपयोगकर्ताओं और उनकी पहुंच का प्रबंधन करें",
+    "loadError": "उपयोगकर्ता लोड नहीं हो सके",
+    "searchPlaceholder": "नाम, ईमेल या फ़ोन से खोजें...",
+    "filters": {
+      "allRoles": "सभी भूमिकाएं",
+      "allStatus": "सभी स्थितियां"
+    },
+    "roles": {
+      "admin": "एडमिन",
+      "doctor": "डॉक्टर",
+      "patient": "मरीज़"
+    },
+    "status": {
+      "active": "सक्रिय",
+      "inactive": "निष्क्रिय"
+    },
+    "table": {
+      "name": "नाम",
+      "email": "ईमेल",
+      "phone": "फ़ोन",
+      "role": "भूमिका",
+      "status": "स्थिति",
+      "joined": "जुड़ने की तारीख"
+    },
+    "empty": "कोई उपयोगकर्ता नहीं मिला",
+    "view": "देखें"
+  },
+  "adminDoctors": {
+    "breadcrumb": "डॉक्टर",
+    "title": "डॉक्टर",
+    "subtitle": "डॉक्टर प्रोफ़ाइल और जानकारी का प्रबंधन करें",
+    "loadError": "डॉक्टर लोड नहीं हो सके",
+    "pendingButton": "लंबित डॉक्टर",
+    "searchPlaceholder": "नाम, आईडी या स्पेशलिटी से खोजें...",
+    "allSpecialties": "सभी स्पेशलिटी",
+    "card": {
+      "experience": "अनुभव",
+      "experienceYears": "{count, plural, one {# वर्ष} other {# वर्ष}}",
+      "appointments": "अपॉइंटमेंट"
+    },
+    "empty": "कोई डॉक्टर नहीं मिला",
+    "doctorsSuffix": "· {count} डॉक्टर",
+    "pending": {
+      "breadcrumbDoctors": "डॉक्टर",
+      "breadcrumbQueue": "सत्यापन कतार",
+      "title": "डॉक्टर सत्यापन कतार",
+      "subtitle": "लंबित डॉक्टर पंजीकरणों की समीक्षा और स्वीकृति करें",
+      "pendingBadge": "{count} लंबित",
+      "searchPlaceholder": "नाम, ईमेल या लाइसेंस से खोजें...",
+      "loadError": "लंबित डॉक्टर लोड नहीं हो सके",
+      "emptyTitle": "सब कुछ पूरा!",
+      "emptyHint": "कोई लंबित डॉक्टर सत्यापन नहीं।",
+      "table": {
+        "doctor": "डॉक्टर",
+        "specialization": "स्पेशलाइज़ेशन",
+        "license": "लाइसेंस",
+        "facility": "सुविधा",
+        "registered": "पंजीकृत",
+        "actions": "कार्रवाई"
+      },
+      "viewDocument": "दस्तावेज़ देखें",
+      "view": "देखें",
+      "approve": "स्वीकृत करें",
+      "reject": "अस्वीकार करें",
+      "showingPending": "{total} लंबित डॉक्टरों में से {start}–{end} दिखाया जा रहा है",
+      "modal": {
+        "approveTitle": "डॉक्टर स्वीकृत करें",
+        "rejectTitle": "डॉक्टर अस्वीकार करें",
+        "approveBody": "{name} का सत्यापन स्वीकृत करें? उन्हें सूचित किया जाएगा और वे मरीज़ देखना शुरू कर सकते हैं।",
+        "rejectBody": "{name} का सत्यापन अस्वीकार करें? कृपया कारण बताएं ताकि वे समस्या ठीक कर सकें।",
+        "noteLabel": "नोट (वैकल्पिक)",
+        "reasonLabel": "अस्वीकार का कारण",
+        "notePlaceholder": "स्वागत नोट जोड़ें...",
+        "reasonPlaceholder": "बताएं कि क्या सुधारना है...",
+        "processing": "प्रोसेस हो रहा है..."
+      }
+    }
+  },
+  "adminAudit": {
+    "breadcrumbDashboard": "डैशबोर्ड",
+    "breadcrumb": "ऑडिट ट्रेल",
+    "title": "ऑडिट ट्रेल",
+    "subtitle": "सिस्टम में सभी डेटा परिवर्तनों का अपरिवर्तनीय लॉग",
+    "loadError": "ऑडिट लॉग लोड नहीं हो सके",
+    "tables": {
+      "all": "सभी टेबल",
+      "medical_records": "मेडिकल रिकॉर्ड",
+      "prescriptions": "प्रिस्क्रिप्शन",
+      "users": "उपयोगकर्ता",
+      "patient_clinic_links": "मरीज़-क्लीनिक लिंक"
+    },
+    "filters": {
+      "from": "से",
+      "to": "तक",
+      "searchUser": "उपयोगकर्ता नाम से खोजें...",
+      "filterRecord": "रिकॉर्ड आईडी से फ़िल्टर करें...",
+      "clear": "फ़िल्टर साफ़ करें"
+    },
+    "export": "CSV एक्सपोर्ट करें",
+    "exporting": "एक्सपोर्ट हो रहा है...",
+    "exportFailedTitle": "एक्सपोर्ट विफल",
+    "exportFailedBody": "ऑडिट लॉग CSV डाउनलोड नहीं हो सका। कृपया फिर प्रयास करें।",
+    "table": {
+      "when": "समय",
+      "action": "कार्रवाई",
+      "table": "टेबल",
+      "recordId": "रिकॉर्ड आईडी",
+      "changedBy": "किसने बदला",
+      "changes": "परिवर्तन"
+    },
+    "system": "सिस्टम",
+    "empty": "कोई ऑडिट लॉग नहीं मिला",
+    "time": {
+      "justNow": "अभी-अभी",
+      "minutesAgo": "{count} मिनट पहले",
+      "hoursAgo": "{count} घंटे पहले",
+      "daysAgo": "{count} दिन पहले"
+    },
+    "diff": {
+      "field": "फ़ील्ड",
+      "oldValue": "पुराना मान",
+      "newValue": "नया मान",
+      "noChanges": "इस कार्रवाई के लिए कोई फ़ील्ड-स्तरीय परिवर्तन दर्ज नहीं है।",
+      "added": "जोड़ा गया",
+      "removed": "हटाया गया",
+      "changed": "बदला गया",
+      "showMore": "और दिखाएं",
+      "showLess": "कम दिखाएं"
     }
   }
 }

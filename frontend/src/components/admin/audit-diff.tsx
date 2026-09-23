@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 
 export type DiffStatus = "added" | "removed" | "changed" | "unchanged";
@@ -97,6 +98,7 @@ function TruncatedValue({
   text: string;
   className?: string;
 }) {
+  const t = useTranslations("adminAudit.diff");
   const [expanded, setExpanded] = useState(false);
   const isLong = text.length > TRUNCATE_AT;
   return (
@@ -111,7 +113,7 @@ function TruncatedValue({
           }}
           className="ml-1.5 text-dreams-blue hover:underline whitespace-nowrap"
         >
-          {expanded ? "Show less" : "Show more"}
+          {expanded ? t("showLess") : t("showMore")}
         </button>
       )}
     </span>
@@ -125,10 +127,13 @@ const ROW_STYLES: Record<DiffStatus, string> = {
   unchanged: "",
 };
 
-const BADGE: Record<DiffStatus, { label: string; className: string } | null> = {
-  added: { label: "added", className: "bg-green-100 text-green-700" },
-  removed: { label: "removed", className: "bg-red-100 text-red-700" },
-  changed: { label: "changed", className: "bg-amber-100 text-amber-700" },
+const BADGE: Record<
+  DiffStatus,
+  { labelKey: "added" | "removed" | "changed"; className: string } | null
+> = {
+  added: { labelKey: "added", className: "bg-green-100 text-green-700" },
+  removed: { labelKey: "removed", className: "bg-red-100 text-red-700" },
+  changed: { labelKey: "changed", className: "bg-amber-100 text-amber-700" },
   unchanged: null,
 };
 
@@ -144,12 +149,13 @@ export function AuditDiff({
   oldValues: Record<string, unknown> | null;
   newValues: Record<string, unknown> | null;
 }) {
+  const t = useTranslations("adminAudit.diff");
   const rows = diffValues(oldValues, newValues);
 
   if (rows.length === 0) {
     return (
       <p className="text-xs text-dreams-textSecondary italic">
-        No field-level changes recorded for this action.
+        {t("noChanges")}
       </p>
     );
   }
@@ -160,13 +166,13 @@ export function AuditDiff({
         <thead className="bg-dreams-lightBg">
           <tr>
             <th className="px-3 py-2 text-left font-semibold text-dreams-textSecondary w-1/4">
-              Field
+              {t("field")}
             </th>
             <th className="px-3 py-2 text-left font-semibold text-dreams-textSecondary">
-              Old Value
+              {t("oldValue")}
             </th>
             <th className="px-3 py-2 text-left font-semibold text-dreams-textSecondary">
-              New Value
+              {t("newValue")}
             </th>
           </tr>
         </thead>
@@ -184,7 +190,7 @@ export function AuditDiff({
                     <span
                       className={`ml-2 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium font-sans ${badge.className}`}
                     >
-                      {badge.label}
+                      {t(badge.labelKey)}
                     </span>
                   )}
                 </td>

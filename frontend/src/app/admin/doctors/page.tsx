@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -10,6 +11,9 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
 export default function AdminDoctorsPage() {
+  const t = useTranslations("adminDoctors");
+  const tCommon = useTranslations("common");
+  const tPagination = useTranslations("pagination");
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [specialtyFilter, setSpecialtyFilter] = useState("all");
@@ -40,7 +44,7 @@ export default function AdminDoctorsPage() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <Breadcrumb items={[{ label: "Doctors" }]} />
+        <Breadcrumb items={[{ label: t("breadcrumb") }]} />
         <div className="flex items-center justify-between">
           <div>
             <div className="h-8 w-48 bg-gray-200 rounded animate-pulse" />
@@ -68,9 +72,9 @@ export default function AdminDoctorsPage() {
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center py-12 space-y-4">
-        <p className="text-red-600 font-medium">Failed to load doctors</p>
+        <p className="text-red-600 font-medium">{t("loadError")}</p>
         <p className="text-dreams-textSecondary text-sm">
-          {error instanceof Error ? error.message : "An error occurred"}
+          {error instanceof Error ? error.message : tCommon("errorGeneric")}
         </p>
       </div>
     );
@@ -79,16 +83,16 @@ export default function AdminDoctorsPage() {
   return (
     <div className="space-y-6">
       {/* Breadcrumb */}
-      <Breadcrumb items={[{ label: "Doctors" }]} />
+      <Breadcrumb items={[{ label: t("breadcrumb") }]} />
 
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-dreams-textPrimary">
-            Doctors
+            {t("title")}
           </h1>
           <p className="text-dreams-textSecondary mt-1">
-            Manage doctor profiles and information
+            {t("subtitle")}
           </p>
         </div>
 
@@ -97,7 +101,7 @@ export default function AdminDoctorsPage() {
           className="flex items-center gap-2 px-4 py-2 bg-dreams-blue text-white rounded-lg hover:opacity-90 transition-opacity"
         >
           <Plus className="h-5 w-5" />
-          <span>Pending Doctors</span>
+          <span>{t("pendingButton")}</span>
         </button>
       </div>
 
@@ -108,7 +112,7 @@ export default function AdminDoctorsPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Search by name, ID, or specialty..."
+            placeholder={t("searchPlaceholder")}
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
@@ -127,7 +131,7 @@ export default function AdminDoctorsPage() {
           }}
           className="h-10 w-full sm:w-auto px-4 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
         >
-          <option value="all">All Specialties</option>
+          <option value="all">{t("allSpecialties")}</option>
           {specialties?.map((specialty) => (
             <option key={specialty} value={specialty}>
               {specialty}
@@ -178,11 +182,11 @@ export default function AdminDoctorsPage() {
                   <div className="flex items-center justify-center gap-1 mb-1">
                     <Briefcase className="h-3 w-3 text-dreams-textSecondary" />
                     <p className="text-xs text-dreams-textSecondary">
-                      Experience
+                      {t("card.experience")}
                     </p>
                   </div>
                   <p className="text-sm font-bold text-dreams-textPrimary">
-                    {doctor.experience} years
+                    {t("card.experienceYears", { count: doctor.experience ?? 0 })}
                   </p>
                 </div>
 
@@ -190,7 +194,7 @@ export default function AdminDoctorsPage() {
                   <div className="flex items-center justify-center gap-1 mb-1">
                     <Calendar className="h-3 w-3 text-dreams-textSecondary" />
                     <p className="text-xs text-dreams-textSecondary">
-                      Appointments
+                      {t("card.appointments")}
                     </p>
                   </div>
                   <p className="text-sm font-bold text-dreams-textPrimary">
@@ -219,7 +223,7 @@ export default function AdminDoctorsPage() {
           ))
         ) : (
           <div className="col-span-full text-center py-12">
-            <p className="text-dreams-textSecondary">No doctors found</p>
+            <p className="text-dreams-textSecondary">{t("empty")}</p>
           </div>
         )}
       </div>
@@ -228,7 +232,8 @@ export default function AdminDoctorsPage() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-dreams-textSecondary">
-            Page {page} of {totalPages} · {data?.total ?? 0} doctors
+            {tPagination("pageOf", { page, totalPages })}{" "}
+            {t("doctorsSuffix", { count: data?.total ?? 0 })}
           </p>
           <div className="flex gap-2">
             <button
@@ -236,14 +241,14 @@ export default function AdminDoctorsPage() {
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               className="px-4 py-2 text-sm rounded-lg border border-dreams-border bg-white disabled:opacity-40 hover:bg-dreams-lightBg transition-colors"
             >
-              Previous
+              {tPagination("previous")}
             </button>
             <button
               disabled={page >= totalPages}
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               className="px-4 py-2 text-sm rounded-lg border border-dreams-border bg-white disabled:opacity-40 hover:bg-dreams-lightBg transition-colors"
             >
-              Next
+              {tPagination("next")}
             </button>
           </div>
         </div>
