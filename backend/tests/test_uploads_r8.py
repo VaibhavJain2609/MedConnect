@@ -22,6 +22,7 @@ NOTE: pydantic presign-validation failures return 422 with FastAPI's default
 """
 
 import uuid
+from datetime import datetime, timedelta, timezone
 
 import pytest
 import pytest_asyncio
@@ -34,7 +35,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import app.models.reminder_log  # noqa: F401
 from app.config import settings
 from app.models.audit import AuditLog
+from app.models.clinic import Clinic, ClinicMembership
+from app.models.doctor import Doctor
 from app.models.medical_record import MedicalRecord
+from app.models.patient_link import PatientClinicLink
 from app.models.platform_setting import PlatformSetting
 from app.models.user import User
 from tests.conftest import make_auth_header
@@ -390,8 +394,6 @@ class TestServeAuthorization:
         self, client, db, patient_client, patient_user, uploads_dir
     ):
         """A doctor with no relationship to the record's patient is denied."""
-        from app.models.doctor import Doctor
-
         key = await _presign(patient_client, "labs.pdf", "application/pdf")
         await patient_client.put(f"/api/v1/uploads/{key}", content=PDF_BYTES)
 
@@ -439,3 +441,273 @@ class TestServeAuthorization:
         resp = await admin_client.get(f"/api/v1/uploads/{uuid.uuid4()}/none.png")
         assert resp.status_code == 404
         assert resp.json()["error"]["code"] == "NOT_FOUND"
+
+
+# ---------------------------------------------------------------------------
+# GET authorization — PHI access matrix (r15 regression tests)
+# ---------------------------------------------------------------------------
+
+
+async def _clinic_with_doctor(
+    db: AsyncSession, doctor_user: User
+) -> tuple[Clinic, ClinicMembership]:
+    """A clinic where ``doctor_user`` holds an active membership."""
+    clinic = Clinic(
+        id=uuid.uuid4(),
+        name="Authz Clinic",
+        city="Mumbai",
+        created_by=doctor_user.id,
+    )
+    db.add(clinic)
+    await db.flush()
+    membership = ClinicMembership(
+        id=uuid.uuid4(),
+        clinic_id=clinic.id,
+        user_id=doctor_user.id,
+        role="doctor",
+        is_active=True,
+    )
+    db.add(membership)
+    await db.commit()
+    return clinic, membership
+
+
+async def _patient_link(
+    db: AsyncSession,
+    clinic: Clinic,
+    patient_id,
+    linked_by,
+    consent_status: str,
+    revoked_at=None,
+) -> PatientClinicLink:
+    link = PatientClinicLink(
+        id=uuid.uuid4(),
+        patient_id=patient_id,
+        clinic_id=clinic.id,
+        linked_by=linked_by,
+        consent_status=consent_status,
+        consented_at=datetime.now(timezone.utc),
+        revoked_at=revoked_at,
+    )
+    db.add(link)
+    await db.commit()
+    return link
+
+
+class TestServeAccessMatrix:
+    """Regression coverage for the download authorization matrix on
+    GET /api/v1/uploads/{key}: unauthenticated 401, cross-patient 403,
+    consented doctor 200, revoked-consent doctor 403/200 by revoked_at."""
+
+    async def test_unauthenticated_get_401(self, client, patient_user, uploads_dir):
+        """No Bearer token → 401 before any object lookup, even for a file
+        that exists on disk."""
+        # Per-request headers only: the shared client's default headers stay
+        # unauthenticated (patient_client would set a default Authorization).
+        patient_auth = make_auth_header(patient_user)
+        key = await _presign_with(client, patient_auth, "phi.png", "image/png")
+        put = await client.put(
+            f"/api/v1/uploads/{key}", content=PNG_BYTES, headers=patient_auth
+        )
+        assert put.status_code == 200
+
+        resp = await client.get(f"/api/v1/uploads/{key}")
+        assert resp.status_code == 401
+
+    async def test_patient_cannot_read_other_patients_record_file(
+        self, client, db, patient_client, patient_user, uploads_dir
+    ):
+        """Even when a MedicalRecord references the key, a different patient
+        gets 403 — record-ownership is checked, not just key knowledge."""
+        key = await _presign(patient_client, "labs.pdf", "application/pdf")
+        put = await patient_client.put(f"/api/v1/uploads/{key}", content=PDF_BYTES)
+        assert put.status_code == 200
+        db.add(
+            MedicalRecord(
+                id=uuid.uuid4(),
+                patient_id=patient_user.id,
+                record_type="lab_report",
+                title="Patient A labs",
+                document_url=key,
+            )
+        )
+        await db.commit()
+
+        _, other_auth = await _make_patient(db, "patient-b@test.com")
+        resp = await client.get(f"/api/v1/uploads/{key}", headers=other_auth)
+        assert resp.status_code == 403
+        assert resp.json()["error"]["code"] == "FORBIDDEN"
+
+    async def test_patient_reads_doctor_uploaded_record_file(
+        self, client, db, doctor_user, doctor_profile, patient_user, uploads_dir
+    ):
+        """A file uploaded by a doctor and referenced by the patient's record
+        is readable by that patient (record ownership, not upload ownership)."""
+        doctor_auth = make_auth_header(doctor_user, roles=["doctor"])
+        key = await _presign_with(client, doctor_auth, "imaging.pdf", "application/pdf")
+        put = await client.put(
+            f"/api/v1/uploads/{key}", content=PDF_BYTES, headers=doctor_auth
+        )
+        assert put.status_code == 200
+        db.add(
+            MedicalRecord(
+                id=uuid.uuid4(),
+                patient_id=patient_user.id,
+                doctor_id=doctor_profile.id,
+                record_type="imaging",
+                title="X-ray",
+                document_url=key,
+            )
+        )
+        await db.commit()
+
+        resp = await client.get(
+            f"/api/v1/uploads/{key}", headers=make_auth_header(patient_user)
+        )
+        assert resp.status_code == 200
+        assert resp.content == PDF_BYTES
+
+    async def test_doctor_reads_file_via_approved_clinic_link(
+        self, client, db, doctor_user, doctor_profile, patient_user, uploads_dir
+    ):
+        """A doctor with an active membership at a clinic holding an
+        APPROVED PatientClinicLink for the record's patient may download —
+        even though the doctor did not author the record."""
+        patient_auth = make_auth_header(patient_user)
+        key = await _presign_with(client, patient_auth, "labs.pdf", "application/pdf")
+        put = await client.put(
+            f"/api/v1/uploads/{key}", content=PDF_BYTES, headers=patient_auth
+        )
+        assert put.status_code == 200
+
+        clinic, _ = await _clinic_with_doctor(db, doctor_user)
+        await _patient_link(
+            db, clinic, patient_user.id, doctor_user.id, "approved"
+        )
+        # Patient-uploaded record — NOT authored by this doctor, so only the
+        # clinic-link path can grant access.
+        db.add(
+            MedicalRecord(
+                id=uuid.uuid4(),
+                patient_id=patient_user.id,
+                record_type="lab_report",
+                title="Self-uploaded labs",
+                source="patient_uploaded",
+                document_url=key,
+            )
+        )
+        await db.commit()
+
+        resp = await client.get(
+            f"/api/v1/uploads/{key}",
+            headers=make_auth_header(doctor_user, roles=["doctor"]),
+        )
+        assert resp.status_code == 200
+        assert resp.content == PDF_BYTES
+
+    async def test_revoked_consent_doctor_denied_for_new_record(
+        self, client, db, doctor_user, doctor_profile, patient_user, uploads_dir
+    ):
+        """Revoked consent only preserves reads of records created at or
+        before revoked_at. A record created after revocation → 403."""
+        patient_auth = make_auth_header(patient_user)
+        key = await _presign_with(client, patient_auth, "new-labs.pdf", "application/pdf")
+        put = await client.put(
+            f"/api/v1/uploads/{key}", content=PDF_BYTES, headers=patient_auth
+        )
+        assert put.status_code == 200
+
+        clinic, _ = await _clinic_with_doctor(db, doctor_user)
+        await _patient_link(
+            db, clinic, patient_user.id, doctor_user.id,
+            "revoked", revoked_at=datetime.now(timezone.utc) - timedelta(days=1),
+        )
+        db.add(
+            MedicalRecord(
+                id=uuid.uuid4(),
+                patient_id=patient_user.id,
+                record_type="lab_report",
+                title="Post-revocation labs",
+                source="patient_uploaded",
+                document_url=key,
+            )
+        )
+        await db.commit()
+
+        resp = await client.get(
+            f"/api/v1/uploads/{key}",
+            headers=make_auth_header(doctor_user, roles=["doctor"]),
+        )
+        assert resp.status_code == 403
+        assert resp.json()["error"]["code"] == "FORBIDDEN"
+
+    async def test_revoked_consent_doctor_reads_pre_revocation_record(
+        self, client, db, doctor_user, doctor_profile, patient_user, uploads_dir
+    ):
+        """The revoked-link extension: records created at/before revoked_at
+        stay readable (clinical continuity), so this download is 200."""
+        patient_auth = make_auth_header(patient_user)
+        key = await _presign_with(client, patient_auth, "old-labs.pdf", "application/pdf")
+        put = await client.put(
+            f"/api/v1/uploads/{key}", content=PDF_BYTES, headers=patient_auth
+        )
+        assert put.status_code == 200
+
+        clinic, _ = await _clinic_with_doctor(db, doctor_user)
+        await _patient_link(
+            db, clinic, patient_user.id, doctor_user.id,
+            "revoked", revoked_at=datetime.now(timezone.utc),
+        )
+        # created_at explicitly set BEFORE the revocation timestamp.
+        db.add(
+            MedicalRecord(
+                id=uuid.uuid4(),
+                patient_id=patient_user.id,
+                record_type="lab_report",
+                title="Pre-revocation labs",
+                source="patient_uploaded",
+                document_url=key,
+                created_at=datetime.now(timezone.utc) - timedelta(days=2),
+            )
+        )
+        await db.commit()
+
+        resp = await client.get(
+            f"/api/v1/uploads/{key}",
+            headers=make_auth_header(doctor_user, roles=["doctor"]),
+        )
+        assert resp.status_code == 200
+        assert resp.content == PDF_BYTES
+
+    async def test_pending_consent_doctor_denied(
+        self, client, db, doctor_user, doctor_profile, patient_user, uploads_dir
+    ):
+        """A pending (never-approved) link grants nothing — 403."""
+        patient_auth = make_auth_header(patient_user)
+        key = await _presign_with(client, patient_auth, "pending.pdf", "application/pdf")
+        put = await client.put(
+            f"/api/v1/uploads/{key}", content=PDF_BYTES, headers=patient_auth
+        )
+        assert put.status_code == 200
+
+        clinic, _ = await _clinic_with_doctor(db, doctor_user)
+        await _patient_link(
+            db, clinic, patient_user.id, doctor_user.id, "pending"
+        )
+        db.add(
+            MedicalRecord(
+                id=uuid.uuid4(),
+                patient_id=patient_user.id,
+                record_type="lab_report",
+                title="Labs",
+                source="patient_uploaded",
+                document_url=key,
+            )
+        )
+        await db.commit()
+
+        resp = await client.get(
+            f"/api/v1/uploads/{key}",
+            headers=make_auth_header(doctor_user, roles=["doctor"]),
+        )
+        assert resp.status_code == 403
