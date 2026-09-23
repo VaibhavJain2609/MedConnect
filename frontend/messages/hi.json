@@ -1034,5 +1034,36 @@
       "loadFailed": "ऑडिट लॉग लोड करने में विफल",
       "generic": "एक त्रुटि हुई"
     }
+  },
+  "catalogImport": {
+    "title": "दवा सूची आयात करें",
+    "subtitle": "ब्रांड और पैक पंक्तियों को थोक में आयात करने के लिए CSV फ़ाइल अपलोड करें",
+    "backToMedicines": "दवाओं पर वापस जाएं",
+    "downloadTemplate": "CSV टेम्पलेट डाउनलोड करें",
+    "uploadTitle": "CSV फ़ाइल अपलोड करें",
+    "uploadDescription": "कॉलम: brand_name, manufacturer_name, salt_name, strength_value, strength_unit, pack_form_name, pack_type, quantity, barcode, mrp_paise",
+    "chooseFile": "फ़ाइल चुनें",
+    "validating": "सत्यापन हो रहा है…",
+    "previewTitle": "ड्राय-रन पूर्वावलोकन",
+    "resultsTitle": "आयात परिणाम",
+    "summary": "कुल {total} · बनाई गई {created} · अपडेट {updated} · छोड़ी गई {skipped} · त्रुटियाँ {errors}",
+    "confirmImport": "आयात की पुष्टि करें",
+    "importing": "आयात हो रहा है…",
+    "importComplete": "आयात पूर्ण",
+    "importFailed": "आयात विफल",
+    "previewFailed": "सत्यापन विफल",
+    "invalidFile": "कृपया .csv फ़ाइल चुनें",
+    "goToMedicines": "दवा सूची पर जाएं",
+    "colRow": "पंक्ति",
+    "colBrand": "ब्रांड",
+    "colStatus": "स्थिति",
+    "colMessage": "संदेश",
+    "status": {
+      "created": "नया",
+      "updated": "अपडेट",
+      "skipped": "कोई बदलाव नहीं",
+      "error": "त्रुटि"
+    },
+    "importButton": "CSV आयात करें"
   }
 }

@@ -1034,5 +1034,36 @@
       "loadFailed": "Failed to load audit logs",
       "generic": "An error occurred"
     }
+  },
+  "catalogImport": {
+    "title": "Import Medicine Catalog",
+    "subtitle": "Upload a CSV file to bulk-import brands and pack rows",
+    "backToMedicines": "Back to Medicines",
+    "downloadTemplate": "Download CSV template",
+    "uploadTitle": "Upload CSV file",
+    "uploadDescription": "Columns: brand_name, manufacturer_name, salt_name, strength_value, strength_unit, pack_form_name, pack_type, quantity, barcode, mrp_paise",
+    "chooseFile": "Choose file",
+    "validating": "Validating…",
+    "previewTitle": "Dry-run preview",
+    "resultsTitle": "Import results",
+    "summary": "Total {total} · Created {created} · Updated {updated} · Skipped {skipped} · Errors {errors}",
+    "confirmImport": "Confirm import",
+    "importing": "Importing…",
+    "importComplete": "Import complete",
+    "importFailed": "Import failed",
+    "previewFailed": "Validation failed",
+    "invalidFile": "Please choose a .csv file",
+    "goToMedicines": "Go to medicines list",
+    "colRow": "Row",
+    "colBrand": "Brand",
+    "colStatus": "Status",
+    "colMessage": "Message",
+    "status": {
+      "created": "Create",
+      "updated": "Update",
+      "skipped": "No change",
+      "error": "Error"
+    },
+    "importButton": "Import CSV"
   }
 }

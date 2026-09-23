@@ -101,6 +101,7 @@ All active routers in `backend/app/routers/`:
 | `medicines_emr.py` | `/api/v1` | — |
 | `interactions.py` | `/api/v1` | — |
 | `admin/brands.py`, `admin/manufacturers.py`, `admin/salts.py` | `/api/v1` | `require_admin` |
+| `admin/catalog.py` | `/api/v1` | `require_admin` |
 | `admin/stats.py`, `admin/users.py`, `admin/clinics.py`, `admin/doctors.py`, `admin/audit.py`, `admin/lab_results.py` | (own prefixes) | `require_admin` |
 
 **Removed:** `admin/medicines.py` and `admin/components.py` were deleted — they queried the `medicines`/`components`/`medicine_components` tables dropped by migration `8e7b`, so every endpoint 500'd. The unmounted legacy `routers/medicines.py` and `routers/prescriptions.py` were deleted along with their sole consumers (`services/medicine_service.py`, `services/component_service.py`, `services/pdf_service.py`, `services/template_service.py`).
