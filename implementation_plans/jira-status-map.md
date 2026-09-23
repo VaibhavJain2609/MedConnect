@@ -161,7 +161,14 @@
   - Bulk catalog import — POST /admin/catalog/import CSV (dry-run, per-row SAVEPOINT, idempotent upserts, 13 tests) + import UI
   - Audit retention — audit_log_archive table + daily 09:00 worker (1k-row batches, 100k/run cap) + archived endpoint + Archive tab
   - Prescription safety checks — prescription_safety_checks snapshot per rx (alerts+override_reason) + GET endpoint + detail page
-- **Round-14 queue:** ABDM (BLOCKED), real LLM-OCR provider when creds exist, first real e2e CI run (@auth specs), remaining admin page i18n, medicine_import_sample.csv cleanup, doctor availability UX
+- **Round-14 — IN PROGRESS (5 of 8 landed):**
+  - OpenAPI drift gate — schema.d.ts regenerated (was ~1,885 lines stale), `make check-api-types` + CI wiring; fixed Makefile venv-path bug (482154f, dcd3152)
+  - Doctor leave — i18n `DoctorLeavesCard` extracted from schedule page + CRUD/slot-exclusion tests (8b999fc)
+  - Smoke test tier — `pytest -m smoke` (38 tests) + Makefile target; verified post-schema-reset (4fb7331, a84c028)
+  - 429 rate-limit UX — typed RateLimitError, Retry-After surfacing, single GET auto-retry, deduped localized toast (c67fd7e)
+  - Doctor availability UX — clinic/branch-scoped windows, clinic timezone display, 7-day slot preview; merged keeping extracted DoctorLeavesCard (7048089→54ebf89)
+  - In flight: admin-i18n-2 (remaining admin pages), encounter-followups (linked appt, idempotent), idempotency (Idempotency-Key on risky POSTs)
+- **Round-14 queue:** ABDM (BLOCKED), real LLM-OCR provider when creds exist, first real e2e CI run (@auth specs), medicine_import_sample.csv cleanup
 - **BLOCKED — ABDM/ABHA: awaiting regulatory approval (user-confirmed)** — do not implement: ABHA creation/linking, NRCeS-conformant FHIR, HIP module (tickets 107–116)
 - **Blocked/external:** SMS/WhatsApp live provider accounts (code adapters anyway), OCR/AI features, load testing env, i18n assets, barcode data source, push VAPID/service
 
