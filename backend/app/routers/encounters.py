@@ -6,13 +6,15 @@ GET    /api/v1/encounters        — list (doctor: own, patient: own, admin: all
 GET    /api/v1/encounters/{id}   — read (author, patient owner, clinic admin, admin)
 PATCH  /api/v1/encounters/{id}   — update (authoring doctor only)
 DELETE /api/v1/encounters/{id}   — soft delete (author or admin)
+POST   /api/v1/encounters/{id}/follow-up — book follow-up appointment (idempotent)
 """
 import uuid
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -22,7 +24,22 @@ from app.models.clinic import Clinic, ClinicMembership
 from app.models.doctor import Doctor
 from app.models.encounter import Encounter
 from app.models.user import User
-from app.schemas.encounter import EncounterCreate, EncounterResponse, EncounterUpdate
+from app.routers.appointments import (
+    VALID_TYPES,
+    _check_doctor_conflict,
+    _check_patient_clinic_conflict,
+    _emit_appointment_webhook,
+    _enqueue_appointment_reminders,
+    _ensure_meeting_url,
+    _ensure_not_in_past,
+    _load_appointment_with_names,
+)
+from app.schemas.encounter import (
+    EncounterCreate,
+    EncounterResponse,
+    EncounterUpdate,
+    FollowUpCreate,
+)
 from app.services import access_service
 
 router = APIRouter(prefix="/api/v1/encounters", tags=["encounters"])
@@ -30,11 +47,26 @@ router = APIRouter(prefix="/api/v1/encounters", tags=["encounters"])
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
+def _serialize_follow_up(appt: Appointment | None) -> dict | None:
+    """Compact view of the follow-up appointment booked from an encounter."""
+    if appt is None:
+        return None
+    return {
+        "id": str(appt.id),
+        "scheduled_at": appt.scheduled_at.isoformat(),
+        "duration_minutes": appt.duration_minutes,
+        "type": appt.type,
+        "status": appt.status,
+        "notes": appt.notes,
+    }
+
+
 def _serialize_encounter(
     enc: Encounter,
     patient_name: str | None = None,
     doctor_name: str | None = None,
     clinic_name: str | None = None,
+    follow_up: Appointment | None = None,
 ) -> dict:
     return {
         "id": str(enc.id),
@@ -50,6 +82,7 @@ def _serialize_encounter(
         "assessment": enc.assessment,
         "plan": enc.plan,
         "vitals_snapshot": enc.vitals_snapshot,
+        "follow_up": _serialize_follow_up(follow_up),
         "created_at": enc.created_at.isoformat(),
         "updated_at": enc.updated_at.isoformat(),
     }
@@ -79,7 +112,22 @@ async def _load_encounter_with_names(db: AsyncSession, enc: Encounter) -> dict:
         )
         clinic_name = clinic_res.scalar_one_or_none()
 
-    return _serialize_encounter(enc, patient_name, doctor_name, clinic_name)
+    follow_up = await _get_follow_up_appointment(db, enc.id)
+
+    return _serialize_encounter(enc, patient_name, doctor_name, clinic_name, follow_up)
+
+
+async def _get_follow_up_appointment(
+    db: AsyncSession, encounter_id: UUID
+) -> Appointment | None:
+    """The live follow-up appointment booked from this encounter, if any."""
+    res = await db.execute(
+        select(Appointment).where(
+            Appointment.source_encounter_id == encounter_id,
+            Appointment.deleted_at.is_(None),
+        )
+    )
+    return res.scalar_one_or_none()
 
 
 async def _load_encounters_with_names(
@@ -112,12 +160,22 @@ async def _load_encounters_with_names(
         )
         clinic_names = {cid: name for cid, name in clinics_res.all()}
 
+    enc_ids = {e.id for e in encounters}
+    follow_ups_res = await db.execute(
+        select(Appointment).where(
+            Appointment.source_encounter_id.in_(enc_ids),
+            Appointment.deleted_at.is_(None),
+        )
+    )
+    follow_ups = {a.source_encounter_id: a for a in follow_ups_res.scalars().all()}
+
     return [
         _serialize_encounter(
             e,
             patient_names.get(e.patient_id),
             doctor_names.get(e.doctor_id),
             clinic_names.get(e.clinic_id),
+            follow_ups.get(e.id),
         )
         for e in encounters
     ]
@@ -184,6 +242,25 @@ async def _is_clinic_admin_for_encounter(
             ClinicMembership.clinic_id == enc.clinic_id,
             ClinicMembership.user_id == user.id,
             ClinicMembership.role.in_(["owner", "admin"]),
+            ClinicMembership.is_active.is_(True),
+            ClinicMembership.deleted_at.is_(None),
+        )
+    )
+    return res.scalar_one_or_none() is not None
+
+
+async def _is_clinic_member_for_encounter(
+    db: AsyncSession,
+    user: User,
+    enc: Encounter,
+) -> bool:
+    """True if the user holds ANY active membership on the encounter's clinic."""
+    if enc.clinic_id is None:
+        return False
+    res = await db.execute(
+        select(ClinicMembership.id).where(
+            ClinicMembership.clinic_id == enc.clinic_id,
+            ClinicMembership.user_id == user.id,
             ClinicMembership.is_active.is_(True),
             ClinicMembership.deleted_at.is_(None),
         )
@@ -556,3 +633,121 @@ async def delete_encounter(
         new_values={"deleted": True},
     )
     await db.flush()
+
+
+@router.post("/{encounter_id}/follow-up", status_code=status.HTTP_201_CREATED)
+async def create_encounter_follow_up(
+    encounter_id: UUID,
+    req: FollowUpCreate,
+    response: Response,
+    doctor_info: tuple[User, Doctor] = Depends(get_verified_doctor),
+    db: AsyncSession = Depends(get_db),
+):
+    """Book a follow-up appointment from an encounter.
+
+    Creates a ``scheduled`` Appointment for the encounter's patient with the
+    encounter's doctor (and clinic, when set), linked back via
+    ``appointments.source_encounter_id``.
+
+    Allowed: the authoring doctor or any active member of the encounter's
+    clinic (callers are always verified doctors via the dependency).
+
+    Idempotent: a live follow-up appointment already linked to this
+    encounter is returned unchanged with 200 — repeat submissions and
+    double-clicks never create duplicates.
+    """
+    user, doctor = doctor_info
+
+    result = await db.execute(
+        select(Encounter).where(
+            Encounter.id == encounter_id, Encounter.deleted_at.is_(None)
+        )
+    )
+    enc = result.scalar_one_or_none()
+    if enc is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "NOT_FOUND", "message": "Encounter not found"}},
+        )
+
+    if enc.doctor_id != doctor.id and not await _is_clinic_member_for_encounter(
+        db, user, enc
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": {
+                    "code": "FORBIDDEN",
+                    "message": "Only the authoring doctor or a member of the encounter's clinic can schedule a follow-up",
+                }
+            },
+        )
+
+    existing = await _get_follow_up_appointment(db, enc.id)
+    if existing is not None:
+        response.status_code = status.HTTP_200_OK
+        return await _load_appointment_with_names(db, existing)
+
+    if req.type not in VALID_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": {
+                    "code": "INVALID_TYPE",
+                    "message": f"type must be one of: {', '.join(sorted(VALID_TYPES))}",
+                }
+            },
+        )
+
+    _ensure_not_in_past(req.scheduled_at)
+
+    # Same scheduling guards as POST /appointments — the follow-up books the
+    # slot on the encounter's doctor's calendar.
+    await _check_doctor_conflict(db, enc.doctor_id, req.scheduled_at, req.duration_minutes)
+    if enc.clinic_id:
+        await _check_patient_clinic_conflict(
+            db, enc.patient_id, enc.clinic_id, req.scheduled_at, req.duration_minutes
+        )
+
+    appt = Appointment(
+        id=uuid.uuid4(),
+        patient_id=enc.patient_id,
+        doctor_id=enc.doctor_id,
+        clinic_id=enc.clinic_id,
+        scheduled_at=req.scheduled_at,
+        duration_minutes=req.duration_minutes,
+        type=req.type,
+        status="scheduled",
+        notes=req.notes,
+        source_encounter_id=enc.id,
+        created_by=user.id,
+    )
+    _ensure_meeting_url(appt)
+    db.add(appt)
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        # A concurrent request may have won the uq_appointments_source_encounter
+        # race — return that row (idempotent). Otherwise the failure was the
+        # double-booking exclusion constraint.
+        existing = await _get_follow_up_appointment(db, enc.id)
+        if existing is not None:
+            response.status_code = status.HTTP_200_OK
+            return await _load_appointment_with_names(db, existing)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": {
+                    "code": "DOCTOR_UNAVAILABLE",
+                    "message": "Doctor has a conflicting appointment at this time",
+                }
+            },
+        )
+    await db.refresh(appt)
+
+    # Reminders + outbound webhook — same side-effects as POST /appointments.
+    await _enqueue_appointment_reminders(appt)
+    await _emit_appointment_webhook(db, appt, "appointment.booked")
+
+    return await _load_appointment_with_names(db, appt)

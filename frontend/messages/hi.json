@@ -1140,5 +1140,21 @@
       "error": "त्रुटि"
     },
     "importButton": "CSV आयात करें"
+  },
+  "followUp": {
+    "schedule": "फ़ॉलो-अप शेड्यूल करें",
+    "scheduledTitle": "फ़ॉलो-अप अपॉइंटमेंट",
+    "minutesSuffix": " मिनट",
+    "title": "फ़ॉलो-अप शेड्यूल करें",
+    "date": "तारीख *",
+    "time": "समय *",
+    "duration": "अवधि",
+    "durationOption": "{count} मिनट",
+    "notes": "नोट्स",
+    "notesPlaceholder": "जैसे, रक्त रिपोर्ट की समीक्षा, BP दोबारा जांचें",
+    "submit": "शेड्यूल करें",
+    "scheduling": "शेड्यूल हो रहा है…",
+    "errorSelectDateTime": "कृपया तारीख और समय चुनें",
+    "errorFailed": "फ़ॉलो-अप शेड्यूल नहीं हो सका। कृपया पुनः प्रयास करें।"
   }
 }
