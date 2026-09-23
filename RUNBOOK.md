@@ -342,6 +342,12 @@ root `.env` — never commit it; `.env.example` ships `CHANGE_ME` placeholders):
 - `RATE_LIMIT_USER_PER_MINUTE`, `JITSI_BASE_URL`, `DB_TRANSACTION_POOLING`.
 - Notification channels — `SMTP_*`, `MSG91_*`, `WHATSAPP_*`, `VAPID_*`;
   unset = channel skipped with a logged `channel_unavailable`.
+- Comm provider layer (`services/comms`) — `SMS_ENABLED` /
+  `WHATSAPP_ENABLED` (both default `false`) route the sms/whatsapp
+  channels through `get_comm_provider()` instead of the legacy
+  MSG91/Meta adapters. Set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`,
+  `TWILIO_FROM_NUMBER`, and `TWILIO_WHATSAPP_FROM` to go live on Twilio;
+  flags off or creds absent = `NullProvider` (attempts logged + skipped).
 - `OCR_*` — only when enabling lab ingest (§9).
 
 ## 11. Outbound clinic webhooks (optional, off by default)

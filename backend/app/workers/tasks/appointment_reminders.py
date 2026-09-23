@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.appointment import Appointment
+from app.models.clinic import Clinic
 from app.models.doctor import Doctor
 from app.models.notification import Notification, NotificationType
 from app.models.reminder_log import ReminderLog
@@ -27,6 +28,18 @@ logger = structlog.get_logger()
 # TODO: render times in the clinic's own timezone once the Clinic model
 # exposes one; until then all reminder times use Asia/Kolkata (IST).
 CLINIC_TZ = ZoneInfo("Asia/Kolkata")
+
+
+def comms_reminder_body(clinic_name: str | None, scheduled_local: str) -> str:
+    """
+    PHI-minimal body for sms/whatsapp channels — clinic name + time only.
+
+    SMS and WhatsApp messages transit third-party networks (carrier logs,
+    provider dashboards, lock-screen previews) so they must never carry
+    patient/doctor names, diagnoses, medicine names, or meeting URLs.
+    """
+    clinic = clinic_name or "your clinic"
+    return f"You have an appointment at {clinic} on {scheduled_local}."
 
 
 async def send_appointment_reminder(ctx: dict, appointment_id: str, hours_before: int) -> None:
@@ -150,6 +163,17 @@ async def _process_reminder(
 
     title = f"Appointment in {hours_before} hour(s)"
 
+    # PHI-minimal body for sms/whatsapp — the full `message` carries patient
+    # and doctor names (and possibly a meeting URL), none of which may leave
+    # the platform over carrier/third-party messaging channels.
+    clinic_name: str | None = None
+    if appt.clinic_id is not None:
+        clinic_name = (
+            await db.execute(select(Clinic.name).where(Clinic.id == appt.clinic_id))
+        ).scalar_one_or_none()
+    comms_body = comms_reminder_body(clinic_name, scheduled_local)
+    channel_bodies = {"sms": comms_body, "whatsapp": comms_body}
+
     # --- Patient: dispatch over every enabled channel -------------------
     channel_results = []
     if patient is None:
@@ -202,6 +226,7 @@ async def _process_reminder(
                 action_url="/patient/appointments",
                 metadata=notif_meta,
                 prefs=prefs,
+                channel_bodies=channel_bodies,
             )
 
     # In-app notification for the doctor (if resolvable) — doctors always get

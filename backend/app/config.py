@@ -105,6 +105,18 @@ class Settings(BaseSettings):
     WHATSAPP_BUSINESS_ACCOUNT_ID: str | None = None
     WHATSAPP_TEMPLATE_NAME: str | None = None  # approved template; required to send
     WHATSAPP_TEMPLATE_LANG: str = "en_US"
+    # Provider-agnostic comm layer (services/comms — CommProvider protocol
+    # with a Twilio reference implementation over httpx). Both flags default
+    # off: when set, the sms/whatsapp channel sends route through
+    # get_comm_provider() instead of the legacy single-provider adapters.
+    # With flags off or credentials absent the factory returns NullProvider
+    # and sends are logged + skipped — safe to leave untouched in any env.
+    SMS_ENABLED: bool = False
+    WHATSAPP_ENABLED: bool = False
+    TWILIO_ACCOUNT_SID: str | None = None
+    TWILIO_AUTH_TOKEN: str | None = None
+    TWILIO_FROM_NUMBER: str | None = None    # E.164 SMS sender
+    TWILIO_WHATSAPP_FROM: str | None = None  # E.164 WhatsApp-enabled sender
     # Web Push (services/providers/webpush.py — VAPID-signed requests via
     # pywebpush). Generate a keypair with `npx web-push generate-vapid-keys`;
     # never commit keys. All three must be set or the channel is skipped.
