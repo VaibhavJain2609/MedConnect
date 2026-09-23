@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Fragment, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ShieldCheck, Download, ChevronDown, ChevronRight } from "lucide-react";
@@ -11,12 +12,12 @@ import { Badge } from "@/components/ui/badge";
 import { AuditDiff } from "@/components/admin/audit-diff";
 
 const TABLE_OPTIONS = [
-  { value: "all", label: "All Tables" },
-  { value: "medical_records", label: "Medical Records" },
-  { value: "prescriptions", label: "Prescriptions" },
-  { value: "users", label: "Users" },
-  { value: "patient_clinic_links", label: "Patient Clinic Links" },
-];
+  { value: "all", labelKey: "all" },
+  { value: "medical_records", labelKey: "medical_records" },
+  { value: "prescriptions", labelKey: "prescriptions" },
+  { value: "users", labelKey: "users" },
+  { value: "patient_clinic_links", labelKey: "patient_clinic_links" },
+] as const;
 
 const ACTION_VARIANTS: Record<string, string> = {
   INSERT: "completed",
@@ -24,21 +25,7 @@ const ACTION_VARIANTS: Record<string, string> = {
   DELETE: "overdue",
 };
 
-function formatRelativeTime(isoString: string): string {
-  const date = new Date(isoString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffSec = Math.floor(diffMs / 1000);
-  const diffMin = Math.floor(diffSec / 60);
-  const diffHour = Math.floor(diffMin / 60);
-  const diffDay = Math.floor(diffHour / 24);
 
-  if (diffSec < 60) return "just now";
-  if (diffMin < 60) return `${diffMin}m ago`;
-  if (diffHour < 24) return `${diffHour}h ago`;
-  if (diffDay < 7) return `${diffDay}d ago`;
-  return date.toLocaleDateString();
-}
 
 interface AuditLogEntry {
   id: string;
@@ -63,6 +50,10 @@ interface AuditLogsResponse {
 }
 
 export default function AuditLogsPage() {
+  const t = useTranslations("adminAudit");
+  const tTime = useTranslations("adminAudit.time");
+  const tCommon = useTranslations("common");
+  const tPagination = useTranslations("pagination");
   const [tableFilter, setTableFilter] = useState("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -91,6 +82,22 @@ export default function AuditLogsPage() {
 
   // record_id is also filtered client-side as a fallback in case the API
   // does not support the record_id query param.
+  const formatRelativeTime = (isoString: string): string => {
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffSec = Math.floor(diffMs / 1000);
+    const diffMin = Math.floor(diffSec / 60);
+    const diffHour = Math.floor(diffMin / 60);
+    const diffDay = Math.floor(diffHour / 24);
+
+    if (diffSec < 60) return tTime("justNow");
+    if (diffMin < 60) return tTime("minutesAgo", { count: diffMin });
+    if (diffHour < 24) return tTime("hoursAgo", { count: diffHour });
+    if (diffDay < 7) return tTime("daysAgo", { count: diffDay });
+    return date.toLocaleDateString();
+  };
+
   const logs = (data?.data ?? []).filter(
     (log) =>
       !recordSearch ||
@@ -113,8 +120,8 @@ export default function AuditLogsPage() {
     } catch (err) {
       console.error("Audit log export failed:", err);
       toast({
-        title: "Export failed",
-        description: "Could not download the audit log CSV. Please try again.",
+        title: t("exportFailedTitle"),
+        description: t("exportFailedBody"),
         variant: "destructive",
       });
     } finally {
@@ -125,9 +132,9 @@ export default function AuditLogsPage() {
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center py-12 space-y-4">
-        <p className="text-red-600 font-medium">Failed to load audit logs</p>
+        <p className="text-red-600 font-medium">{t("loadError")}</p>
         <p className="text-dreams-textSecondary text-sm">
-          {error instanceof Error ? error.message : "An error occurred"}
+          {error instanceof Error ? error.message : tCommon("errorGeneric")}
         </p>
       </div>
     );
@@ -137,8 +144,8 @@ export default function AuditLogsPage() {
     <div className="space-y-6">
       <Breadcrumb
         items={[
-          { label: "Dashboard", href: "/admin/dashboard" },
-          { label: "Audit Trail" },
+          { label: t("breadcrumbDashboard"), href: "/admin/dashboard" },
+          { label: t("breadcrumb") },
         ]}
       />
 
@@ -146,9 +153,9 @@ export default function AuditLogsPage() {
         <div className="flex items-center gap-3">
           <ShieldCheck className="h-7 w-7 text-dreams-blue" />
           <div>
-            <h1 className="text-3xl font-bold text-dreams-textPrimary">Audit Trail</h1>
+            <h1 className="text-3xl font-bold text-dreams-textPrimary">{t("title")}</h1>
             <p className="text-dreams-textSecondary mt-0.5">
-              Immutable log of all data changes in the system
+              {t("subtitle")}
             </p>
           </div>
         </div>
@@ -166,13 +173,13 @@ export default function AuditLogsPage() {
         >
           {TABLE_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
-              {opt.label}
+              {t(`tables.${opt.labelKey}`)}
             </option>
           ))}
         </select>
 
         <div className="flex items-center gap-2">
-          <label className="text-sm text-dreams-textSecondary">From</label>
+          <label className="text-sm text-dreams-textSecondary">{t("filters.from")}</label>
           <input
             type="date"
             value={fromDate}
@@ -185,7 +192,7 @@ export default function AuditLogsPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <label className="text-sm text-dreams-textSecondary">To</label>
+          <label className="text-sm text-dreams-textSecondary">{t("filters.to")}</label>
           <input
             type="date"
             value={toDate}
@@ -199,7 +206,7 @@ export default function AuditLogsPage() {
 
         <input
           type="text"
-          placeholder="Search by user name..."
+          placeholder={t("filters.searchUser")}
           value={userSearch}
           onChange={(e) => {
             setUserSearch(e.target.value);
@@ -210,7 +217,7 @@ export default function AuditLogsPage() {
 
         <input
           type="text"
-          placeholder="Filter by record ID..."
+          placeholder={t("filters.filterRecord")}
           value={recordSearch}
           onChange={(e) => {
             setRecordSearch(e.target.value);
@@ -231,7 +238,7 @@ export default function AuditLogsPage() {
             }}
             className="h-10 px-3 rounded-lg border border-dreams-border bg-white text-sm text-dreams-textSecondary hover:bg-dreams-lightBg transition-colors"
           >
-            Clear filters
+            {t("filters.clear")}
           </button>
         )}
 
@@ -241,7 +248,7 @@ export default function AuditLogsPage() {
           className="flex items-center gap-2 h-10 px-4 rounded-lg border border-dreams-border bg-white text-sm font-medium text-dreams-textPrimary hover:bg-dreams-lightBg transition-colors disabled:opacity-50 ml-auto"
         >
           <Download className="h-4 w-4" />
-          {exporting ? "Exporting..." : "Export CSV"}
+          {exporting ? t("exporting") : t("export")}
         </button>
       </div>
 
@@ -257,22 +264,22 @@ export default function AuditLogsPage() {
               <tr>
                 <th className="w-8 px-2 py-3" />
                 <th className="px-5 py-3 text-left font-semibold text-dreams-textSecondary">
-                  When
+                  {t("table.when")}
                 </th>
                 <th className="px-5 py-3 text-left font-semibold text-dreams-textSecondary">
-                  Action
+                  {t("table.action")}
                 </th>
                 <th className="px-5 py-3 text-left font-semibold text-dreams-textSecondary">
-                  Table
+                  {t("table.table")}
                 </th>
                 <th className="px-5 py-3 text-left font-semibold text-dreams-textSecondary">
-                  Record ID
+                  {t("table.recordId")}
                 </th>
                 <th className="px-5 py-3 text-left font-semibold text-dreams-textSecondary">
-                  Changed By
+                  {t("table.changedBy")}
                 </th>
                 <th className="px-5 py-3 text-left font-semibold text-dreams-textSecondary">
-                  Changes
+                  {t("table.changes")}
                 </th>
               </tr>
             </thead>
@@ -283,7 +290,7 @@ export default function AuditLogsPage() {
                     colSpan={7}
                     className="px-5 py-12 text-center text-dreams-textSecondary"
                   >
-                    No audit logs found
+                    {t("empty")}
                   </td>
                 </tr>
               ) : (
@@ -323,7 +330,7 @@ export default function AuditLogsPage() {
                         </td>
                         <td className="px-5 py-3 text-dreams-textPrimary">
                           {log.changed_by_name ?? (
-                            <span className="text-dreams-textSecondary italic">System</span>
+                            <span className="text-dreams-textSecondary italic">{t("system")}</span>
                           )}
                         </td>
                         <td className="px-5 py-3 text-dreams-textSecondary text-xs max-w-xs truncate">
@@ -353,7 +360,8 @@ export default function AuditLogsPage() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-dreams-textSecondary">
-            Page {page} of {totalPages} · {data?.total} total
+            {tPagination("pageOf", { page, totalPages })}{" "}
+            {tPagination("totalSuffix", { count: data?.total ?? 0 })}
           </p>
           <div className="flex gap-2">
             <button
@@ -361,14 +369,14 @@ export default function AuditLogsPage() {
               onClick={() => setPage((p) => p - 1)}
               className="px-4 py-2 text-sm rounded-lg border border-dreams-border bg-white disabled:opacity-40 hover:bg-dreams-lightBg transition-colors"
             >
-              Previous
+              {tPagination("previous")}
             </button>
             <button
               disabled={page >= totalPages}
               onClick={() => setPage((p) => p + 1)}
               className="px-4 py-2 text-sm rounded-lg border border-dreams-border bg-white disabled:opacity-40 hover:bg-dreams-lightBg transition-colors"
             >
-              Next
+              {tPagination("next")}
             </button>
           </div>
         </div>

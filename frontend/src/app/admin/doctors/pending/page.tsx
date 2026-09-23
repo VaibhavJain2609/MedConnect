@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -31,6 +32,8 @@ function VerifyModal({
   onConfirm: (reason: string) => void;
   isPending: boolean;
 }) {
+  const t = useTranslations("adminDoctors.pending");
+  const tCommon = useTranslations("common");
   const [reason, setReason] = useState("");
 
   return (
@@ -43,29 +46,29 @@ function VerifyModal({
             <XCircle className="h-6 w-6 text-red-500" />
           )}
           <h2 className="text-lg font-semibold text-dreams-textPrimary">
-            {action === "approve" ? "Approve Doctor" : "Reject Doctor"}
+            {t(action === "approve" ? "modal.approveTitle" : "modal.rejectTitle")}
           </h2>
         </div>
 
         <p className="text-dreams-textSecondary text-sm mb-4">
-          {action === "approve"
-            ? `Approve ${doctor.name}'s verification? They will be notified and can start seeing patients.`
-            : `Reject ${doctor.name}'s verification? Please provide a reason so they can address the issue.`}
+          {t(action === "approve" ? "modal.approveBody" : "modal.rejectBody", {
+            name: doctor.name,
+          })}
         </p>
 
         <div className="mb-5">
           <label className="block text-sm font-medium text-dreams-textPrimary mb-1.5">
-            {action === "approve" ? "Note (optional)" : "Reason for rejection"}
+            {t(action === "approve" ? "modal.noteLabel" : "modal.reasonLabel")}
           </label>
           <textarea
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={3}
-            placeholder={
+            placeholder={t(
               action === "approve"
-                ? "Add a welcome note..."
-                : "Explain what needs to be corrected..."
-            }
+                ? "modal.notePlaceholder"
+                : "modal.reasonPlaceholder"
+            )}
             className="w-full px-3 py-2 border border-dreams-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue resize-none"
           />
         </div>
@@ -76,7 +79,7 @@ function VerifyModal({
             disabled={isPending}
             className="px-4 py-2 text-sm font-medium text-dreams-textSecondary border border-dreams-border rounded-lg hover:bg-gray-50 transition-colors"
           >
-            Cancel
+            {tCommon("cancel")}
           </button>
           <button
             onClick={() => onConfirm(reason)}
@@ -88,10 +91,8 @@ function VerifyModal({
             }`}
           >
             {isPending
-              ? "Processing..."
-              : action === "approve"
-              ? "Approve"
-              : "Reject"}
+              ? t("modal.processing")
+              : t(action === "approve" ? "approve" : "reject")}
           </button>
         </div>
       </div>
@@ -100,6 +101,8 @@ function VerifyModal({
 }
 
 export default function DoctorVerificationQueuePage() {
+  const t = useTranslations("adminDoctors.pending");
+  const tPagination = useTranslations("pagination");
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -144,8 +147,8 @@ export default function DoctorVerificationQueuePage() {
     <div className="space-y-6">
       <Breadcrumb
         items={[
-          { label: "Doctors", href: "/admin/doctors" },
-          { label: "Verification Queue" },
+          { label: t("breadcrumbDoctors"), href: "/admin/doctors" },
+          { label: t("breadcrumbQueue") },
         ]}
       />
 
@@ -153,13 +156,13 @@ export default function DoctorVerificationQueuePage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-dreams-textPrimary">
-            Doctor Verification Queue
+            {t("title")}
           </h1>
           <p className="text-dreams-textSecondary mt-1">
-            Review and approve pending doctor registrations
+            {t("subtitle")}
             {total > 0 && (
               <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                {total} pending
+                {t("pendingBadge", { count: total })}
               </span>
             )}
           </p>
@@ -171,7 +174,7 @@ export default function DoctorVerificationQueuePage() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
         <input
           type="text"
-          placeholder="Search by name, email, or license..."
+          placeholder={t("searchPlaceholder")}
           value={searchQuery}
           onChange={(e) => {
             setSearchQuery(e.target.value);
@@ -190,17 +193,17 @@ export default function DoctorVerificationQueuePage() {
         ) : error ? (
           <div className="text-center py-16">
             <p className="text-red-600 font-medium">
-              Failed to load pending doctors
+              {t("loadError")}
             </p>
           </div>
         ) : doctors.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <CheckCircle className="h-12 w-12 text-green-400 mb-3" />
             <p className="text-lg font-semibold text-dreams-textPrimary">
-              All caught up!
+              {t("emptyTitle")}
             </p>
             <p className="text-dreams-textSecondary text-sm mt-1">
-              No pending doctor verifications.
+              {t("emptyHint")}
             </p>
           </div>
         ) : (
@@ -208,22 +211,22 @@ export default function DoctorVerificationQueuePage() {
             <thead>
               <tr className="border-b border-dreams-border bg-gray-50">
                 <th className="text-left px-6 py-3 text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider">
-                  Doctor
+                  {t("table.doctor")}
                 </th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider">
-                  Specialization
+                  {t("table.specialization")}
                 </th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider">
-                  License
+                  {t("table.license")}
                 </th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider">
-                  Facility
+                  {t("table.facility")}
                 </th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider">
-                  Registered
+                  {t("table.registered")}
                 </th>
                 <th className="text-right px-6 py-3 text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider">
-                  Actions
+                  {t("table.actions")}
                 </th>
               </tr>
             </thead>
@@ -275,7 +278,7 @@ export default function DoctorVerificationQueuePage() {
                         className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-dreams-blue hover:underline"
                       >
                         <ExternalLink className="h-3 w-3" />
-                        View document
+                        {t("viewDocument")}
                       </button>
                     )}
                   </td>
@@ -318,7 +321,7 @@ export default function DoctorVerificationQueuePage() {
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-dreams-textSecondary border border-dreams-border rounded-lg hover:bg-gray-50 transition-colors"
                       >
                         <Eye className="h-3.5 w-3.5" />
-                        View
+                        {t("view")}
                       </a>
                       <button
                         onClick={() =>
@@ -327,7 +330,7 @@ export default function DoctorVerificationQueuePage() {
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors"
                       >
                         <CheckCircle className="h-3.5 w-3.5" />
-                        Approve
+                        {t("approve")}
                       </button>
                       <button
                         onClick={() =>
@@ -336,7 +339,7 @@ export default function DoctorVerificationQueuePage() {
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
                       >
                         <XCircle className="h-3.5 w-3.5" />
-                        Reject
+                        {t("reject")}
                       </button>
                     </div>
                   </td>
@@ -351,8 +354,11 @@ export default function DoctorVerificationQueuePage() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-dreams-textSecondary">
-            Showing {(page - 1) * 20 + 1}–{Math.min(page * 20, total)} of{" "}
-            {total} pending doctors
+            {t("showingPending", {
+              start: (page - 1) * 20 + 1,
+              end: Math.min(page * 20, total),
+              total,
+            })}
           </p>
           <div className="flex gap-2">
             <button
@@ -360,14 +366,14 @@ export default function DoctorVerificationQueuePage() {
               disabled={page === 1}
               className="px-3 py-1.5 text-sm border border-dreams-border rounded-lg disabled:opacity-40 hover:bg-gray-50 transition-colors"
             >
-              Previous
+              {tPagination("previous")}
             </button>
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
               className="px-3 py-1.5 text-sm border border-dreams-border rounded-lg disabled:opacity-40 hover:bg-gray-50 transition-colors"
             >
-              Next
+              {tPagination("next")}
             </button>
           </div>
         </div>

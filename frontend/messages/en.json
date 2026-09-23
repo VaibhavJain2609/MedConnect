@@ -6,7 +6,10 @@
       "clinics": "Clinics",
       "account": "Account",
       "clinical": "Clinical",
-      "actions": "Actions"
+      "actions": "Actions",
+      "healthCare": "Health Care",
+      "management": "Management",
+      "pages": "Pages"
     },
     "healthTimeline": "Health Timeline",
     "appointments": "Appointments",
@@ -41,14 +44,31 @@
     "doctorWebhooks": "Webhooks",
     "doctorLinkPatient": "Link Patient",
     "doctorNewPrescription": "New Prescription",
-    "doctorNewRecord": "New Record"
+    "doctorNewRecord": "New Record",
+    "adminDashboard": "Dashboard",
+    "adminPatients": "Patients",
+    "adminDoctors": "Doctors",
+    "adminRevenue": "Revenue",
+    "adminCatalog": "Catalog",
+    "adminMedicines": "Medicines",
+    "adminSalts": "Salts (APIs)",
+    "adminManufacturers": "Manufacturers",
+    "adminBulkImport": "Bulk Import",
+    "adminAddMedicine": "Add Medicine",
+    "adminUsers": "Users",
+    "adminClinics": "Clinics",
+    "adminSettings": "Settings",
+    "adminDoctorVerification": "Doctor Verification",
+    "adminAuditLogs": "Audit Logs",
+    "adminSystemHealth": "System Health"
   },
   "common": {
     "retry": "Retry",
     "loadFailed": "Failed to load. Please try again.",
     "close": "Close",
     "cancel": "Cancel",
-    "unknownPatient": "Unknown Patient"
+    "unknownPatient": "Unknown Patient",
+    "errorGeneric": "An error occurred"
   },
   "timeline": {
     "breadcrumb": "Health Timeline",
@@ -694,6 +714,189 @@
       "male": "Male",
       "female": "Female",
       "other": "Other"
+    }
+  },
+  "adminDashboard": {
+    "breadcrumb": "Dashboard",
+    "title": "Dashboard",
+    "subtitle": "Overview of your healthcare platform",
+    "loadError": "Failed to load dashboard data",
+    "range": {
+      "7d": "Last 7 days",
+      "30d": "Last 30 days",
+      "90d": "Last 90 days"
+    },
+    "stats": {
+      "totalPatients": "Total Patients",
+      "medicalRecords": "Medical Records",
+      "totalDoctors": "Total Doctors",
+      "prescriptions": "Prescriptions"
+    },
+    "verification": {
+      "pendingTitle": "{count, plural, one {# doctor pending verification} other {# doctors pending verification}}",
+      "verifiedSubtitle": "{verified} of {total} doctors verified",
+      "review": "Review"
+    },
+    "recentActivity": {
+      "title": "Recent Activity",
+      "recentBadge": "{count} Recent",
+      "viewAll": "View all",
+      "loadError": "Failed to load recent activity",
+      "empty": "No recent activity",
+      "approve": "Approve",
+      "reject": "Reject",
+      "approveTitle": "Approve request",
+      "rejectTitle": "Reject request",
+      "requestedAt": "{date} at {time}"
+    },
+    "status": {
+      "pending": "pending",
+      "approved": "approved",
+      "rejected": "rejected"
+    },
+    "patientActivity": {
+      "title": "Patient Activity",
+      "loadError": "Failed to load patient activity data",
+      "newPatients": "New Patients",
+      "activePatients": "Active Patients"
+    },
+    "quickStats": {
+      "verifiedDoctors": "Verified Doctors",
+      "pendingVerification": "Pending Verification",
+      "totalMedicines": "Total Medicines"
+    }
+  },
+  "adminUsers": {
+    "breadcrumb": "Users",
+    "title": "Users",
+    "subtitle": "Manage platform users and their access",
+    "loadError": "Failed to load users",
+    "searchPlaceholder": "Search by name, email or phone...",
+    "filters": {
+      "allRoles": "All Roles",
+      "allStatus": "All Status"
+    },
+    "roles": {
+      "admin": "Admin",
+      "doctor": "Doctor",
+      "patient": "Patient"
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "table": {
+      "name": "Name",
+      "email": "Email",
+      "phone": "Phone",
+      "role": "Role",
+      "status": "Status",
+      "joined": "Joined"
+    },
+    "empty": "No users found",
+    "view": "View"
+  },
+  "adminDoctors": {
+    "breadcrumb": "Doctors",
+    "title": "Doctors",
+    "subtitle": "Manage doctor profiles and information",
+    "loadError": "Failed to load doctors",
+    "pendingButton": "Pending Doctors",
+    "searchPlaceholder": "Search by name, ID, or specialty...",
+    "allSpecialties": "All Specialties",
+    "card": {
+      "experience": "Experience",
+      "experienceYears": "{count, plural, one {# year} other {# years}}",
+      "appointments": "Appointments"
+    },
+    "empty": "No doctors found",
+    "doctorsSuffix": "· {count} doctors",
+    "pending": {
+      "breadcrumbDoctors": "Doctors",
+      "breadcrumbQueue": "Verification Queue",
+      "title": "Doctor Verification Queue",
+      "subtitle": "Review and approve pending doctor registrations",
+      "pendingBadge": "{count} pending",
+      "searchPlaceholder": "Search by name, email, or license...",
+      "loadError": "Failed to load pending doctors",
+      "emptyTitle": "All caught up!",
+      "emptyHint": "No pending doctor verifications.",
+      "table": {
+        "doctor": "Doctor",
+        "specialization": "Specialization",
+        "license": "License",
+        "facility": "Facility",
+        "registered": "Registered",
+        "actions": "Actions"
+      },
+      "viewDocument": "View document",
+      "view": "View",
+      "approve": "Approve",
+      "reject": "Reject",
+      "showingPending": "Showing {start}–{end} of {total} pending doctors",
+      "modal": {
+        "approveTitle": "Approve Doctor",
+        "rejectTitle": "Reject Doctor",
+        "approveBody": "Approve {name}'s verification? They will be notified and can start seeing patients.",
+        "rejectBody": "Reject {name}'s verification? Please provide a reason so they can address the issue.",
+        "noteLabel": "Note (optional)",
+        "reasonLabel": "Reason for rejection",
+        "notePlaceholder": "Add a welcome note...",
+        "reasonPlaceholder": "Explain what needs to be corrected...",
+        "processing": "Processing..."
+      }
+    }
+  },
+  "adminAudit": {
+    "breadcrumbDashboard": "Dashboard",
+    "breadcrumb": "Audit Trail",
+    "title": "Audit Trail",
+    "subtitle": "Immutable log of all data changes in the system",
+    "loadError": "Failed to load audit logs",
+    "tables": {
+      "all": "All Tables",
+      "medical_records": "Medical Records",
+      "prescriptions": "Prescriptions",
+      "users": "Users",
+      "patient_clinic_links": "Patient Clinic Links"
+    },
+    "filters": {
+      "from": "From",
+      "to": "To",
+      "searchUser": "Search by user name...",
+      "filterRecord": "Filter by record ID...",
+      "clear": "Clear filters"
+    },
+    "export": "Export CSV",
+    "exporting": "Exporting...",
+    "exportFailedTitle": "Export failed",
+    "exportFailedBody": "Could not download the audit log CSV. Please try again.",
+    "table": {
+      "when": "When",
+      "action": "Action",
+      "table": "Table",
+      "recordId": "Record ID",
+      "changedBy": "Changed By",
+      "changes": "Changes"
+    },
+    "system": "System",
+    "empty": "No audit logs found",
+    "time": {
+      "justNow": "just now",
+      "minutesAgo": "{count}m ago",
+      "hoursAgo": "{count}h ago",
+      "daysAgo": "{count}d ago"
+    },
+    "diff": {
+      "field": "Field",
+      "oldValue": "Old Value",
+      "newValue": "New Value",
+      "noChanges": "No field-level changes recorded for this action.",
+      "added": "added",
+      "removed": "removed",
+      "changed": "changed",
+      "showMore": "Show more",
+      "showLess": "Show less"
     }
   }
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import Link from "next/link";
@@ -40,8 +41,23 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
 export default function AdminDashboardPage() {
+  const t = useTranslations("adminDashboard");
+  const tCommon = useTranslations("common");
   const [dateRange, setDateRange] = useState("30d");
   const queryClient = useQueryClient();
+
+  const statusLabel = (status: string): string => {
+    switch (status) {
+      case "pending":
+        return t("status.pending");
+      case "approved":
+        return t("status.approved");
+      case "rejected":
+        return t("status.rejected");
+      default:
+        return status;
+    }
+  };
 
   const dateParams = useMemo(() => {
     const end_date = new Date().toISOString().split("T")[0];
@@ -155,9 +171,9 @@ export default function AdminDashboardPage() {
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center py-12 space-y-4">
-        <p className="text-red-600 font-medium">Failed to load dashboard data</p>
+        <p className="text-red-600 font-medium">{t("loadError")}</p>
         <p className="text-dreams-textSecondary text-sm">
-          {error instanceof Error ? error.message : "An error occurred"}
+          {error instanceof Error ? error.message : tCommon("errorGeneric")}
         </p>
       </div>
     );
@@ -165,15 +181,15 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="space-y-6">
-      <Breadcrumb items={[{ label: "Dashboard" }]} />
+      <Breadcrumb items={[{ label: t("breadcrumb") }]} />
 
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-dreams-textPrimary">
-            Dashboard
+            {t("title")}
           </h1>
           <p className="text-dreams-textSecondary mt-1">
-            Overview of your healthcare platform
+            {t("subtitle")}
           </p>
         </div>
 
@@ -182,16 +198,16 @@ export default function AdminDashboardPage() {
           onChange={(e) => setDateRange(e.target.value)}
           className="h-10 px-4 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
         >
-          <option value="7d">Last 7 days</option>
-          <option value="30d">Last 30 days</option>
-          <option value="90d">Last 90 days</option>
+          <option value="7d">{t("range.7d")}</option>
+          <option value="30d">{t("range.30d")}</option>
+          <option value="90d">{t("range.90d")}</option>
         </select>
       </div>
 
       {/* Stat Cards */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          title="Total Patients"
+          title={t("stats.totalPatients")}
           value={stats?.total_patients || 0}
           trend={stats?.patient_trend}
           icon={Users}
@@ -199,7 +215,7 @@ export default function AdminDashboardPage() {
           sparklineData={patientSparkline}
         />
         <StatCard
-          title="Medical Records"
+          title={t("stats.medicalRecords")}
           value={stats?.total_records || 0}
           trend={stats?.record_trend}
           icon={FileText}
@@ -207,7 +223,7 @@ export default function AdminDashboardPage() {
           sparklineData={recordSparkline}
         />
         <StatCard
-          title="Total Doctors"
+          title={t("stats.totalDoctors")}
           value={stats?.total_doctors || 0}
           trend={stats?.doctor_trend}
           icon={Stethoscope}
@@ -215,7 +231,7 @@ export default function AdminDashboardPage() {
           sparklineData={doctorSparkline}
         />
         <StatCard
-          title="Prescriptions"
+          title={t("stats.prescriptions")}
           value={stats?.total_prescriptions || 0}
           trend={stats?.prescription_trend}
           icon={ClipboardList}
@@ -230,17 +246,22 @@ export default function AdminDashboardPage() {
           <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0" />
           <div className="flex-1">
             <p className="text-sm font-medium text-amber-800">
-              {stats?.unverified_doctors} doctor{(stats?.unverified_doctors ?? 0) > 1 ? "s" : ""} pending verification
+              {t("verification.pendingTitle", {
+                count: stats?.unverified_doctors ?? 0,
+              })}
             </p>
             <p className="text-xs text-amber-600 mt-0.5">
-              {stats?.verified_doctors} of {stats?.total_doctors} doctors verified
+              {t("verification.verifiedSubtitle", {
+                verified: stats?.verified_doctors ?? 0,
+                total: stats?.total_doctors ?? 0,
+              })}
             </p>
           </div>
           <Link
             href="/admin/doctors/pending"
             className="text-xs font-medium text-amber-700 hover:text-amber-900 underline"
           >
-            Review
+            {t("verification.review")}
           </Link>
         </div>
       )}
@@ -250,24 +271,26 @@ export default function AdminDashboardPage() {
         <div className="bg-white rounded-lg shadow-card p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-dreams-textPrimary">
-              Recent Activity
+              {t("recentActivity.title")}
             </h2>
             <div className="flex items-center gap-2">
               <Badge variant="pending">
-                {recentActivity?.length || 0} Recent
+                {t("recentActivity.recentBadge", {
+                  count: recentActivity?.length || 0,
+                })}
               </Badge>
               <Link
                 href="/admin/appointments"
                 className="text-xs font-medium text-dreams-blue hover:underline"
               >
-                View all
+                {t("recentActivity.viewAll")}
               </Link>
             </div>
           </div>
 
           {recentActivityError ? (
             <p className="text-sm text-red-500 py-8 text-center">
-              Failed to load recent activity
+              {t("recentActivity.loadError")}
             </p>
           ) : (
             <div className="space-y-4">
@@ -291,7 +314,10 @@ export default function AdminDashboardPage() {
                       </p>
                       <p className="text-xs text-dreams-textSecondary mt-1">
                         <Clock className="inline h-3 w-3 mr-1" />
-                        {item.requested_date} at {item.requested_time}
+                        {t("recentActivity.requestedAt", {
+                          date: item.requested_date,
+                          time: item.requested_time,
+                        })}
                       </p>
                     </div>
                     {item.status === "pending" ? (
@@ -299,20 +325,20 @@ export default function AdminDashboardPage() {
                         <button
                           onClick={() => approveMutation.mutate(item.id)}
                           disabled={approveMutation.isPending || rejectMutation.isPending}
-                          title="Approve request"
+                          title={t("recentActivity.approveTitle")}
                           className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-md hover:bg-green-100 transition-colors disabled:opacity-50"
                         >
                           <CheckCircle className="h-3.5 w-3.5" />
-                          Approve
+                          {t("recentActivity.approve")}
                         </button>
                         <button
                           onClick={() => rejectMutation.mutate(item.id)}
                           disabled={approveMutation.isPending || rejectMutation.isPending}
-                          title="Reject request"
+                          title={t("recentActivity.rejectTitle")}
                           className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 transition-colors disabled:opacity-50"
                         >
                           <XCircle className="h-3.5 w-3.5" />
-                          Reject
+                          {t("recentActivity.reject")}
                         </button>
                       </div>
                     ) : (
@@ -320,14 +346,14 @@ export default function AdminDashboardPage() {
                         variant={item.status === "approved" ? "completed" : "overdue"}
                         className="flex-shrink-0"
                       >
-                        {item.status}
+                        {statusLabel(item.status)}
                       </Badge>
                     )}
                   </div>
                 ))
               ) : (
                 <p className="text-sm text-dreams-textSecondary py-8 text-center">
-                  No recent activity
+                  {t("recentActivity.empty")}
                 </p>
               )}
             </div>
@@ -337,12 +363,12 @@ export default function AdminDashboardPage() {
         {/* Patient Activity Chart */}
         <div className="bg-white rounded-lg shadow-card p-6">
           <h2 className="text-xl font-bold text-dreams-textPrimary mb-4">
-            Patient Activity
+            {t("patientActivity.title")}
           </h2>
 
           {patientStatsError ? (
             <div className="flex items-center justify-center h-[300px]">
-              <p className="text-sm text-red-500">Failed to load patient activity data</p>
+              <p className="text-sm text-red-500">{t("patientActivity.loadError")}</p>
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={300}>
@@ -364,13 +390,13 @@ export default function AdminDashboardPage() {
                 <Bar
                   dataKey="new"
                   fill="#4169E1"
-                  name="New Patients"
+                  name={t("patientActivity.newPatients")}
                   radius={[4, 4, 0, 0]}
                 />
                 <Bar
                   dataKey="active"
                   fill="#10B981"
-                  name="Active Patients"
+                  name={t("patientActivity.activePatients")}
                   radius={[4, 4, 0, 0]}
                 />
               </BarChart>
@@ -387,7 +413,7 @@ export default function AdminDashboardPage() {
               <CheckCircle className="h-5 w-5 text-dreams-blue" />
             </div>
             <div>
-              <p className="text-sm text-dreams-textSecondary">Verified Doctors</p>
+              <p className="text-sm text-dreams-textSecondary">{t("quickStats.verifiedDoctors")}</p>
               <p className="text-2xl font-bold text-dreams-textPrimary">
                 {stats?.verified_doctors || 0}
               </p>
@@ -400,7 +426,7 @@ export default function AdminDashboardPage() {
               <AlertCircle className="h-5 w-5 text-amber-600" />
             </div>
             <div>
-              <p className="text-sm text-dreams-textSecondary">Pending Verification</p>
+              <p className="text-sm text-dreams-textSecondary">{t("quickStats.pendingVerification")}</p>
               <p className="text-2xl font-bold text-dreams-textPrimary">
                 {stats?.unverified_doctors || 0}
               </p>
@@ -413,7 +439,7 @@ export default function AdminDashboardPage() {
               <FileText className="h-5 w-5 text-green-600" />
             </div>
             <div>
-              <p className="text-sm text-dreams-textSecondary">Total Medicines</p>
+              <p className="text-sm text-dreams-textSecondary">{t("quickStats.totalMedicines")}</p>
               <p className="text-2xl font-bold text-dreams-textPrimary">
                 {(stats?.total_medicines || 0).toLocaleString()}
               </p>
