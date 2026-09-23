@@ -125,6 +125,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/audit-logs/archived": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Archived Audit Logs
+         * @description List archived audit logs — same filters/pagination as GET /admin/audit.
+         *
+         *     Reads ``audit_log_archive``, the cold-storage table populated by the daily
+         *     ``audit_retention`` worker task. Rows carry an extra ``archived_at``
+         *     timestamp recording when the retention sweep moved them out of the live
+         *     table. Newest first (by ``changed_at``).
+         */
+        get: operations["list_archived_audit_logs_api_v1_admin_audit_logs_archived_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/audit-logs/export": {
         parameters: {
             query?: never;
@@ -231,6 +256,31 @@ export interface paths {
          *     - Returns detailed results for each row
          */
         post: operations["bulk_import_brands_api_v1_admin_brands_bulk_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/catalog/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Catalog Csv
+         * @description Bulk-import brands + packaging rows from a CSV file — Admin only.
+         *
+         *     - ``?dry_run=true`` validates and reports per-row outcomes without writing.
+         *     - Real mode upserts per row inside a SAVEPOINT; one bad row does not
+         *       kill the batch.
+         *     - Rejects non-CSV files, files > 2 MB, and files with > 1000 data rows.
+         */
+        post: operations["import_catalog_csv_api_v1_admin_catalog_import_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1258,11 +1308,16 @@ export interface paths {
         /**
          * List Appointments
          * @description List appointments.
-         *     - doctor role: returns their own appointments; default today unless date/upcoming param provided
+         *     - doctor role: returns their own appointments; default today unless
+         *       date/upcoming/from+to params provided
          *     - clinic staff (any active membership incl. receptionist) with X-Clinic-Id:
-         *       the clinic's full schedule, same date/upcoming filtering as doctors
+         *       the clinic's full schedule, same date/upcoming/from+to filtering as doctors
          *     - patient role: returns their own appointments
          *     - admin with all=true: returns all appointments
+         *
+         *     `from`/`to` are inclusive YYYY-MM-DD bounds on scheduled_at (UTC days) —
+         *     used by the doctor week-calendar view. Both must be supplied; they are
+         *     ignored when `date` or `upcoming` is also present.
          */
         get: operations["list_appointments_api_v1_appointments_get"];
         put?: never;
@@ -1379,6 +1434,78 @@ export interface paths {
          * @description Link a provisional (walk-in) patient to a real patient account using a link code.
          */
         post: operations["link_provisional_patient_api_v1_appointments_link_provisional_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/appointments/waitlist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Clinic Waitlist
+         * @description Clinic-scoped waitlist for front-desk staff.
+         *
+         *     Requires the X-Clinic-Id header — ``get_active_clinic`` verifies the
+         *     caller holds an active ClinicMembership (any role incl. receptionist)
+         *     and raises 403 otherwise.
+         */
+        get: operations["list_clinic_waitlist_api_v1_appointments_waitlist_get"];
+        put?: never;
+        /**
+         * Join Waitlist
+         * @description Join a doctor's waitlist for a fully-booked day.
+         *
+         *     Validates that the doctor exists and the date is not in the past. A second
+         *     pending entry for the same (patient, doctor, day) is rejected with 409,
+         *     and a partial unique index enforces it under races.
+         */
+        post: operations["join_waitlist_api_v1_appointments_waitlist_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/appointments/waitlist/{entry_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Cancel Waitlist Entry
+         * @description Cancel one of the patient's own waitlist entries (soft-delete).
+         */
+        delete: operations["cancel_waitlist_entry_api_v1_appointments_waitlist__entry_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/appointments/waitlist/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My Waitlist Entries
+         * @description List the current patient's waitlist entries (newest first, capped).
+         */
+        get: operations["my_waitlist_entries_api_v1_appointments_waitlist_mine_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1784,6 +1911,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/clinics/{clinic_id}/holidays": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Clinic Holidays
+         * @description List the clinic's holidays, ordered by date. ``?year=2026`` filters
+         *     to that calendar year (clinic-local dates).
+         */
+        get: operations["list_clinic_holidays_api_v1_clinics__clinic_id__holidays_get"];
+        put?: never;
+        /**
+         * Create Clinic Holiday
+         * @description Add a closure date for the clinic. 409 when the date already exists.
+         */
+        post: operations["create_clinic_holiday_api_v1_clinics__clinic_id__holidays_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clinics/{clinic_id}/holidays/{holiday_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Clinic Holiday
+         * @description Soft-delete one of the clinic's holidays.
+         */
+        delete: operations["delete_clinic_holiday_api_v1_clinics__clinic_id__holidays__holiday_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/clinics/{clinic_id}/invites": {
         parameters: {
             query?: never;
@@ -1932,6 +2104,113 @@ export interface paths {
         /** Update Settings */
         put: operations["update_settings_api_v1_clinics__clinic_id__settings_put"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clinics/{clinic_id}/webhooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Webhook Endpoints */
+        get: operations["list_webhook_endpoints_api_v1_clinics__clinic_id__webhooks_get"];
+        put?: never;
+        /** Create Webhook Endpoint */
+        post: operations["create_webhook_endpoint_api_v1_clinics__clinic_id__webhooks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clinics/{clinic_id}/webhooks/{endpoint_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Webhook Endpoint */
+        get: operations["get_webhook_endpoint_api_v1_clinics__clinic_id__webhooks__endpoint_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Webhook Endpoint */
+        delete: operations["delete_webhook_endpoint_api_v1_clinics__clinic_id__webhooks__endpoint_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Webhook Endpoint */
+        patch: operations["update_webhook_endpoint_api_v1_clinics__clinic_id__webhooks__endpoint_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/clinics/{clinic_id}/webhooks/{endpoint_id}/redeliver-failed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Redeliver Failed Deliveries
+         * @description Bulk re-queue — flips up to ``REDELIVER_BULK_LIMIT`` most-recent failed
+         *     deliveries for this endpoint back to ``pending`` and enqueues a
+         *     ``deliver_webhook`` job for each. Rows whose enqueue fails are reverted
+         *     to ``failed`` and skipped from the response.
+         */
+        post: operations["redeliver_failed_deliveries_api_v1_clinics__clinic_id__webhooks__endpoint_id__redeliver_failed_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clinics/{clinic_id}/webhooks/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Webhook Deliveries
+         * @description Paginated delivery log for debugging, join-filtered to this clinic.
+         */
+        get: operations["list_webhook_deliveries_api_v1_clinics__clinic_id__webhooks_deliveries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clinics/{clinic_id}/webhooks/deliveries/{delivery_id}/redeliver": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Redeliver Webhook Delivery
+         * @description Re-queue a single failed delivery.
+         *
+         *     Resets the row to ``pending`` and enqueues the same ``deliver_webhook``
+         *     ARQ job — the worker re-attempts the POST and overwrites
+         *     ``attempts``/``last_error``/``delivered_at`` with the new outcome. Prior
+         *     ``attempts``/``last_error`` values are left in place until then so the
+         *     delivery log keeps the failure history. Only ``failed`` rows may be
+         *     redelivered (``sent``/``pending`` → 409).
+         */
+        post: operations["redeliver_webhook_delivery_api_v1_clinics__clinic_id__webhooks_deliveries__delivery_id__redeliver_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2369,6 +2648,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/family/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Members */
+        get: operations["list_members_api_v1_family_members_get"];
+        put?: never;
+        /** Create Member */
+        post: operations["create_member_api_v1_family_members_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/family/members/{member_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Member */
+        get: operations["get_member_api_v1_family_members__member_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Member */
+        delete: operations["delete_member_api_v1_family_members__member_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Member */
+        patch: operations["update_member_api_v1_family_members__member_id__patch"];
+        trace?: never;
+    };
     "/api/v1/interactions": {
         parameters: {
             query?: never;
@@ -2522,6 +2838,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lab-results/ingest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ingest Lab Report Image
+         * @description Extract lab-value candidates from an uploaded report image.
+         */
+        post: operations["ingest_lab_report_image_api_v1_lab_results_ingest_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/manufacturers": {
         parameters: {
             query?: never;
@@ -2583,6 +2919,33 @@ export interface paths {
          *     Prioritizes exact matches, then prefix matches, then contains matches.
          */
         get: operations["autocomplete_medicines_api_v1_medicines_autocomplete_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/medicines/by-barcode/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Medicine By Barcode
+         * @description Look up a brand by pack barcode (GTIN/EAN).
+         *
+         *     Barcodes are stored per-pack on ``brand_packaging.barcode`` (Indian packs
+         *     carry a barcode per pack size). The code must be digits only, 8-14
+         *     characters; surrounding/embedded whitespace is stripped. When multiple
+         *     brands share a barcode (non-unique index by design), the first by brand
+         *     name is returned — its ``packaging`` list carries all packs so callers
+         *     can disambiguate.
+         */
+        get: operations["get_medicine_by_barcode_api_v1_medicines_by_barcode__code__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2855,6 +3218,26 @@ export interface paths {
         put?: never;
         /** Trigger Nhr Verification */
         post: operations["trigger_nhr_verification_api_v1_onboarding_verify_nhr_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pack-forms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Pack Forms
+         * @description List dosage/pack forms (dropdown source for pack/barcode management UIs).
+         */
+        get: operations["list_pack_forms_api_v1_pack_forms_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3262,6 +3645,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/prescriptions/{prescription_id}/refill-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request Refill
+         * @description Request a refill/renewal of one of the patient's own prescriptions.
+         *
+         *     Any non-deleted prescription is requestable — including expired ones,
+         *     which is the common refill case. A second request while one is still
+         *     pending is rejected (409), and a partial unique index enforces it.
+         */
+        post: operations["request_refill_api_v1_prescriptions__prescription_id__refill_request_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/prescriptions/{prescription_id}/safety-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Prescription Safety Check */
+        get: operations["get_prescription_safety_check_api_v1_prescriptions__prescription_id__safety_check_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/prescriptions/refill-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Refill Requests
+         * @description List refill requests for the doctor.
+         *
+         *     With an X-Clinic-Id header: requests scoped to that clinic (receptionist
+         *     memberships are excluded — refill requests expose clinical detail).
+         *     Without it: requests on prescriptions this doctor authored.
+         */
+        get: operations["list_refill_requests_api_v1_prescriptions_refill_requests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/prescriptions/refill-requests/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My Refill Requests
+         * @description List the current patient's refill requests (newest first, capped).
+         */
+        get: operations["my_refill_requests_api_v1_prescriptions_refill_requests_mine_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/push/subscribe": {
         parameters: {
             query?: never;
@@ -3403,6 +3871,34 @@ export interface paths {
         get: operations["get_my_queue_position_api_v1_queue_my_position_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/refill-requests/{request_id}/respond": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Respond Refill Request
+         * @description Approve or decline a refill request.
+         *
+         *     Authorization: for clinic-scoped requests, the responding doctor must
+         *     hold an active owner/admin/doctor membership in the prescribing clinic;
+         *     for non-clinic prescriptions, only the original prescriber may respond.
+         *
+         *     Approve issues a NEW prescription cloned from the original's medicines
+         *     (valid_until is extended by the original course length). The patient is
+         *     notified in both cases via the notification service.
+         */
+        post: operations["respond_refill_request_api_v1_refill_requests__request_id__respond_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4083,6 +4579,11 @@ export interface components {
             manufacturer_name: string;
             /** Ndhm Code */
             ndhm_code: string | null;
+            /**
+             * Packaging
+             * @default []
+             */
+            packaging: components["schemas"]["BrandPackagingResponse"][];
             /** Salt Composition */
             salt_composition: string;
         };
@@ -4206,6 +4707,11 @@ export interface components {
             /** Launch Date */
             launch_date?: string | null;
             manufacturer?: components["schemas"]["app__schemas__medicine_emr__ManufacturerResponse"] | null;
+            /**
+             * Packaging
+             * @default []
+             */
+            packaging: components["schemas"]["BrandPackagingResponse"][];
             /** Salt Composition */
             salt_composition: string;
             /**
@@ -4435,6 +4941,8 @@ export interface components {
             scheduled_at: string;
             /** Status */
             status: string;
+            /** Teleconsult Url */
+            teleconsult_url?: string | null;
             /** Type */
             type: string;
             /**
@@ -4571,6 +5079,11 @@ export interface components {
             /** Status */
             status?: string | null;
         };
+        /** Body_import_catalog_csv_api_v1_admin_catalog_import_post */
+        Body_import_catalog_csv_api_v1_admin_catalog_import_post: {
+            /** File */
+            file: string;
+        };
         /**
          * BrandCompositionInput
          * @description Input for brand composition (salt + strength).
@@ -4638,6 +5151,8 @@ export interface components {
             manufacturer_id: string;
             /** Ndhm Code */
             ndhm_code?: string | null;
+            /** Packaging */
+            packaging?: components["schemas"]["BrandPackagingInput"][];
         };
         /**
          * BrandListResponse
@@ -4652,6 +5167,64 @@ export interface components {
             pages: number;
             /** Total */
             total: number;
+        };
+        /**
+         * BrandPackagingInput
+         * @description Input for one pack entry (pack size + optional GTIN/EAN barcode).
+         */
+        BrandPackagingInput: {
+            /** Barcode */
+            barcode?: string | null;
+            /**
+             * Is Primary Pack
+             * @default true
+             */
+            is_primary_pack: boolean;
+            /**
+             * Pack Form Id
+             * Format: uuid
+             */
+            pack_form_id: string;
+            /** Pack Type */
+            pack_type?: string | null;
+            /**
+             * Quantity
+             * @default 1
+             */
+            quantity: number;
+            /** Sku */
+            sku?: string | null;
+        };
+        /**
+         * BrandPackagingResponse
+         * @description Packaging detail for a brand — GTIN/EAN barcodes live per-pack.
+         */
+        BrandPackagingResponse: {
+            /** Barcode */
+            barcode?: string | null;
+            /**
+             * Brand Pack Id
+             * Format: uuid
+             */
+            brand_pack_id: string;
+            /**
+             * Is Primary Pack
+             * @default true
+             */
+            is_primary_pack: boolean;
+            /**
+             * Pack Form Id
+             * Format: uuid
+             */
+            pack_form_id: string;
+            /** Pack Form Name */
+            pack_form_name?: string | null;
+            /** Pack Type */
+            pack_type?: string | null;
+            /** Quantity */
+            quantity: number;
+            /** Sku */
+            sku?: string | null;
         };
         /**
          * BrandUpdateRequest
@@ -4674,6 +5247,8 @@ export interface components {
             manufacturer_id?: string | null;
             /** Ndhm Code */
             ndhm_code?: string | null;
+            /** Packaging */
+            packaging?: components["schemas"]["BrandPackagingInput"][] | null;
         };
         /** BroadcastRequest */
         BroadcastRequest: {
@@ -4749,6 +5324,26 @@ export interface components {
             manufacturer_name: string;
             /** Salt Compositions */
             salt_compositions: string;
+        };
+        /**
+         * CatalogImportResponse
+         * @description Import report: counts per status + per-row detail.
+         */
+        CatalogImportResponse: {
+            /** Created */
+            created: number;
+            /** Dry Run */
+            dry_run: boolean;
+            /** Errors */
+            errors: components["schemas"]["ImportRowResult"][];
+            /** Rows */
+            rows: components["schemas"]["ImportRowResult"][];
+            /** Skipped */
+            skipped: number;
+            /** Total */
+            total: number;
+            /** Updated */
+            updated: number;
         };
         /**
          * CheckAllergiesRequest
@@ -4851,6 +5446,41 @@ export interface components {
             phone?: string | null;
             /** State */
             state?: string | null;
+        };
+        /** ClinicHolidayCreate */
+        ClinicHolidayCreate: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Name */
+            name?: string | null;
+        };
+        /** ClinicHolidayResponse */
+        ClinicHolidayResponse: {
+            /**
+             * Clinic Id
+             * Format: uuid
+             */
+            clinic_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name?: string | null;
         };
         /** ClinicListResponse */
         ClinicListResponse: {
@@ -5093,6 +5723,39 @@ export interface components {
             /** Vitals Snapshot */
             vitals_snapshot?: Record<string, never> | null;
         };
+        /** FamilyMemberCreate */
+        FamilyMemberCreate: {
+            /** Blood Group */
+            blood_group?: string | null;
+            /**
+             * Dob
+             * Format: date
+             */
+            dob: string;
+            /** Full Name */
+            full_name: string;
+            /** Gender */
+            gender?: string | null;
+            /** Notes */
+            notes?: string | null;
+            /** Relationship */
+            relationship: string;
+        };
+        /** FamilyMemberUpdate */
+        FamilyMemberUpdate: {
+            /** Blood Group */
+            blood_group?: string | null;
+            /** Dob */
+            dob?: string | null;
+            /** Full Name */
+            full_name?: string | null;
+            /** Gender */
+            gender?: string | null;
+            /** Notes */
+            notes?: string | null;
+            /** Relationship */
+            relationship?: string | null;
+        };
         /** GuestAppointmentCreate */
         GuestAppointmentCreate: {
             /** Branch Id */
@@ -5124,6 +5787,20 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * ImportRowResult
+         * @description Outcome for one CSV data row (2-based row number, header = row 1).
+         */
+        ImportRowResult: {
+            /** Brand Name */
+            brand_name?: string | null;
+            /** Message */
+            message?: string | null;
+            /** Row */
+            row: number;
+            /** Status */
+            status: string;
         };
         /**
          * InteractionResponse
@@ -5174,6 +5851,13 @@ export interface components {
         JoinRequestCreate: {
             /** Message */
             message?: string | null;
+        };
+        /** LabIngestRequest */
+        LabIngestRequest: {
+            /** Patient Id */
+            patient_id?: string | null;
+            /** Upload Key */
+            upload_key: string;
         };
         /** LabResultCreate */
         LabResultCreate: {
@@ -5411,6 +6095,11 @@ export interface components {
              */
             push_notifications: boolean;
             /**
+             * Queue Updates
+             * @default true
+             */
+            queue_updates: boolean;
+            /**
              * Sms Notifications
              * @default false
              */
@@ -5459,6 +6148,11 @@ export interface components {
              */
             push_notifications: boolean;
             /**
+             * Queue Updates
+             * @default true
+             */
+            queue_updates: boolean;
+            /**
              * Sms Notifications
              * @default false
              */
@@ -5506,6 +6200,27 @@ export interface components {
             /** Unread Count */
             unread_count: number;
         };
+        /**
+         * PackFormResponse
+         * @description Dosage/pack form (tablet, syrup, ...).
+         */
+        PackFormResponse: {
+            /** Form Name */
+            form_name: string;
+            /** Is Liquid */
+            is_liquid?: boolean | null;
+            /** Is Solid */
+            is_solid?: boolean | null;
+            /**
+             * Pack Form Id
+             * Format: uuid
+             */
+            pack_form_id: string;
+            /** Requires Reconstitution */
+            requires_reconstitution?: boolean | null;
+            /** Route Of Administration */
+            route_of_administration?: string | null;
+        };
         /** PatientProfileUpdate */
         PatientProfileUpdate: {
             /** Emergency Contact Name */
@@ -5523,6 +6238,8 @@ export interface components {
             description?: string | null;
             /** Document Url */
             document_url?: string | null;
+            /** Family Member Id */
+            family_member_id?: string | null;
             /** Record Type */
             record_type: string;
             /** Title */
@@ -5633,6 +6350,41 @@ export interface components {
             translated: Record<string, never> | null;
             /** Valid Until */
             valid_until: string | null;
+        };
+        /**
+         * PrescriptionSafetyCheckResponse
+         * @description Persisted safety-gate snapshot for one prescription (R13).
+         *
+         *     Returned by GET /api/v1/prescriptions/{id}/safety-check — the latest
+         *     check row written at prescription creation.
+         */
+        PrescriptionSafetyCheckResponse: {
+            /** Alerts */
+            alerts: Record<string, never>[];
+            /**
+             * Checked At
+             * Format: date-time
+             */
+            checked_at: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Items */
+            items: Record<string, never>[];
+            /** Override Reason */
+            override_reason?: string | null;
+            /**
+             * Prescription Id
+             * Format: uuid
+             */
+            prescription_id: string;
         };
         /** PrescriptionTemplateCreate */
         PrescriptionTemplateCreate: {
@@ -5871,6 +6623,8 @@ export interface components {
             doctor_id: string | null;
             /** Document Url */
             document_url?: string | null;
+            /** Family Member Id */
+            family_member_id?: string | null;
             /** Fhir Bundle */
             fhir_bundle: Record<string, never> | null;
             /**
@@ -5899,6 +6653,27 @@ export interface components {
         RedeemRequest: {
             /** Code */
             code: string;
+        };
+        /**
+         * RefillRequestCreate
+         * @description Patient-initiated refill/renewal request for one of their prescriptions.
+         */
+        RefillRequestCreate: {
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * RefillRespondRequest
+         * @description Doctor response to a refill request — approve clones the prescription.
+         */
+        RefillRespondRequest: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "approve" | "decline";
+            /** Note */
+            note?: string | null;
         };
         /** ReviewRequestBody */
         ReviewRequestBody: {
@@ -6183,6 +6958,119 @@ export interface components {
             /** Vital Type */
             vital_type: string;
         };
+        /** WaitlistJoinRequest */
+        WaitlistJoinRequest: {
+            /** Clinic Id */
+            clinic_id?: string | null;
+            /**
+             * Desired Date
+             * Format: date
+             */
+            desired_date: string;
+            /**
+             * Doctor Id
+             * Format: uuid
+             */
+            doctor_id: string;
+            /**
+             * Slot Window
+             * @default any
+             */
+            slot_window: string;
+        };
+        /** WebhookDeliveryResponse */
+        WebhookDeliveryResponse: {
+            /** Attempts */
+            attempts: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Delivered At */
+            delivered_at: string | null;
+            /** Endpoint Id */
+            endpoint_id: string;
+            /** Event Type */
+            event_type: string;
+            /** Id */
+            id: string;
+            /** Last Error */
+            last_error: string | null;
+            /** Payload */
+            payload: Record<string, never>;
+            /** Status */
+            status: string;
+        };
+        /** WebhookEndpointCreate */
+        WebhookEndpointCreate: {
+            /** Event Types */
+            event_types: string[];
+            /**
+             * Is Active
+             * @default true
+             */
+            is_active: boolean;
+            /** Url */
+            url: string;
+        };
+        /**
+         * WebhookEndpointCreatedResponse
+         * @description Create-only shape — the only response that ever carries the full secret.
+         */
+        WebhookEndpointCreatedResponse: {
+            /** Clinic Id */
+            clinic_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Event Types */
+            event_types: string[];
+            /** Id */
+            id: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Secret */
+            secret: string;
+            /** Secret Masked */
+            secret_masked: string;
+            /** Url */
+            url: string;
+        };
+        /**
+         * WebhookEndpointResponse
+         * @description List/detail shape — the signing secret is ALWAYS masked.
+         */
+        WebhookEndpointResponse: {
+            /** Clinic Id */
+            clinic_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Event Types */
+            event_types: string[];
+            /** Id */
+            id: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Secret Masked */
+            secret_masked: string;
+            /** Url */
+            url: string;
+        };
+        /** WebhookEndpointUpdate */
+        WebhookEndpointUpdate: {
+            /** Event Types */
+            event_types?: string[] | null;
+            /** Is Active */
+            is_active?: boolean | null;
+            /** Url */
+            url?: string | null;
+        };
     };
     responses: never;
     parameters: never;
@@ -6384,6 +7272,45 @@ export interface operations {
             };
         };
     };
+    list_archived_audit_logs_api_v1_admin_audit_logs_archived_get: {
+        parameters: {
+            query?: {
+                changed_by_name?: string | null;
+                from_date?: string | null;
+                limit?: number;
+                page?: number;
+                record_id?: string | null;
+                table_name?: string | null;
+                to_date?: string | null;
+                /** @description Filter to changes made by this user (audit_log_archive.changed_by) */
+                user_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     export_audit_logs_api_v1_admin_audit_logs_export_get: {
         parameters: {
             query?: {
@@ -6538,6 +7465,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BulkImportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_catalog_csv_api_v1_admin_catalog_import_post: {
+        parameters: {
+            query?: {
+                dry_run?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_catalog_csv_api_v1_admin_catalog_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogImportResponse"];
                 };
             };
             /** @description Validation Error */
@@ -8575,9 +9537,11 @@ export interface operations {
             query?: {
                 all?: boolean | null;
                 date?: string | null;
+                from?: string | null;
                 limit?: number;
                 offset?: number;
                 status?: string | null;
+                to?: string | null;
                 upcoming?: boolean | null;
             };
             header?: {
@@ -8861,6 +9825,133 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LinkProvisionalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_clinic_waitlist_api_v1_appointments_waitlist_get: {
+        parameters: {
+            query?: {
+                date?: string | null;
+                status?: string | null;
+            };
+            header?: {
+                "X-Clinic-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    join_waitlist_api_v1_appointments_waitlist_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WaitlistJoinRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_waitlist_entry_api_v1_appointments_waitlist__entry_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_waitlist_entries_api_v1_appointments_waitlist_mine_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -9654,6 +10745,104 @@ export interface operations {
             };
         };
     };
+    list_clinic_holidays_api_v1_clinics__clinic_id__holidays_get: {
+        parameters: {
+            query?: {
+                year?: number | null;
+            };
+            header?: never;
+            path: {
+                clinic_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_clinic_holiday_api_v1_clinics__clinic_id__holidays_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clinic_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClinicHolidayCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicHolidayResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_clinic_holiday_api_v1_clinics__clinic_id__holidays__holiday_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clinic_id: string;
+                holiday_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_invites_api_v1_clinics__clinic_id__invites_get: {
         parameters: {
             query?: never;
@@ -9975,6 +11164,270 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ClinicResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_webhook_endpoints_api_v1_clinics__clinic_id__webhooks_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clinic_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_webhook_endpoint_api_v1_clinics__clinic_id__webhooks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clinic_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookEndpointCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookEndpointCreatedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_webhook_endpoint_api_v1_clinics__clinic_id__webhooks__endpoint_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clinic_id: string;
+                endpoint_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookEndpointResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_webhook_endpoint_api_v1_clinics__clinic_id__webhooks__endpoint_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clinic_id: string;
+                endpoint_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_webhook_endpoint_api_v1_clinics__clinic_id__webhooks__endpoint_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clinic_id: string;
+                endpoint_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookEndpointUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookEndpointResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    redeliver_failed_deliveries_api_v1_clinics__clinic_id__webhooks__endpoint_id__redeliver_failed_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clinic_id: string;
+                endpoint_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_webhook_deliveries_api_v1_clinics__clinic_id__webhooks_deliveries_get: {
+        parameters: {
+            query?: {
+                endpoint_id?: string | null;
+                limit?: number;
+                page?: number;
+                status?: string | null;
+            };
+            header?: never;
+            path: {
+                clinic_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    redeliver_webhook_delivery_api_v1_clinics__clinic_id__webhooks_deliveries__delivery_id__redeliver_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clinic_id: string;
+                delivery_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookDeliveryResponse"];
                 };
             };
             /** @description Validation Error */
@@ -10882,6 +12335,154 @@ export interface operations {
             };
         };
     };
+    list_members_api_v1_family_members_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    create_member_api_v1_family_members_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FamilyMemberCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_member_api_v1_family_members__member_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                member_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_member_api_v1_family_members__member_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                member_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_member_api_v1_family_members__member_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                member_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FamilyMemberUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_interaction_api_v1_interactions_post: {
         parameters: {
             query?: never;
@@ -11077,6 +12678,39 @@ export interface operations {
             };
         };
     };
+    ingest_lab_report_image_api_v1_lab_results_ingest_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LabIngestRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_manufacturers_api_v1_manufacturers_get: {
         parameters: {
             query?: {
@@ -11161,6 +12795,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_medicine_by_barcode_api_v1_medicines_by_barcode__code__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["app__schemas__medicine_emr__BrandResponse"];
                 };
             };
             /** @description Validation Error */
@@ -11588,6 +13253,26 @@ export interface operations {
             };
         };
     };
+    list_pack_forms_api_v1_pack_forms_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackFormResponse"][];
+                };
+            };
+        };
+    };
     list_clinic_links_api_v1_patients_clinic_links_get: {
         parameters: {
             query?: never;
@@ -12008,9 +13693,17 @@ export interface operations {
             query?: {
                 /** @description Pagination cursor */
                 cursor?: string | null;
+                /** @description Only records attached to this dependent */
+                family_member_id?: string | null;
+                /** @description Only records created on/after this date (UTC) */
+                from_date?: string | null;
                 limit?: number;
                 /** @description Search query */
                 q?: string | null;
+                /** @description Filter by record type (alias for 'type') */
+                record_type?: string | null;
+                /** @description Only records created on/before this date (UTC) */
+                to_date?: string | null;
                 /** @description Filter by record type */
                 type?: string | null;
             };
@@ -12172,9 +13865,15 @@ export interface operations {
             query?: {
                 /** @description Pagination cursor */
                 cursor?: string | null;
+                /** @description Only records attached to this dependent */
+                family_member_id?: string | null;
+                /** @description Only records created on/after this date (UTC) */
+                from_date?: string | null;
                 limit?: number;
                 /** @description Search query */
                 q?: string | null;
+                /** @description Only records created on/before this date (UTC) */
+                to_date?: string | null;
                 /** @description Filter by record type */
                 type?: string | null;
             };
@@ -12302,6 +14001,125 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_refill_api_v1_prescriptions__prescription_id__refill_request_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                prescription_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefillRequestCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_prescription_safety_check_api_v1_prescriptions__prescription_id__safety_check_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                prescription_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrescriptionSafetyCheckResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_refill_requests_api_v1_prescriptions_refill_requests_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+            };
+            header?: {
+                "X-Clinic-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_refill_requests_api_v1_prescriptions_refill_requests_mine_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -12578,6 +14396,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QueuePositionResponse"];
+                };
+            };
+        };
+    };
+    respond_refill_request_api_v1_refill_requests__request_id__respond_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefillRespondRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

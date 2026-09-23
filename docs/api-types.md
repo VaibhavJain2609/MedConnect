@@ -36,10 +36,14 @@ frontend/src/lib/api/schema.d.ts ← committed artifact (checked by CI)
 ## Regenerating after backend changes
 
 ```bash
+make gen-api-types        # from the repo root — runs both steps below
+# or manually:
 cd backend && python scripts/export_openapi.py
 cd ../frontend && npm run gen:api-types
 # commit schema.d.ts together with the backend change
 ```
+
+`make check-api-types` runs the same drift check CI performs.
 
 CI's `contract` job (`.github/workflows/ci.yml`) runs the same two steps with
 no docker services and fails the PR if `schema.d.ts` is out of sync — a

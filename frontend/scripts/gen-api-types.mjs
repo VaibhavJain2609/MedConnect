@@ -37,4 +37,16 @@ if (!existsSync(input)) {
 const args = [cli, input, "--output", output, "--alphabetize"];
 if (check) args.push("--check");
 
-execFileSync(process.execPath, args, { stdio: "inherit" });
+try {
+  execFileSync(process.execPath, args, { stdio: "inherit" });
+} catch {
+  if (!check) process.exit(1);
+  console.error(
+    `\n${relative(process.cwd(), output)} is stale — the backend OpenAPI contract changed.\n\n` +
+      "Regenerate and commit it with your backend change:\n\n" +
+      "  cd backend && python scripts/export_openapi.py\n" +
+      "  cd ../frontend && npm run gen:api-types\n\n" +
+      "(or `make gen-api-types` from the repo root — no DB/server needed)\n",
+  );
+  process.exit(1);
+}

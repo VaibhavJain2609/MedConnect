@@ -200,6 +200,8 @@ make logs SERVICE=backend          # tail one service (default: all)
 make psql                          # psql into medconnect DB
 make psql-medicine                 # psql into medconnect_medicines DB
 make down-v                        # full reset incl. volumes (DATA LOSS)
+make gen-api-types                 # regen frontend schema.d.ts from OpenAPI
+make check-api-types               # fail if schema.d.ts is stale (CI does this)
 
 # K8s
 kubectl -n <ns> logs deploy/backend --tail=200 -f          # JSON structlog
@@ -215,6 +217,12 @@ failing request end-to-end by grepping for its `request_id`.
 
 Grafana/Prometheus/Alertmanager UIs (cluster): `kubectl -n monitoring
 port-forward svc/kube-prometheus-stack-grafana 3001:80` etc.
+
+**API contract types:** after adding/changing any backend endpoint, run
+`make gen-api-types` (or `cd backend && python scripts/export_openapi.py &&
+cd ../frontend && npm run gen:api-types`) and commit
+`frontend/src/lib/api/schema.d.ts` with the change. The `contract` CI job
+rejects PRs where it's stale — see `docs/api-types.md`.
 
 ## 8. Logs (Loki aggregation)
 

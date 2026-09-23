@@ -27,6 +27,9 @@ POSTGRES_PASSWORD ?= medconnect
 
 SERVICE ?=            # set SERVICE=backend (etc.) for per-service logs
 PYTEST ?= $(if $(wildcard backend/.venv/bin/pytest),backend/.venv/bin/pytest,pytest)
+# Backend interpreter for the OpenAPI export — the backend venv from
+# `make backend-install` if present, else system python3. Override: PY=...
+PY ?= $(if $(wildcard backend/.venv/bin/python),backend/.venv/bin/python,python3)
 
 # Test URLs: conftest defaults point at the in-network `postgres` hostname;
 # local runs go through the published port.
@@ -37,6 +40,7 @@ TEST_DB_MEDICINE := postgresql+asyncpg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@l
         migrate migrate-new migrate-down seed \
         psql psql-medicine redis-cli backup restore-drill \
         test-backend test-frontend test-e2e lint lint-backend lint-frontend typecheck \
+        gen-api-types check-api-types \
         backend-install frontend-install build clean \
         loadtest loadtest-smoke \
         k8s-render k8s-alerts-staging k8s-alerts-prod
@@ -140,6 +144,17 @@ lint-frontend: ## next lint frontend/
 
 typecheck: ## tsc --noEmit on the frontend
 	cd frontend && npm run typecheck
+
+# OpenAPI -> TS contract types (see docs/api-types.md). The export step runs
+# `app.openapi()` in-process — no DB, Redis, Keycloak or running server needed.
+
+gen-api-types: ## Regenerate frontend schema.d.ts from the backend OpenAPI schema (no DB needed)
+	$(PY) backend/scripts/export_openapi.py
+	cd frontend && npm run gen:api-types
+
+check-api-types: ## Fail if frontend schema.d.ts is stale vs. the backend OpenAPI schema
+	$(PY) backend/scripts/export_openapi.py
+	cd frontend && npm run check:api-types
 
 # --- local toolchain --------------------------------------------------------
 
