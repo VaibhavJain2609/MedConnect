@@ -531,6 +531,21 @@
     "loadFailed": "Failed to load holidays",
     "addFailed": "Could not add the holiday — this date may already exist."
   },
+  "doctorLeaves": {
+    "title": "Leave Days",
+    "description": "Full days off — no slots are bookable on these dates.",
+    "dateLabel": "Leave date",
+    "reasonLabel": "Leave reason",
+    "reasonPlaceholder": "Reason (optional)",
+    "add": "Add leave",
+    "adding": "Adding…",
+    "remove": "Remove leave",
+    "empty": "No upcoming leave days.",
+    "loading": "Loading…",
+    "loadFailed": "Failed to load leave days.",
+    "addFailed": "Could not add the leave — this date may already exist.",
+    "removeFailed": "Could not remove the leave."
+  },
   "clinicWebhooks": {
     "title": "Webhooks",
     "breadcrumbClinic": "My Clinic",

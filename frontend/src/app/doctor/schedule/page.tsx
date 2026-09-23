@@ -4,14 +4,12 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, Plus, Trash2, X } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
+import { DoctorLeavesCard } from "@/components/doctor/doctor-leaves-card";
 import {
   getMyAvailability,
   createAvailabilityWindow,
   updateAvailabilityWindow,
   deleteAvailabilityWindow,
-  getMyLeaves,
-  createLeave,
-  deleteLeave,
   type AvailabilityWindow,
 } from "@/lib/api/availability";
 
@@ -214,22 +212,15 @@ function NewWindowForm({
 export default function DoctorSchedulePage() {
   const queryClient = useQueryClient();
   const [addingFor, setAddingFor] = useState<number | null>(null);
-  const [leaveDate, setLeaveDate] = useState("");
-  const [leaveReason, setLeaveReason] = useState("");
   const [pageError, setPageError] = useState<string | null>(null);
 
   const windowsQuery = useQuery({
     queryKey: ["my-availability"],
     queryFn: getMyAvailability,
   });
-  const leavesQuery = useQuery({
-    queryKey: ["my-leaves"],
-    queryFn: getMyLeaves,
-  });
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["my-availability"] });
-    queryClient.invalidateQueries({ queryKey: ["my-leaves"] });
   };
 
   const createWindowMutation = useMutation({
@@ -266,36 +257,7 @@ export default function DoctorSchedulePage() {
     onError: (e) => setPageError(errorMessage(e)),
   });
 
-  const createLeaveMutation = useMutation({
-    mutationFn: createLeave,
-    onSuccess: () => {
-      setLeaveDate("");
-      setLeaveReason("");
-      setPageError(null);
-      invalidate();
-    },
-    onError: (e) => setPageError(errorMessage(e)),
-  });
-
-  const deleteLeaveMutation = useMutation({
-    mutationFn: deleteLeave,
-    onSuccess: () => {
-      setPageError(null);
-      invalidate();
-    },
-    onError: (e) => setPageError(errorMessage(e)),
-  });
-
   const windows = windowsQuery.data ?? [];
-  const leaves = (leavesQuery.data ?? []).slice().sort((a, b) => a.date.localeCompare(b.date));
-
-  const formatLeaveDate = (iso: string) =>
-    new Date(iso + "T00:00:00").toLocaleDateString("en-IN", {
-      weekday: "short",
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
 
   return (
     <div className="space-y-6">
@@ -317,12 +279,12 @@ export default function DoctorSchedulePage() {
 
       {/* Surface query failures — otherwise a failed fetch looks like "not
           available" on every day, which silently misleads the doctor. */}
-      {(windowsQuery.isError || leavesQuery.isError) && (
+      {windowsQuery.isError && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           Failed to load your schedule — the grid below may be stale.{" "}
           <button
             className="underline font-medium"
-            onClick={() => { windowsQuery.refetch(); leavesQuery.refetch(); }}
+            onClick={() => windowsQuery.refetch()}
           >
             Retry
           </button>
@@ -393,83 +355,7 @@ export default function DoctorSchedulePage() {
       </div>
 
       {/* Leave days */}
-      <div className="rounded-xl border border-dreams-border bg-white">
-        <div className="border-b border-dreams-border px-5 py-4">
-          <h2 className="text-lg font-semibold text-dreams-textPrimary">
-            Leave Days
-          </h2>
-          <p className="text-sm text-dreams-textSecondary mt-0.5">
-            Full days off — no slots are bookable on these dates.
-          </p>
-        </div>
-        <div className="px-5 py-4 space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              type="date"
-              value={leaveDate}
-              onChange={(e) => setLeaveDate(e.target.value)}
-              className={inputCls}
-              aria-label="Leave date"
-            />
-            <input
-              type="text"
-              value={leaveReason}
-              onChange={(e) => setLeaveReason(e.target.value)}
-              placeholder="Reason (optional)"
-              maxLength={255}
-              className={`${inputCls} w-64`}
-              aria-label="Leave reason"
-            />
-            <button
-              onClick={() =>
-                leaveDate &&
-                createLeaveMutation.mutate({
-                  date: leaveDate,
-                  reason: leaveReason || null,
-                })
-              }
-              disabled={!leaveDate || createLeaveMutation.isPending}
-              className="h-9 rounded-lg bg-dreams-blue px-4 text-sm font-medium text-white hover:bg-dreams-blue/90 disabled:opacity-50"
-            >
-              Add leave
-            </button>
-          </div>
-
-          {leavesQuery.isLoading ? (
-            <p className="text-sm text-dreams-textSecondary">Loading…</p>
-          ) : leaves.length === 0 ? (
-            <p className="text-sm text-dreams-textSecondary">
-              No upcoming leave days.
-            </p>
-          ) : (
-            <ul className="divide-y divide-dreams-border">
-              {leaves.map((leave) => (
-                <li
-                  key={leave.id}
-                  className="flex items-center gap-3 py-2.5 text-sm"
-                >
-                  <span className="font-medium text-dreams-textPrimary">
-                    {formatLeaveDate(leave.date)}
-                  </span>
-                  {leave.reason && (
-                    <span className="text-dreams-textSecondary">
-                      — {leave.reason}
-                    </span>
-                  )}
-                  <button
-                    onClick={() => deleteLeaveMutation.mutate(leave.id)}
-                    className="ml-auto text-gray-400 hover:text-red-500"
-                    aria-label="Remove leave"
-                    title="Remove leave"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
+      <DoctorLeavesCard />
     </div>
   );
 }
