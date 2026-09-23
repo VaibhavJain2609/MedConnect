@@ -6,6 +6,9 @@ asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-ra"
+markers = [
+    "smoke: fast pre-merge sanity tier — critical-path happy paths + bug regressions (run: pytest -m smoke)",
+]
 
 [tool.coverage.run]
 source = ["app"]

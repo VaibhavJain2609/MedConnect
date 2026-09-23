@@ -72,6 +72,7 @@ async def _make_bill(
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 async def test_create_bill_with_items_computes_total(
     admin_client: AsyncClient, db: AsyncSession, patient_user: User
 ):

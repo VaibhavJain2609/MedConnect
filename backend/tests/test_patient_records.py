@@ -126,6 +126,7 @@ async def test_records_list_empty(patient_client: AsyncClient):
     assert body["pagination"]["next_cursor"] is None
 
 
+@pytest.mark.smoke
 async def test_records_list_returns_only_own(
     patient_client: AsyncClient, patient_user: User, db: AsyncSession
 ):

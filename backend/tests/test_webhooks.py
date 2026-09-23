@@ -114,6 +114,7 @@ def _auth(client, user: User, roles=("doctor",)) -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 @pytest.mark.asyncio
 async def test_emit_creates_delivery_and_enqueues_per_event(
     db: AsyncSession, clinic: Clinic, endpoint: WebhookEndpoint, webhooks_on, arq_redis
@@ -151,6 +152,7 @@ async def test_emit_skips_unsubscribed_and_inactive(
     arq_redis.enqueue_job.assert_not_called()
 
 
+@pytest.mark.smoke
 @pytest.mark.asyncio
 async def test_emit_disabled_flag_noop(
     db: AsyncSession, clinic: Clinic, endpoint: WebhookEndpoint, monkeypatch

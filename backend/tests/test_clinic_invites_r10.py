@@ -310,6 +310,7 @@ class TestRevokeInvite:
 
 
 class TestRedeemInvite:
+    @pytest.mark.smoke
     async def test_doctor_redeems_doctor_invite(
         self, client, db, clinic, owner_membership, doctor_user
     ):
@@ -337,6 +338,7 @@ class TestRedeemInvite:
         await db.refresh(invite)
         assert invite.use_count == 1
 
+    @pytest.mark.smoke
     async def test_patient_redeems_receptionist_invite(
         self, client, db, clinic, owner_membership, doctor_user, patient_user
     ):

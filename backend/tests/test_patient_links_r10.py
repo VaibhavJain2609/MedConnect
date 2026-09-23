@@ -151,6 +151,7 @@ async def _make_patient(db: AsyncSession, email: str | None = None) -> tuple[Use
 
 
 class TestLinkCode:
+    @pytest.mark.smoke
     async def test_creates_code(self, patient_client):
         resp = await patient_client.get("/api/v1/patients/link-code")
         assert resp.status_code == 200, resp.text
@@ -203,6 +204,7 @@ class TestLinkCode:
 
 
 class TestLinkPatient:
+    @pytest.mark.smoke
     async def test_happy_path_consumes_code(
         self, doctor_client, db, clinic, owner_membership, doctor_user, patient_user
     ):
@@ -461,6 +463,7 @@ class TestPatientLinkList:
 
 
 class TestConsent:
+    @pytest.mark.smoke
     async def test_approve_sets_consented_at(
         self, patient_client, db, clinic, doctor_user, patient_user
     ):

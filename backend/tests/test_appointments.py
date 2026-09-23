@@ -227,6 +227,7 @@ class TestStatusTransitions:
 
 
 class TestPatientCancelOnly:
+    @pytest.mark.smoke
     async def test_patient_can_cancel_own_appointment(
         self, patient_client, db, patient_user, doctor_profile
     ):
@@ -326,6 +327,7 @@ class TestBookingConflicts:
             "type": "in-person",
         }
 
+    @pytest.mark.smoke
     async def test_patient_books_own_appointment(
         self, patient_client, db, patient_user, doctor_profile
     ):
@@ -338,6 +340,7 @@ class TestBookingConflicts:
         assert body["status"] == "scheduled"
         assert body["patient_id"] == str(patient_user.id)
 
+    @pytest.mark.smoke
     async def test_double_booking_same_slot_returns_409(
         self, patient_client, db, patient_user, doctor_profile
     ):

@@ -21,6 +21,7 @@ async def setup_users(client: AsyncClient, db) -> tuple[str, str, str]:
     return doctor_token, patient_token, patient_id
 
 
+@pytest.mark.smoke
 @pytest.mark.asyncio
 async def test_create_prescription(client: AsyncClient, db):
     doctor_token, patient_token, patient_id = await setup_users(client, db)

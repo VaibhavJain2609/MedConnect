@@ -70,6 +70,7 @@ def test_development_defaults_construct(clean_env):
     assert s.APP_ENV == "development"
 
 
+@pytest.mark.smoke
 def test_production_full_config_passes(clean_env):
     s = _settings(**_PROD_ENV)
     assert s.APP_ENV == "production"
@@ -86,6 +87,7 @@ def test_env_var_path_also_enforced(clean_env):
 # Production guard — dev defaults must fail
 # ---------------------------------------------------------------------------
 
+@pytest.mark.smoke
 def test_production_rejects_all_dev_defaults(clean_env):
     with pytest.raises(ValidationError) as exc:
         _settings(APP_ENV="production")
