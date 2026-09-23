@@ -161,14 +161,24 @@
   - Bulk catalog import — POST /admin/catalog/import CSV (dry-run, per-row SAVEPOINT, idempotent upserts, 13 tests) + import UI
   - Audit retention — audit_log_archive table + daily 09:00 worker (1k-row batches, 100k/run cap) + archived endpoint + Archive tab
   - Prescription safety checks — prescription_safety_checks snapshot per rx (alerts+override_reason) + GET endpoint + detail page
-- **Round-14 — IN PROGRESS (5 of 8 landed):**
+- **Round-14 — ALL LANDED (8/8):**
   - OpenAPI drift gate — schema.d.ts regenerated (was ~1,885 lines stale), `make check-api-types` + CI wiring; fixed Makefile venv-path bug (482154f, dcd3152)
   - Doctor leave — i18n `DoctorLeavesCard` extracted from schedule page + CRUD/slot-exclusion tests (8b999fc)
-  - Smoke test tier — `pytest -m smoke` (38 tests) + Makefile target; verified post-schema-reset (4fb7331, a84c028)
+  - Smoke test tier — `pytest -m smoke` (38 tests) + Makefile target (4fb7331, a84c028)
   - 429 rate-limit UX — typed RateLimitError, Retry-After surfacing, single GET auto-retry, deduped localized toast (c67fd7e)
-  - Doctor availability UX — clinic/branch-scoped windows, clinic timezone display, 7-day slot preview; merged keeping extracted DoctorLeavesCard (7048089→54ebf89)
-  - In flight: admin-i18n-2 (remaining admin pages), encounter-followups (linked appt, idempotent), idempotency (Idempotency-Key on risky POSTs)
-- **Round-14 queue:** ABDM (BLOCKED), real LLM-OCR provider when creds exist, first real e2e CI run (@auth specs), medicine_import_sample.csv cleanup
+  - Doctor availability UX — clinic/branch-scoped windows, clinic timezone display, 7-day slot preview (7048089→54ebf89)
+  - Encounter follow-ups — `POST /encounters/{id}/follow-up`, unique partial index, idempotent + doctor/clinic-scoped, modal UI (919e609+ce8d5c1)
+  - Idempotency-Key — (key,user,endpoint) claim rows, SHA-256 body-hash mismatch→409, in-progress→409, 24h TTL, verbatim replay; 6 create endpoints + frontend keys (fc8109a)
+  - Admin i18n complete — every remaining admin page + global search + notification center + shared UI; 1569 keys/locale exact parity (eb67839)
+- **Round-15 — ALL LANDED (6/6, 67 new tests green):**
+  - Waiting-room display — PHI-free token board `GET /queue/display` (names/ids never in payload, asserted by test) + `/doctor/queue/display` TV view + patient queue ETA i18n (18c9e6a)
+  - Doctor analytics — `/doctors/analytics` (status counts, 8-wk completions, avg consult, top-10 medicines, queue-today) + `/doctor/analytics` recharts page w/ a11y pattern (714838a)
+  - Lab orders — `LabOrder` model + doctor CRUD/status transitions + patient visibility, consent-gated writes (05ec27b)
+  - Medication adherence reminders — opt-in per-rx times_of_day (Asia/Kolkata), 15-min cron slot match, Notification-meta dedupe incl. soft-deleted, flag `MEDICATION_REMINDERS_ENABLED` (748506c)
+  - Admin CSV exports — patients + appointments honoring live filters, 50k cap, EXPORT audit rows (cb96370)
+  - Uploads authz audit — download path already secure; +7 regression tests (unauth 401, cross-patient 403, pending-link 403, revoked split pre/post) (bcf9b5a)
+- **Round-16 queue (in flight):** secure patient↔clinic messaging, DPDP patient data export, patient reschedule, SMS/WhatsApp adapters (flag-gated), hot-path index audit, router coverage gap-fill
+- **Round-14 queue:** ABDM (BLOCKED), real LLM-OCR provider when creds exist, first real e2e CI run (@auth specs), medicine_import_sample.csv cleanup (done — stale file dropped)
 - **BLOCKED — ABDM/ABHA: awaiting regulatory approval (user-confirmed)** — do not implement: ABHA creation/linking, NRCeS-conformant FHIR, HIP module (tickets 107–116)
 - **Blocked/external:** SMS/WhatsApp live provider accounts (code adapters anyway), OCR/AI features, load testing env, i18n assets, barcode data source, push VAPID/service
 
