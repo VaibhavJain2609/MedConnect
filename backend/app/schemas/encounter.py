@@ -44,6 +44,17 @@ class FollowUpCreate(BaseModel):
         return v.replace(tzinfo=timezone.utc) if v.tzinfo is None else v
 
 
+class FollowUpSummary(BaseModel):
+    """Compact view of the follow-up appointment booked from an encounter."""
+
+    id: UUID
+    scheduled_at: datetime
+    duration_minutes: int
+    type: str
+    status: str
+    notes: Optional[str] = None
+
+
 class EncounterResponse(BaseModel):
     id: UUID
     patient_id: UUID
@@ -58,6 +69,7 @@ class EncounterResponse(BaseModel):
     assessment: Optional[str] = None
     plan: Optional[str] = None
     vitals_snapshot: Optional[dict] = None
+    follow_up: Optional[FollowUpSummary] = None
     created_at: datetime
     updated_at: datetime
 
