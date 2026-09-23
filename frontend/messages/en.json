@@ -636,6 +636,7 @@
     "subtitle": "Today's waiting room — auto-refreshes every 30s",
     "summary": "{waiting} waiting · {inConsultation} in consultation",
     "refresh": "Refresh",
+    "openDisplay": "Display board",
     "nextUp": "Next up",
     "callNext": "Call Next Patient",
     "sections": {
@@ -1156,5 +1157,52 @@
     "scheduling": "Scheduling…",
     "errorSelectDateTime": "Please pick a date and time",
     "errorFailed": "Failed to schedule the follow-up. Please try again."
+  },
+  "patientQueue": {
+    "title": "Queue Status",
+    "subtitle": "Live view of your place in today's queue",
+    "refreshing": "Refreshing...",
+    "updated": "Updated {time}",
+    "loading": "Loading your queue status...",
+    "notCheckedInTitle": "You're not checked in anywhere today",
+    "notCheckedInDescription": "When a clinic checks you in, your live queue position will appear here.",
+    "viewAppointments": "View my appointments",
+    "clinicFallback": "Clinic",
+    "doctorLabel": "Dr. {name}",
+    "status": {
+      "waiting": "Waiting",
+      "in_consultation": "In Consultation",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
+    },
+    "beingSeen": "You're being seen now",
+    "yourPosition": "your position in queue",
+    "visitComplete": "Your visit is complete",
+    "entryCancelled": "This queue entry was cancelled",
+    "tokenNumber": "Token #{number}",
+    "peopleAhead": "People ahead of you",
+    "estimatedWait": "Estimated wait",
+    "waitNow": "Any moment now",
+    "waitMinutes": "~{minutes} min",
+    "waitHours": "~{hours} hr",
+    "waitHoursMinutes": "~{hours} hr {minutes} min",
+    "refreshNote": "This page refreshes automatically every 30 seconds."
+  },
+  "queueDisplay": {
+    "title": "Waiting Room",
+    "clinicFallback": "Clinic",
+    "noClinic": "Select a clinic to show the display board.",
+    "loadFailed": "Unable to load the queue board.",
+    "autoRefresh": "Auto-refreshes every {seconds} seconds",
+    "updated": "Updated {time}",
+    "nowServing": "Now Serving",
+    "noneServing": "No one is being seen right now.",
+    "proceedInside": "Please proceed inside",
+    "upNext": "Up Next",
+    "position": "No. {position} in line",
+    "waitingTotal": "{count} waiting today",
+    "moreWaiting": "+{count} more",
+    "emptyTitle": "No patients in the queue",
+    "emptyHint": "Tokens will appear here as patients check in."
   }
 }

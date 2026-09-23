@@ -44,6 +44,31 @@ export async function getMyQueuePosition(): Promise<MyQueuePosition> {
   return res.data;
 }
 
+/**
+ * Anonymized waiting-room board (GET /api/v1/queue/display).
+ * Token labels only — the payload carries no patient identifiers, names,
+ * or notes, so it is safe to render on a public-facing TV.
+ */
+export interface QueueDisplayToken {
+  token: string; // e.g. "Q-12"
+  status: "waiting" | "in_consultation";
+  position: number | null; // 1-based place among waiting entries
+  called_at: string | null;
+}
+
+export interface QueueDisplayResponse {
+  now_serving: QueueDisplayToken[];
+  up_next: QueueDisplayToken[];
+  waiting_count: number; // total waiting (up_next may be truncated by limit)
+  generated_at: string;
+}
+
+export async function getQueueDisplay(limit = 8): Promise<QueueDisplayResponse> {
+  // X-Clinic-Id is attached automatically by the axios interceptor.
+  const res = await api.get("/api/v1/queue/display", { params: { limit } });
+  return res.data;
+}
+
 export async function getQueue(
   clinicId: string,
   params?: { status?: string; doctor_id?: string }

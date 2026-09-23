@@ -23,6 +23,7 @@ from app.models.notification import Notification, NotificationType
 from app.models.queue import QueueEntry
 from app.models.user import User
 from app.schemas.queue import (
+    QueueDisplayResponse,
     QueueEntryCreate,
     QueueEntryResponse,
     QueueListResponse,
@@ -507,6 +508,68 @@ async def get_my_queue_position(
         "status": entry.status,
         "ahead_count": ahead_count,
         "estimated_wait_minutes": estimated_wait,
+    }
+
+
+def _display_token(entry: QueueEntry, position: int | None = None) -> dict:
+    """Serialize a queue entry for the public board — token label only.
+
+    No patient_id, names, notes, or doctor names: the display TV is visible
+    to everyone in the waiting room, so PHI never enters this payload.
+    """
+    return {
+        "token": f"Q-{entry.queue_number}",
+        "status": entry.status,
+        "position": position,
+        "called_at": entry.called_at.isoformat() if entry.called_at else None,
+    }
+
+
+@router.get("/display", response_model=QueueDisplayResponse)
+async def get_queue_display(
+    limit: int = Query(8, ge=1, le=50),
+    staff: tuple = Depends(get_clinic_staff),
+    db: AsyncSession = Depends(get_db),
+):
+    """Anonymized waiting-room board for a clinic TV (any clinic staff).
+
+    Returns today's active queue as token numbers only — now-serving
+    (in_consultation) plus up to ``limit`` upcoming waiting tokens. Completed
+    and cancelled entries drop off the board. ``waiting_count`` is the full
+    waiting total so the UI can show "+N more" when up_next is truncated.
+    """
+    _user, clinic_id, _clinic_role = staff
+
+    today = datetime.now(tz=timezone.utc).date()
+    day_start = datetime(today.year, today.month, today.day, 0, 0, 0, tzinfo=timezone.utc)
+    day_end = day_start + timedelta(days=1)
+
+    result = await db.execute(
+        select(QueueEntry)
+        .where(
+            QueueEntry.clinic_id == clinic_id,
+            QueueEntry.deleted_at.is_(None),
+            QueueEntry.created_at >= day_start,
+            QueueEntry.created_at < day_end,
+            QueueEntry.status.in_(ACTIVE_STATUSES),
+        )
+        .order_by(QueueEntry.queue_number.asc())
+    )
+    entries = result.scalars().all()
+
+    now_serving = [
+        _display_token(e) for e in entries if e.status == "in_consultation"
+    ]
+    waiting = [e for e in entries if e.status == "waiting"]
+    up_next = [
+        _display_token(e, position=i) for i, e in enumerate(waiting[:limit], start=1)
+    ]
+
+    return {
+        "now_serving": now_serving,
+        "up_next": up_next,
+        "waiting_count": len(waiting),
+        "generated_at": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 

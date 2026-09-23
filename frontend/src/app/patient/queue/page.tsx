@@ -2,18 +2,19 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { Building2, Clock, RefreshCw, Stethoscope, Users } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { EmptyState } from "@/components/ui/empty-state";
 import { getMyQueuePosition, type MyQueuePosition } from "@/lib/api/queue";
 import { cn } from "@/lib/utils";
 
-const STATUS_LABELS: Record<NonNullable<MyQueuePosition["status"]>, string> = {
-  waiting: "Waiting",
-  in_consultation: "In Consultation",
-  completed: "Completed",
-  cancelled: "Cancelled",
-};
+const STATUS_KEYS = [
+  "waiting",
+  "in_consultation",
+  "completed",
+  "cancelled",
+] as const;
 
 const STATUS_COLORS: Record<NonNullable<MyQueuePosition["status"]>, string> = {
   waiting: "bg-blue-100 text-blue-800",
@@ -22,16 +23,18 @@ const STATUS_COLORS: Record<NonNullable<MyQueuePosition["status"]>, string> = {
   cancelled: "bg-red-100 text-red-700",
 };
 
-function formatWait(minutes: number | null) {
-  if (minutes == null) return "—";
-  if (minutes < 1) return "Any moment now";
-  if (minutes < 60) return `~${minutes} min`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m > 0 ? `~${h} hr ${m} min` : `~${h} hr`;
-}
-
 export default function PatientQueuePage() {
+  const t = useTranslations("patientQueue");
+
+  function formatWait(minutes: number | null) {
+    if (minutes == null) return "—";
+    if (minutes < 1) return t("waitNow");
+    if (minutes < 60) return t("waitMinutes", { minutes });
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return m > 0 ? t("waitHoursMinutes", { hours: h, minutes: m }) : t("waitHours", { hours: h });
+  }
+
   const { data, isLoading, isFetching, dataUpdatedAt } = useQuery({
     queryKey: ["my-queue-position"],
     queryFn: getMyQueuePosition,
@@ -46,7 +49,7 @@ export default function PatientQueuePage() {
       <Breadcrumb
         items={[
           { label: "Patient Portal", href: "/patient/timeline" },
-          { label: "Queue Status" },
+          { label: t("title") },
         ]}
       />
 
@@ -54,10 +57,10 @@ export default function PatientQueuePage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-dreams-textPrimary">
-            Queue Status
+            {t("title")}
           </h1>
           <p className="text-dreams-textSecondary text-sm mt-1">
-            Live view of your place in today&apos;s queue
+            {t("subtitle")}
           </p>
         </div>
         {checkedIn && (
@@ -67,11 +70,13 @@ export default function PatientQueuePage() {
             />
             <span>
               {isFetching
-                ? "Refreshing..."
-                : `Updated ${new Date(dataUpdatedAt).toLocaleTimeString("en-IN", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}`}
+                ? t("refreshing")
+                : t("updated", {
+                    time: new Date(dataUpdatedAt).toLocaleTimeString("en-IN", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    }),
+                  })}
             </span>
           </div>
         )}
@@ -79,20 +84,20 @@ export default function PatientQueuePage() {
 
       {isLoading ? (
         <div className="bg-white rounded-xl shadow-card border border-dreams-border p-12 flex items-center justify-center text-dreams-textSecondary">
-          Loading your queue status...
+          {t("loading")}
         </div>
       ) : !checkedIn ? (
         <div className="bg-white rounded-xl shadow-card border border-dreams-border">
           <EmptyState
             icon={Users}
-            title="You're not checked in anywhere today"
-            description="When a clinic checks you in, your live queue position will appear here."
+            title={t("notCheckedInTitle")}
+            description={t("notCheckedInDescription")}
             action={
               <Link
                 href="/patient/appointments"
                 className="inline-flex items-center gap-2 px-4 py-2 bg-dreams-blue text-white rounded-lg hover:bg-dreams-blue/90 transition-colors text-sm font-medium"
               >
-                View my appointments
+                {t("viewAppointments")}
               </Link>
             }
           />
@@ -105,23 +110,23 @@ export default function PatientQueuePage() {
               <div>
                 <div className="flex items-center gap-2 text-sm text-dreams-textSecondary">
                   <Building2 className="h-4 w-4" />
-                  <span>{data?.clinic_name ?? "Clinic"}</span>
+                  <span>{data?.clinic_name ?? t("clinicFallback")}</span>
                 </div>
                 {data?.doctor_name && (
                   <div className="flex items-center gap-2 text-sm text-dreams-textSecondary mt-1">
                     <Stethoscope className="h-4 w-4" />
-                    <span>Dr. {data.doctor_name}</span>
+                    <span>{t("doctorLabel", { name: data.doctor_name })}</span>
                   </div>
                 )}
               </div>
-              {data?.status && (
+              {data?.status && STATUS_KEYS.includes(data.status) && (
                 <span
                   className={cn(
                     "inline-flex items-center px-3 py-1 rounded-full text-xs font-medium w-fit",
                     STATUS_COLORS[data.status]
                   )}
                 >
-                  {STATUS_LABELS[data.status]}
+                  {t(`status.${data.status}`)}
                 </span>
               )}
             </div>
@@ -134,21 +139,21 @@ export default function PatientQueuePage() {
                   </span>
                   <span className="text-sm text-dreams-textSecondary pb-1">
                     {data?.status === "in_consultation"
-                      ? "You're being seen now"
-                      : "your position in queue"}
+                      ? t("beingSeen")
+                      : t("yourPosition")}
                   </span>
                 </>
               ) : (
                 <span className="text-lg font-semibold text-dreams-textPrimary">
                   {data?.status === "completed"
-                    ? "Your visit is complete"
-                    : "This queue entry was cancelled"}
+                    ? t("visitComplete")
+                    : t("entryCancelled")}
                 </span>
               )}
             </div>
             {data?.queue_number != null && (
               <p className="text-xs text-dreams-textSecondary mt-2">
-                Token #{data.queue_number}
+                {t("tokenNumber", { number: data.queue_number })}
               </p>
             )}
           </div>
@@ -159,7 +164,7 @@ export default function PatientQueuePage() {
               <div className="bg-white rounded-xl shadow-card border border-dreams-border p-5">
                 <div className="flex items-center gap-2 text-sm text-dreams-textSecondary">
                   <Users className="h-4 w-4" />
-                  <span>People ahead of you</span>
+                  <span>{t("peopleAhead")}</span>
                 </div>
                 <p className="text-3xl font-bold text-dreams-textPrimary mt-2">
                   {data?.ahead_count ?? 0}
@@ -168,7 +173,7 @@ export default function PatientQueuePage() {
               <div className="bg-white rounded-xl shadow-card border border-dreams-border p-5">
                 <div className="flex items-center gap-2 text-sm text-dreams-textSecondary">
                   <Clock className="h-4 w-4" />
-                  <span>Estimated wait</span>
+                  <span>{t("estimatedWait")}</span>
                 </div>
                 <p className="text-3xl font-bold text-dreams-textPrimary mt-2">
                   {formatWait(data?.estimated_wait_minutes ?? null)}
@@ -178,7 +183,7 @@ export default function PatientQueuePage() {
           )}
 
           <p className="text-xs text-dreams-textSecondary">
-            This page refreshes automatically every 30 seconds.
+            {t("refreshNote")}
           </p>
         </>
       )}
