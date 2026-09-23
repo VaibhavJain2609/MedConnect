@@ -3,6 +3,7 @@
  */
 
 import api from "../api";
+import { downloadFile } from "../download";
 
 export interface Appointment {
   id: string;
@@ -122,6 +123,37 @@ export async function getAppointments(
   }
 
   return result;
+}
+
+export interface AdminAppointmentsExportParams {
+  status?: string;
+  /** Inclusive YYYY-MM-DD bounds on scheduled_at. */
+  from?: string;
+  to?: string;
+  /** Clinic name — the admin page's clinic dropdown filters by name. */
+  clinic?: string;
+  clinic_id?: string;
+  /** Matches patient name, doctor name, or appointment id. */
+  search?: string;
+}
+
+/**
+ * Download the admin appointments CSV export.
+ *
+ * Hits GET /api/v1/admin/appointments/export with the same filters the
+ * /admin/appointments page applies. The filename
+ * (appointments-export-<date>.csv) is resolved from the response's
+ * Content-Disposition header by downloadFile().
+ */
+export async function exportAppointmentsCsv(
+  params: AdminAppointmentsExportParams = {}
+): Promise<void> {
+  const qs = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value) qs.set(key, value);
+  }
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  await downloadFile(`/api/v1/admin/appointments/export${suffix}`);
 }
 
 /**

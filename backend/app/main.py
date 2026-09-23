@@ -316,6 +316,8 @@ app.include_router(admin_audit.reports_router)
 app.include_router(admin_audit.audit_logs_router)
 app.include_router(admin_lab_results.router)
 app.include_router(admin_exports.router)
+app.include_router(admin_exports.patients_export_router)
+app.include_router(admin_exports.appointments_export_router)
 app.include_router(admin_broadcast.router)
 app.include_router(admin_patients.router)
 # clinic_invites before clinics: /api/v1/clinics/search must match before

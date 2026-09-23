@@ -4,6 +4,7 @@
  */
 
 import api from "../api";
+import { downloadFile } from "../download";
 
 export interface Patient {
   id: string;
@@ -126,6 +127,32 @@ export async function getPatients(
     limit: raw.limit,
     totalPages: raw.totalPages,
   };
+}
+
+export type PatientsExportParams = Pick<
+  PatientsListParams,
+  "search" | "status" | "clinic_id" | "consent_status"
+> & { is_active?: boolean };
+
+/**
+ * Download the admin patients CSV export.
+ *
+ * Hits GET /api/v1/admin/patients/export with the same filters as the
+ * patient list (the backend maps the page's `status` values onto
+ * is_active). The filename (patients-export-<date>.csv) is resolved
+ * from the response's Content-Disposition header by downloadFile().
+ */
+export async function exportPatientsCsv(
+  params: PatientsExportParams = {}
+): Promise<void> {
+  const qs = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== "") {
+      qs.set(key, String(value));
+    }
+  }
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  await downloadFile(`/api/v1/admin/patients/export${suffix}`);
 }
 
 /**
