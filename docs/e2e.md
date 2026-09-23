@@ -190,3 +190,33 @@ API credentials needed.
 - On failure the workflow dumps the postgres/redis/keycloak compose logs
   plus `backend-e2e.log`, and always uploads `frontend/playwright-report/`
   (traces included) for 14 days.
+
+## Verified locally vs. CI-only
+
+The following was validated on a developer machine without the docker
+stack (Docker daemon down): `npx playwright test --list` (all 16 tests
+load — catches spec/config import errors), `tsc --noEmit` on both the app
+and the e2e sources, and the four non-`@auth` tests running live against
+`next dev` — `smoke.spec.ts` (3 tests) and the public `a11y` audit all
+pass with Keycloak unreachable.
+
+Everything else still **needs a real CI run** (or a local
+`docker compose up` + `make seed`) before it's proven:
+
+- All `@auth` specs — token minting via direct grant, `keycloak.init()`
+  accepting the injected tokens, JWKS validation, auto-provisioning, and
+  refresh against the real token endpoint have only been validated
+  statically (fixture env vars ↔ workflow env, localStorage keys ↔
+  `src/lib/auth.ts`, realm users/subs ↔ `seed_demo_data.py`).
+- `queue.spec.ts` — the header-capture + `POST /api/v1/queue` check-in
+  flow and the seeded-name assertions (`Ananya Iyer`, `Kabir Singh`,
+  `Rohan Verma`) were verified against the routers/schemas/seed script
+  but never executed.
+- The `next start` `webServer` path — CI builds then serves the
+  production bundle; only the `next dev` path has been exercised. Watch
+  the first CI run for production-only differences (e.g. no StrictMode
+  double-effects, no dev overlay).
+- The seeded-appointment time-of-day assumption in
+  `patient-journey.spec.ts` (morning slots migrate to "Past" as the day
+  progresses) — the spec self-heals by switching tabs, but the nightly
+  cron timing is unproven.
