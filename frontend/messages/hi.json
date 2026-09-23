@@ -32,6 +32,7 @@
     "closeMenu": "मेनू बंद करें",
     "familyMembers": "परिवार के सदस्य",
     "doctorDashboard": "डैशबोर्ड",
+    "doctorAnalytics": "एनालिटिक्स",
     "doctorMyPatients": "मेरे मरीज़",
     "doctorSchedule": "शेड्यूल",
     "doctorEncounters": "विज़िट",
@@ -629,6 +630,45 @@
       "emptyHint": "पहला मरीज़ जोड़ने के लिए मेडिकल रिकॉर्ड या प्रिस्क्रिप्शन बनाएं।",
       "view": "देखें →",
       "addRecord": "रिकॉर्ड जोड़ें →"
+    }
+  },
+  "doctorAnalytics": {
+    "breadcrumb": "एनालिटिक्स",
+    "title": "एनालिटिक्स",
+    "subtitle": "आपकी प्रैक्टिस एक नज़र में",
+    "loadError": "एनालिटिक्स लोड नहीं हो सके।",
+    "totalAppointments": "कुल अपॉइंटमेंट",
+    "avgConsult": "औसत परामर्श अवधि",
+    "avgConsultValue": "{minutes} मिनट",
+    "queueWaiting": "अभी कतार में",
+    "byStatus": {
+      "title": "स्थिति के अनुसार अपॉइंटमेंट",
+      "ariaLabel": "स्थिति के अनुसार अपॉइंटमेंट संख्या का बार चार्ट: {summary}",
+      "tableCaption": "स्थिति के अनुसार अपॉइंटमेंट संख्या",
+      "colStatus": "स्थिति",
+      "colCount": "अपॉइंटमेंट",
+      "empty": "अभी कोई अपॉइंटमेंट नहीं।"
+    },
+    "weekly": {
+      "title": "पूर्ण अपॉइंटमेंट — पिछले 8 सप्ताह",
+      "ariaLabel": "पिछले 8 सप्ताह में प्रति सप्ताह पूर्ण अपॉइंटमेंट का लाइन चार्ट",
+      "tableCaption": "प्रति सप्ताह पूर्ण अपॉइंटमेंट",
+      "colWeek": "सप्ताह प्रारंभ",
+      "colCount": "पूर्ण",
+      "seriesLabel": "पूर्ण"
+    },
+    "medicines": {
+      "title": "शीर्ष दवाएं",
+      "empty": "अभी कोई प्रिस्क्रिप्शन नहीं।",
+      "countSuffix": "{count, plural, one {# प्रिस्क्रिप्शन} other {# प्रिस्क्रिप्शन}}"
+    },
+    "statuses": {
+      "scheduled": "निर्धारित",
+      "arrived": "पहुंचे",
+      "inProgress": "जारी",
+      "completed": "पूर्ण",
+      "cancelled": "रद्द",
+      "noShow": "नहीं आए"
     }
   },
   "doctorQueue": {

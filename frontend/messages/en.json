@@ -32,6 +32,7 @@
     "closeMenu": "Close menu",
     "familyMembers": "Family Members",
     "doctorDashboard": "Dashboard",
+    "doctorAnalytics": "Analytics",
     "doctorMyPatients": "My Patients",
     "doctorSchedule": "Schedule",
     "doctorEncounters": "Encounters",
@@ -629,6 +630,45 @@
       "emptyHint": "Create a medical record or prescription to add your first patient.",
       "view": "View →",
       "addRecord": "Add record →"
+    }
+  },
+  "doctorAnalytics": {
+    "breadcrumb": "Analytics",
+    "title": "Analytics",
+    "subtitle": "Your practice at a glance",
+    "loadError": "Couldn't load analytics.",
+    "totalAppointments": "Total appointments",
+    "avgConsult": "Avg. consultation",
+    "avgConsultValue": "{minutes} min",
+    "queueWaiting": "In queue now",
+    "byStatus": {
+      "title": "Appointments by status",
+      "ariaLabel": "Bar chart of appointment counts by status: {summary}",
+      "tableCaption": "Appointment counts by status",
+      "colStatus": "Status",
+      "colCount": "Appointments",
+      "empty": "No appointments yet."
+    },
+    "weekly": {
+      "title": "Completed appointments — last 8 weeks",
+      "ariaLabel": "Line chart of completed appointments per week for the last 8 weeks",
+      "tableCaption": "Completed appointments per week",
+      "colWeek": "Week starting",
+      "colCount": "Completed",
+      "seriesLabel": "Completed"
+    },
+    "medicines": {
+      "title": "Top medicines",
+      "empty": "No prescriptions yet.",
+      "countSuffix": "{count, plural, one {# prescription} other {# prescriptions}}"
+    },
+    "statuses": {
+      "scheduled": "Scheduled",
+      "arrived": "Arrived",
+      "inProgress": "In progress",
+      "completed": "Completed",
+      "cancelled": "Cancelled",
+      "noShow": "No-show"
     }
   },
   "doctorQueue": {
