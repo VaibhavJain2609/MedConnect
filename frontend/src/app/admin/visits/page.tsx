@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ColumnDef } from "@tanstack/react-table";
 import { Plus, Search, Trash2 } from "lucide-react";
@@ -22,6 +23,9 @@ function formatDateTime(iso: string) {
 }
 
 export default function AdminVisitsPage() {
+  const t = useTranslations("adminVisits");
+  const tCommon = useTranslations("common");
+  const tPagination = useTranslations("pagination");
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [dateFilter, setDateFilter] = useState("");
@@ -55,7 +59,7 @@ export default function AdminVisitsPage() {
     {
       accessorKey: "id",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Visit ID" />
+        <DataTableColumnHeader column={column} title={t("table.visitId")} />
       ),
       cell: ({ row }) => (
         <span className="font-medium text-dreams-blue font-mono text-xs">
@@ -66,7 +70,7 @@ export default function AdminVisitsPage() {
     {
       accessorKey: "patient_name",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Patient Name" />
+        <DataTableColumnHeader column={column} title={t("table.patientName")} />
       ),
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
@@ -75,7 +79,7 @@ export default function AdminVisitsPage() {
             size="sm"
           />
           <span className="font-medium">
-            {row.original.patient_name ?? "Unknown"}
+            {row.original.patient_name ?? t("unknown")}
           </span>
         </div>
       ),
@@ -83,7 +87,7 @@ export default function AdminVisitsPage() {
     {
       accessorKey: "doctor_name",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Doctor Name" />
+        <DataTableColumnHeader column={column} title={t("table.doctorName")} />
       ),
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
@@ -92,7 +96,7 @@ export default function AdminVisitsPage() {
             size="sm"
           />
           <span className="font-medium">
-            {row.original.doctor_name ?? "Unknown"}
+            {row.original.doctor_name ?? t("unknown")}
           </span>
         </div>
       ),
@@ -100,7 +104,7 @@ export default function AdminVisitsPage() {
     {
       accessorKey: "clinic_name",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Clinic" />
+        <DataTableColumnHeader column={column} title={t("table.clinic")} />
       ),
       cell: ({ row }) => (
         <span className="text-sm">
@@ -111,7 +115,7 @@ export default function AdminVisitsPage() {
     {
       accessorKey: "created_at",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Visit Date" />
+        <DataTableColumnHeader column={column} title={t("table.visitDate")} />
       ),
       cell: ({ row }) => (
         <span className="text-sm">{formatDateTime(row.original.created_at)}</span>
@@ -120,7 +124,7 @@ export default function AdminVisitsPage() {
     {
       accessorKey: "assessment",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Assessment" />
+        <DataTableColumnHeader column={column} title={t("table.assessment")} />
       ),
       cell: ({ row }) => {
         const assessment = row.original.assessment;
@@ -138,16 +142,14 @@ export default function AdminVisitsPage() {
         <button
           onClick={() => {
             if (
-              window.confirm(
-                "Delete this visit? This will soft-delete the encounter record."
-              )
+              window.confirm(t("deleteConfirm"))
             ) {
               deleteMutation.mutate(row.original.id);
             }
           }}
           disabled={deleteMutation.isPending}
           className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40"
-          title="Delete visit"
+          title={t("deleteTitle")}
         >
           <Trash2 className="h-4 w-4" />
         </button>
@@ -166,9 +168,9 @@ export default function AdminVisitsPage() {
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center py-12 space-y-4">
-        <p className="text-red-600 font-medium">Failed to load visits</p>
+        <p className="text-red-600 font-medium">{t("loadError")}</p>
         <p className="text-dreams-textSecondary text-sm">
-          {error instanceof Error ? error.message : "An error occurred"}
+          {error instanceof Error ? error.message : tCommon("errorGeneric")}
         </p>
       </div>
     );
@@ -177,31 +179,31 @@ export default function AdminVisitsPage() {
   return (
     <div className="space-y-6">
       {/* Breadcrumb */}
-      <Breadcrumb items={[{ label: "Visits" }]} />
+      <Breadcrumb items={[{ label: t("breadcrumb") }]} />
 
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-bold text-dreams-textPrimary">
-              Visits
+              {t("title")}
             </h1>
             <Badge variant="pending" className="text-base px-3 py-1">
               {data?.total || 0}
             </Badge>
           </div>
           <p className="text-dreams-textSecondary mt-1">
-            Patient encounters and consultation notes
+            {t("subtitle")}
           </p>
         </div>
 
         <button
           disabled
-          title="Coming soon"
+          title={t("comingSoon")}
           className="flex items-center gap-2 px-4 py-2 bg-dreams-blue text-white rounded-lg opacity-50 cursor-not-allowed"
         >
           <Plus className="h-5 w-5" />
-          <span>New Visit</span>
+          <span>{t("newVisit")}</span>
         </button>
       </div>
 
@@ -212,7 +214,7 @@ export default function AdminVisitsPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Search by patient, doctor, or clinic..."
+            placeholder={t("searchPlaceholder")}
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
@@ -248,7 +250,7 @@ export default function AdminVisitsPage() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-dreams-textSecondary">
-            Page {page} of {totalPages} · {data?.total ?? 0} visits
+            {t("pageInfo", { page, totalPages, count: data?.total ?? 0 })}
           </p>
           <div className="flex gap-2">
             <button
@@ -256,14 +258,14 @@ export default function AdminVisitsPage() {
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               className="px-4 py-2 text-sm rounded-lg border border-dreams-border bg-white disabled:opacity-40 hover:bg-dreams-lightBg transition-colors"
             >
-              Previous
+              {tPagination("previous")}
             </button>
             <button
               disabled={page >= totalPages}
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               className="px-4 py-2 text-sm rounded-lg border border-dreams-border bg-white disabled:opacity-40 hover:bg-dreams-lightBg transition-colors"
             >
-              Next
+              {tPagination("next")}
             </button>
           </div>
         </div>

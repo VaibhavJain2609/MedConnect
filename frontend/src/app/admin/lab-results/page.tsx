@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
 import { ColumnDef } from "@tanstack/react-table";
 import { Plus, Search } from "lucide-react";
@@ -11,6 +12,10 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
 export default function AdminLabResultsPage() {
+  const t = useTranslations("adminLabResults");
+  const tStatus = useTranslations("statusBadge");
+  const tCommon = useTranslations("common");
+  const tPagination = useTranslations("pagination");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [page, setPage] = useState(1);
@@ -36,7 +41,7 @@ export default function AdminLabResultsPage() {
     {
       accessorKey: "test_id",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Test ID" />
+        <DataTableColumnHeader column={column} title={t("table.testId")} />
       ),
       cell: ({ row }) => (
         <span className="font-medium text-dreams-blue">
@@ -47,7 +52,7 @@ export default function AdminLabResultsPage() {
     {
       accessorKey: "patient_name",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Patient Name" />
+        <DataTableColumnHeader column={column} title={t("table.patientName")} />
       ),
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
@@ -63,13 +68,13 @@ export default function AdminLabResultsPage() {
     {
       accessorKey: "gender",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Gender" />
+        <DataTableColumnHeader column={column} title={t("table.gender")} />
       ),
     },
     {
       accessorKey: "appointment_date",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Appointment Date" />
+        <DataTableColumnHeader column={column} title={t("table.appointmentDate")} />
       ),
       cell: ({ row }) => (
         <span className="text-sm">
@@ -87,7 +92,7 @@ export default function AdminLabResultsPage() {
     {
       accessorKey: "doctor_name",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Referred By" />
+        <DataTableColumnHeader column={column} title={t("table.referredBy")} />
       ),
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
@@ -105,26 +110,21 @@ export default function AdminLabResultsPage() {
     {
       accessorKey: "test_name",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Test Name" />
+        <DataTableColumnHeader column={column} title={t("table.testName")} />
       ),
     },
     {
       accessorKey: "status",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Status" />
+        <DataTableColumnHeader column={column} title={t("table.status")} />
       ),
       cell: ({ row }) => {
         const status = row.getValue("status") as string;
-        const statusLabels: Record<string, string> = {
-          received: "Received",
-          in_progress: "In Progress",
-          completed: "Completed",
-          pending: "Pending",
-        };
+        const i18nKey = status.replace(/[_-]+(.)/g, (_, c) => c.toUpperCase());
 
         return (
           <Badge variant={status as any}>
-            {statusLabels[status] || status}
+            {tStatus.has(i18nKey as never) ? tStatus(i18nKey as never) : status}
           </Badge>
         );
       },
@@ -142,9 +142,9 @@ export default function AdminLabResultsPage() {
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center py-12 space-y-4">
-        <p className="text-red-600 font-medium">Failed to load lab results</p>
+        <p className="text-red-600 font-medium">{t("loadError")}</p>
         <p className="text-dreams-textSecondary text-sm">
-          {error instanceof Error ? error.message : "An error occurred"}
+          {error instanceof Error ? error.message : tCommon("errorGeneric")}
         </p>
       </div>
     );
@@ -153,26 +153,26 @@ export default function AdminLabResultsPage() {
   return (
     <div className="space-y-6">
       {/* Breadcrumb */}
-      <Breadcrumb items={[{ label: "Lab Results" }]} />
+      <Breadcrumb items={[{ label: t("breadcrumb") }]} />
 
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-dreams-textPrimary">
-            Lab Results
+            {t("title")}
           </h1>
           <p className="text-dreams-textSecondary mt-1">
-            Manage laboratory test results and reports
+            {t("subtitle")}
           </p>
         </div>
 
         <button
           disabled
-          title="Coming soon"
+          title={t("comingSoon")}
           className="flex items-center gap-2 px-4 py-2 bg-dreams-blue text-white rounded-lg opacity-50 cursor-not-allowed"
         >
           <Plus className="h-5 w-5" />
-          <span>New Test</span>
+          <span>{t("newTest")}</span>
         </button>
       </div>
 
@@ -183,7 +183,7 @@ export default function AdminLabResultsPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Search by patient, test, or ID..."
+            placeholder={t("searchPlaceholder")}
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
@@ -202,11 +202,11 @@ export default function AdminLabResultsPage() {
           }}
           className="h-10 px-4 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
         >
-          <option value="all">All Status</option>
-          <option value="pending">Pending</option>
-          <option value="in_progress">In Progress</option>
-          <option value="received">Received</option>
-          <option value="completed">Completed</option>
+          <option value="all">{t("allStatus")}</option>
+          <option value="pending">{tStatus("pending")}</option>
+          <option value="in_progress">{tStatus("inProgress")}</option>
+          <option value="received">{tStatus("received")}</option>
+          <option value="completed">{tStatus("completed")}</option>
         </select>
       </div>
 
@@ -224,7 +224,7 @@ export default function AdminLabResultsPage() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-dreams-textSecondary">
-            Page {page} of {totalPages} · {data?.total ?? 0} lab results
+            {t("pageInfo", { page, totalPages, count: data?.total ?? 0 })}
           </p>
           <div className="flex gap-2">
             <button
@@ -232,14 +232,14 @@ export default function AdminLabResultsPage() {
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               className="px-4 py-2 text-sm rounded-lg border border-dreams-border bg-white disabled:opacity-40 hover:bg-dreams-lightBg transition-colors"
             >
-              Previous
+              {tPagination("previous")}
             </button>
             <button
               disabled={page >= totalPages}
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               className="px-4 py-2 text-sm rounded-lg border border-dreams-border bg-white disabled:opacity-40 hover:bg-dreams-lightBg transition-colors"
             >
-              Next
+              {tPagination("next")}
             </button>
           </div>
         </div>

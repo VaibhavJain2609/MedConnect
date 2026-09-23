@@ -2145,5 +2145,114 @@
     "markPaid": "Mark Paid",
     "saving": "Saving…",
     "markPaidError": "Failed to mark as paid."
+  },
+  "adminVisits": {
+    "breadcrumb": "Visits",
+    "title": "Visits",
+    "subtitle": "Patient encounters and consultation notes",
+    "newVisit": "New Visit",
+    "comingSoon": "Coming soon",
+    "loadError": "Failed to load visits",
+    "searchPlaceholder": "Search by patient, doctor, or clinic...",
+    "unknown": "Unknown",
+    "deleteConfirm": "Delete this visit? This will soft-delete the encounter record.",
+    "deleteTitle": "Delete visit",
+    "pageInfo": "Page {page} of {totalPages} · {count, plural, one {# visit} other {# visits}}",
+    "table": {
+      "visitId": "Visit ID",
+      "patientName": "Patient Name",
+      "doctorName": "Doctor Name",
+      "clinic": "Clinic",
+      "visitDate": "Visit Date",
+      "assessment": "Assessment"
+    }
+  },
+  "adminLabResults": {
+    "breadcrumb": "Lab Results",
+    "title": "Lab Results",
+    "subtitle": "Manage laboratory test results and reports",
+    "newTest": "New Test",
+    "comingSoon": "Coming soon",
+    "loadError": "Failed to load lab results",
+    "searchPlaceholder": "Search by patient, test, or ID...",
+    "allStatus": "All Status",
+    "pageInfo": "Page {page} of {totalPages} · {count, plural, one {# lab result} other {# lab results}}",
+    "table": {
+      "testId": "Test ID",
+      "patientName": "Patient Name",
+      "gender": "Gender",
+      "appointmentDate": "Appointment Date",
+      "referredBy": "Referred By",
+      "testName": "Test Name",
+      "status": "Status"
+    }
+  },
+  "adminClinics": {
+    "breadcrumbDashboard": "Dashboard",
+    "breadcrumb": "Clinics",
+    "title": "Clinics",
+    "subtitle": "Manage all registered clinics",
+    "createClinic": "Create Clinic",
+    "searchPlaceholder": "Search clinics...",
+    "allStatus": "All Status",
+    "empty": "No clinics found",
+    "table": {
+      "clinic": "Clinic",
+      "location": "Location",
+      "members": "Members",
+      "sharingMode": "Sharing Mode",
+      "status": "Status"
+    },
+    "sharing": {
+      "perClinic": "Per Clinic",
+      "perDoctor": "Per Doctor"
+    },
+    "createModal": {
+      "title": "Create Clinic",
+      "nameLabel": "Clinic Name",
+      "address": "Address",
+      "city": "City",
+      "state": "State",
+      "phone": "Phone",
+      "email": "Email",
+      "creating": "Creating...",
+      "submit": "Create Clinic",
+      "errorFallback": "Failed to create clinic."
+    },
+    "detail": {
+      "edit": "Edit",
+      "delete": "Delete",
+      "deleteTitle": "Delete Clinic",
+      "deleteDesc": "Delete clinic \"{name}\"? This cannot be undone.",
+      "deleting": "Deleting...",
+      "metricsTitle": "Usage Metrics",
+      "infoTitle": "Clinic Information",
+      "recordSharing": "Record Sharing",
+      "branchesTitle": "Branches ({count})",
+      "noBranches": "No branches",
+      "saveChanges": "Save Changes",
+      "saving": "Saving...",
+      "stats": {
+        "members": "Members",
+        "records": "Records",
+        "prescriptions": "Prescriptions"
+      },
+      "metrics": {
+        "doctors": "Doctors",
+        "patientsLinked": "Patients Linked",
+        "pendingLinks": "Pending Links",
+        "appointments30d": "Appointments (30d)",
+        "inQueueToday": "In Queue Today",
+        "branches": "Branches"
+      },
+      "fields": {
+        "name": "Name",
+        "address": "Address",
+        "city": "City",
+        "state": "State",
+        "phone": "Phone",
+        "email": "Email"
+      }
+    }
   }
 }

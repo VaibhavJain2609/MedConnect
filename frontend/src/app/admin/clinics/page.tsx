@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Search, Building2, Users, MapPin, Plus, X } from "lucide-react";
@@ -14,6 +15,8 @@ import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
 
 function CreateClinicModal({ onClose }: { onClose: () => void }) {
+  const t = useTranslations("adminClinics.createModal");
+  const tCommon = useTranslations("common");
   const queryClient = useQueryClient();
   const [form, setForm] = useState<ClinicCreatePayload>({ name: "" });
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +28,7 @@ function CreateClinicModal({ onClose }: { onClose: () => void }) {
       onClose();
     },
     onError: (err: any) => {
-      setError(err?.response?.data?.detail?.error?.message ?? "Failed to create clinic.");
+      setError(err?.response?.data?.detail?.error?.message ?? t("errorFallback"));
     },
   });
 
@@ -55,24 +58,24 @@ function CreateClinicModal({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-dreams-border px-6 py-4">
-          <h2 className="text-lg font-semibold text-dreams-textPrimary">Create Clinic</h2>
+          <h2 className="text-lg font-semibold text-dreams-textPrimary">{t("title")}</h2>
           <button onClick={onClose} className="rounded-lg p-1.5 hover:bg-gray-100">
             <X className="h-4 w-4 text-dreams-textSecondary" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 px-6 py-5">
-          {field("name", "Clinic Name", true)}
-          {field("address", "Address")}
+          {field("name", t("nameLabel"), true)}
+          {field("address", t("address"))}
 
           <div className="grid grid-cols-2 gap-3">
-            {field("city", "City")}
-            {field("state", "State")}
+            {field("city", t("city"))}
+            {field("state", t("state"))}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            {field("phone", "Phone")}
-            {field("email", "Email")}
+            {field("phone", t("phone"))}
+            {field("email", t("email"))}
           </div>
 
           {error && (
@@ -85,14 +88,14 @@ function CreateClinicModal({ onClose }: { onClose: () => void }) {
               onClick={onClose}
               className="rounded-lg border border-dreams-border px-4 py-2 text-sm hover:bg-gray-50"
             >
-              Cancel
+              {tCommon("cancel")}
             </button>
             <button
               type="submit"
               disabled={mutation.isPending || !form.name.trim()}
               className="rounded-lg bg-dreams-blue px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
             >
-              {mutation.isPending ? "Creating..." : "Create Clinic"}
+              {mutation.isPending ? t("creating") : t("submit")}
             </button>
           </div>
         </form>
@@ -102,6 +105,9 @@ function CreateClinicModal({ onClose }: { onClose: () => void }) {
 }
 
 export default function AdminClinicsPage() {
+  const t = useTranslations("adminClinics");
+  const tStatus = useTranslations("statusBadge");
+  const tPagination = useTranslations("pagination");
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
@@ -138,16 +144,16 @@ export default function AdminClinicsPage() {
 
       <Breadcrumb
         items={[
-          { label: "Dashboard", href: "/admin/dashboard" },
-          { label: "Clinics" },
+          { label: t("breadcrumbDashboard"), href: "/admin/dashboard" },
+          { label: t("breadcrumb") },
         ]}
       />
 
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-dreams-textPrimary">Clinics</h1>
+          <h1 className="text-2xl font-bold text-dreams-textPrimary">{t("title")}</h1>
           <p className="text-sm text-dreams-textSecondary mt-1">
-            Manage all registered clinics
+            {t("subtitle")}
           </p>
         </div>
         <button
@@ -155,7 +161,7 @@ export default function AdminClinicsPage() {
           className="flex items-center gap-2 rounded-lg bg-dreams-blue px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
         >
           <Plus className="h-4 w-4" />
-          Create Clinic
+          {t("createClinic")}
         </button>
       </div>
 
@@ -165,7 +171,7 @@ export default function AdminClinicsPage() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dreams-textSecondary" />
           <input
             type="text"
-            placeholder="Search clinics..."
+            placeholder={t("searchPlaceholder")}
             value={searchQuery}
             onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
             className="w-full rounded-lg border border-dreams-border bg-white py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
@@ -176,9 +182,9 @@ export default function AdminClinicsPage() {
           onChange={(e) => { setActiveFilter(e.target.value); setPage(1); }}
           className="rounded-lg border border-dreams-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
         >
-          <option value="all">All Status</option>
-          <option value="true">Active</option>
-          <option value="false">Inactive</option>
+          <option value="all">{t("allStatus")}</option>
+          <option value="true">{tStatus("active")}</option>
+          <option value="false">{tStatus("inactive")}</option>
         </select>
       </div>
 
@@ -187,18 +193,18 @@ export default function AdminClinicsPage() {
         <table className="w-full text-sm">
           <thead className="border-b border-dreams-border bg-gray-50">
             <tr>
-              <th className="px-4 py-3 text-left font-medium text-dreams-textSecondary">Clinic</th>
-              <th className="px-4 py-3 text-left font-medium text-dreams-textSecondary">Location</th>
-              <th className="px-4 py-3 text-left font-medium text-dreams-textSecondary">Members</th>
-              <th className="px-4 py-3 text-left font-medium text-dreams-textSecondary">Sharing Mode</th>
-              <th className="px-4 py-3 text-left font-medium text-dreams-textSecondary">Status</th>
+              <th className="px-4 py-3 text-left font-medium text-dreams-textSecondary">{t("table.clinic")}</th>
+              <th className="px-4 py-3 text-left font-medium text-dreams-textSecondary">{t("table.location")}</th>
+              <th className="px-4 py-3 text-left font-medium text-dreams-textSecondary">{t("table.members")}</th>
+              <th className="px-4 py-3 text-left font-medium text-dreams-textSecondary">{t("table.sharingMode")}</th>
+              <th className="px-4 py-3 text-left font-medium text-dreams-textSecondary">{t("table.status")}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-dreams-border">
             {clinics.length === 0 ? (
               <tr>
                 <td colSpan={5} className="py-10 text-center text-dreams-textSecondary">
-                  No clinics found
+                  {t("empty")}
                 </td>
               </tr>
             ) : (
@@ -230,12 +236,12 @@ export default function AdminClinicsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-dreams-textSecondary">
-                      {clinic.record_sharing_mode === "per_clinic" ? "Per Clinic" : "Per Doctor"}
+                      {clinic.record_sharing_mode === "per_clinic" ? t("sharing.perClinic") : t("sharing.perDoctor")}
                     </span>
                   </td>
                   <td className="px-4 py-3">
                     <Badge variant={clinic.is_active ? "completed" : "overdue"}>
-                      {clinic.is_active ? "Active" : "Inactive"}
+                      {clinic.is_active ? tStatus("active") : tStatus("inactive")}
                     </Badge>
                   </td>
                 </tr>
@@ -249,7 +255,7 @@ export default function AdminClinicsPage() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-dreams-textSecondary">
-            Page {page} of {totalPages}
+            {tPagination("pageOf", { page, totalPages })}
           </p>
           <div className="flex gap-2">
             <button
@@ -257,14 +263,14 @@ export default function AdminClinicsPage() {
               onClick={() => setPage((p) => p - 1)}
               className="rounded-lg border border-dreams-border px-3 py-1.5 text-sm disabled:opacity-40 hover:bg-gray-50"
             >
-              Previous
+              {tPagination("previous")}
             </button>
             <button
               disabled={page === totalPages}
               onClick={() => setPage((p) => p + 1)}
               className="rounded-lg border border-dreams-border px-3 py-1.5 text-sm disabled:opacity-40 hover:bg-gray-50"
             >
-              Next
+              {tPagination("next")}
             </button>
           </div>
         </div>
