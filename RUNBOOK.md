@@ -457,3 +457,44 @@ npm run test:e2e
   that env's Keycloak for @auth specs).
 - Failure triage: `npm run test:e2e:report` opens the HTML report with
   traces/screenshots; backend logs via `make logs SERVICE=backend`.
+
+## 13. Security headers & CSP
+
+Each surface owns its response headers — **never** add them in
+nginx/`nginx.conf` or the ingress (that duplication already caused one
+X-Frame-Options conflict; see the comments in `nginx/nginx.conf`).
+
+| Surface | Source of truth | Headers |
+|---|---|---|
+| API (`/api/*`, `/health`, `/livez`, errors, 429s) | `backend/app/middleware/security_headers.py` (pure-ASGI, outermost-ish) | nosniff, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()`, full CSP `default-src 'none' … frame-ancestors 'none'`, `Cache-Control: no-store` on `/api/v1/*`, HSTS when `APP_ENV=production` |
+| Frontend (HTML/JS/CSS) | `frontend/next.config.js` `headers()` | same baseline + enforced CSP `default-src 'self' …` and a `Content-Security-Policy-Report-Only` twin (skipped under `next dev`) |
+
+CSP-specific notes:
+
+- **API CSP is intentionally draconian** — the backend serves JSON, never
+  markup, so every fetch directive is `'none'` except `connect-src 'self'
+  <FRONTEND_URL>`. It applies to all responses, not just `/api/*`.
+- **Frontend enforced CSP** allows `script-src 'unsafe-eval'`
+  (Next dev runtime) and `'unsafe-inline'` (Next bootstrap scripts).
+  `frame-src 'self' <keycloak-origin>` exists because keycloak-js silent
+  check-sso runs a hidden iframe through the Keycloak authorize endpoint —
+  removing the Keycloak origin silently breaks session restore.
+  `connect-src` is built from `NEXT_PUBLIC_API_URL`,
+  `NEXT_PUBLIC_KEYCLOAK_URL` and `NEXT_PUBLIC_SENTRY_DSN` at config-eval
+  time; unset vars are dropped from the directive.
+- **Report-Only header** carries the nonce-ready target policy (same
+  directives minus the `unsafe-*` script concessions). It deliberately
+  has **no `report-uri`/`report-to`** — there is no collector endpoint,
+  so a reporting target would just 404 against our own origin. Violations
+  currently surface only in devtools.
+
+Path to full enforcement (when tightening further):
+
+1. Ship a report collector (e.g. `POST /api/v1/csp-report` writing to a
+   log/Prometheus counter, or a SaaS endpoint) and add
+   `report-to`/`report-uri` to the Report-Only policy.
+2. Wire per-request nonces through a Next middleware + `headers()`
+   interpolation, then move the Report-Only policy into `Content-Security-Policy`.
+3. Drop `'unsafe-inline'`/`'unsafe-eval'` from `script-src`, keep
+   `style-src 'unsafe-inline'` (CSS-in-JS inline styles are pervasive and
+   low-risk), and ratchet `connect-src`/`img-src` based on collected reports.

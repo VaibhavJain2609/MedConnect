@@ -6,11 +6,13 @@ responses additionally carry Cache-Control: no-store.
 """
 from httpx import AsyncClient
 
+from app.config import settings
+
 EXPECTED_HEADERS = {
     "x-content-type-options": "nosniff",
     "x-frame-options": "DENY",
     "referrer-policy": "strict-origin-when-cross-origin",
-    "permissions-policy": "camera=(), microphone=(), geolocation=()",
+    "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=()",
 }
 
 
@@ -18,8 +20,19 @@ def _assert_security_headers(resp):
     for name, value in EXPECTED_HEADERS.items():
         assert resp.headers.get(name) == value, f"missing/incorrect {name}"
     csp = resp.headers.get("content-security-policy", "")
+    # Strict JSON-API policy: no markup resources at all; frame-ancestors
+    # 'none' is the modern clickjacking guard (supersedes X-Frame-Options).
     assert "default-src 'none'" in csp
     assert "frame-ancestors 'none'" in csp
+    assert "script-src 'none'" in csp
+    # No unsafe concessions anywhere on the API surface.
+    assert "unsafe-inline" not in csp
+    assert "unsafe-eval" not in csp
+    # connect-src is the only non-'none' source — the SPA origin.
+    assert settings.FRONTEND_URL in csp
+    # The Report-Only CSP is a frontend concern (next.config.js) — the API
+    # must not emit it.
+    assert "content-security-policy-report-only" not in resp.headers
     # Deprecated header must never appear.
     assert "x-xss-protection" not in resp.headers
 

@@ -18,10 +18,11 @@ Header set:
 - ``X-Frame-Options: DENY`` — legacy clickjacking guard; superseded by
   CSP ``frame-ancestors 'none'`` in modern browsers, kept for old clients.
 - ``Referrer-Policy: strict-origin-when-cross-origin``.
-- ``Permissions-Policy: camera=(), microphone=(), geolocation=()`` —
-  the API never needs device sensors. Teleconsult runs on Jitsi's own
-  domain via an external ``meeting_url`` link (not an embedded iframe),
-  so no camera/mic delegation is needed on our origin.
+- ``Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()``
+  — the API never needs device sensors or the Payment Request API.
+  Teleconsult runs on Jitsi's own domain via an external ``meeting_url``
+  link (not an embedded iframe), so no camera/mic delegation is needed on
+  our origin; no in-browser payment flow exists either.
 - ``Content-Security-Policy`` — strict API policy: this service returns
   JSON, not HTML, so every content source is ``'none'`` except
   ``connect-src`` (kept for any future browsable resource).
@@ -64,7 +65,7 @@ class SecurityHeadersMiddleware:
                 headers["X-Frame-Options"] = "DENY"
                 headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
                 headers["Permissions-Policy"] = (
-                    "camera=(), microphone=(), geolocation=()"
+                    "camera=(), microphone=(), geolocation=(), payment=()"
                 )
                 # API-level CSP: strict policy for JSON/REST responses.
                 # No unsafe-inline — the backend serves data, not HTML/JS/CSS.
