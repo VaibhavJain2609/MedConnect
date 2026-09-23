@@ -12,6 +12,7 @@ import {
   type Notification,
 } from "@/lib/api/notifications";
 import { actOnRecordAccessRequest } from "@/lib/api/record-access";
+import { toast } from "@/hooks/use-toast";
 import { useAuthStore } from "@/stores/auth-store";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -78,6 +79,10 @@ export const NotificationCenter: React.FC = () => {
     mutationFn: () => markAllAsRead(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      toast({ title: tNotif("markedAllRead") });
+    },
+    onError: () => {
+      toast({ title: tNotif("markAllReadError"), variant: "destructive" });
     },
   });
 

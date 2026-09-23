@@ -396,6 +396,8 @@
     "title": "सूचनाएं",
     "unreadCount": "{count} अपठित",
     "markAllRead": "सभी को पढ़ा चिह्नित करें",
+    "markedAllRead": "सभी सूचनाएं पढ़ी हुई चिह्नित की गईं",
+    "markAllReadError": "सभी सूचनाओं को पढ़ा हुआ चिह्नित नहीं किया जा सका",
     "clearRead": "पढ़ी हुई हटाएं",
     "filterLabel": "फ़िल्टर:",
     "unreadOnly": "केवल अपठित",

@@ -396,6 +396,8 @@
     "title": "Notifications",
     "unreadCount": "{count} unread",
     "markAllRead": "Mark all read",
+    "markedAllRead": "All notifications marked as read",
+    "markAllReadError": "Couldn't mark all notifications as read",
     "clearRead": "Clear read",
     "filterLabel": "Filter:",
     "unreadOnly": "Unread only",
