@@ -14,7 +14,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = "034_idempotency_keys"
-down_revision = "033_audit_log_archive"
+down_revision = "034_appt_source_encounter"
 branch_labels = None
 depends_on = None
 
