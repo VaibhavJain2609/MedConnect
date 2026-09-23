@@ -13,6 +13,7 @@ import {
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { LoadMoreButton } from "@/components/ui/pagination";
 import { getMyLabResults, type PatientLabResult } from "@/lib/api/patient-portal";
+import { PatientLabOrdersList } from "@/components/patient/lab-orders-list";
 import { cn } from "@/lib/utils";
 
 function formatDate(iso: string) {
@@ -280,6 +281,9 @@ export default function PatientLabResultsPage() {
           </select>
         )}
       </div>
+
+      {/* Lab Orders — tests doctors have ordered for this patient */}
+      <PatientLabOrdersList />
 
       {isLoading && results.length === 0 ? (
         <div className="flex justify-center py-12">

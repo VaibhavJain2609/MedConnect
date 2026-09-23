@@ -22,6 +22,7 @@ from app.models.billing import Billing, BillingItem
 from app.models.vital import PatientVital, VITAL_TYPES
 from app.models.audit import AuditLog, AuditLogArchive
 from app.models.lab_result import LabResult
+from app.models.lab_order import LabOrder
 from app.models.webhook import WebhookEndpoint, WebhookDelivery
 from app.models.family import FamilyMember
 from app.models.idempotency import IdempotencyKey
@@ -97,6 +98,7 @@ __all__ = [
     "AuditLog",
     "AuditLogArchive",
     "LabResult",
+    "LabOrder",
     "WebhookEndpoint",
     "WebhookDelivery",
     "FamilyMember",

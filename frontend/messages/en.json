@@ -1244,5 +1244,25 @@
     "moreWaiting": "+{count} more",
     "emptyTitle": "No patients in the queue",
     "emptyHint": "Tokens will appear here as patients check in."
+  },
+  "labOrders": {
+    "title": "Lab Orders",
+    "patientTitle": "Lab Orders",
+    "testNameLabel": "Test name",
+    "testNamePlaceholder": "e.g. Complete Blood Count",
+    "notesLabel": "Notes (optional)",
+    "notesPlaceholder": "e.g. Fasting required",
+    "orderButton": "Order Test",
+    "createFailed": "Failed to create lab order. Please try again.",
+    "loadFailed": "Failed to load lab orders.",
+    "empty": "No lab orders yet.",
+    "emptyPatient": "No lab orders yet.",
+    "markCompleted": "Mark Completed",
+    "cancelOrder": "Cancel",
+    "status": {
+      "ordered": "Ordered",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
+    }
   }
 }

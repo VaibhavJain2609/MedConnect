@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { VitalsTrendsGrid } from "@/components/vitals/vitals-trend-chart";
 import { FileText, Pill, Activity, User, AlertCircle, Edit2, X, ShieldCheck, ShieldAlert, ShieldOff } from "lucide-react";
 import { getMyRecordAccessConsent, requestRecordAccess } from "@/lib/api/record-access";
+import { LabOrdersSection } from "@/components/doctor/lab-orders-section";
 
 const VITAL_LABELS: Record<string, { label: string; unit: string }> = {
   bp_systolic: { label: "BP Systolic", unit: "mmHg" },
@@ -583,6 +584,9 @@ export default function DoctorPatientProfilePage() {
           )}
         </div>
       </div>
+
+      {/* Lab Orders */}
+      <LabOrdersSection patientId={patientId} />
 
       {/* Quick Actions */}
       <div className="rounded-xl border border-dreams-border bg-white p-6 shadow-card">
