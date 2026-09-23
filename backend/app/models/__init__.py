@@ -2,6 +2,7 @@ from app.models.user import User
 from app.models.doctor import Doctor
 from app.models.medical_record import MedicalRecord
 from app.models.prescription import Prescription
+from app.models.prescription_safety_check import PrescriptionSafetyCheck
 from app.models.prescription_refill import PrescriptionRefillRequest
 from app.models.prescription_template import PrescriptionTemplate
 from app.models.notification import Notification, NotificationPreferences, NotificationType
@@ -65,6 +66,7 @@ __all__ = [
     "Doctor",
     "MedicalRecord",
     "Prescription",
+    "PrescriptionSafetyCheck",
     "PrescriptionRefillRequest",
     "PrescriptionTemplate",
     "Notification",

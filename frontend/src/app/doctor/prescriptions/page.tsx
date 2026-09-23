@@ -143,15 +143,23 @@ export default function DoctorPrescriptionsPage() {
                       Patient: {record.patient_name}
                     </span>
                   )}
-                  <Link
-                    href={`/doctor/prescriptions/${record.prescription_id || record.id}/print`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-dreams-blue px-3 py-1 text-xs font-medium text-white hover:opacity-90 transition-opacity"
-                  >
-                    <Printer className="h-3 w-3" />
-                    Print
-                  </Link>
+                  <div className="ml-auto flex items-center gap-2">
+                    <Link
+                      href={`/doctor/prescriptions/${record.prescription_id || record.id}`}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-dreams-border px-3 py-1 text-xs font-medium text-dreams-textPrimary hover:bg-gray-50 transition-colors"
+                    >
+                      Details
+                    </Link>
+                    <Link
+                      href={`/doctor/prescriptions/${record.prescription_id || record.id}/print`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-dreams-blue px-3 py-1 text-xs font-medium text-white hover:opacity-90 transition-opacity"
+                    >
+                      <Printer className="h-3 w-3" />
+                      Print
+                    </Link>
+                  </div>
                 </div>
                 <PrescriptionCard
                   prescription={prescriptionData}

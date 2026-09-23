@@ -619,6 +619,39 @@
     "count": "{count, plural, one {# patient} other {# patients}}",
     "noContact": "No contact info"
   },
+  "doctorPrescriptionDetail": {
+    "breadcrumb": "Prescription",
+    "title": "Prescription",
+    "print": "Print",
+    "loadError": "Couldn't load the prescription.",
+    "patient": "Patient",
+    "date": "Date",
+    "diagnosis": "Diagnosis",
+    "notes": "Notes",
+    "validUntil": "Valid until",
+    "medicines": "Medicines",
+    "safetyCheck": {
+      "title": "Safety check",
+      "checkedAt": "Checked {timestamp}",
+      "loadError": "Couldn't load the safety check.",
+      "empty": "No safety check was recorded for this prescription.",
+      "noAlerts": "No alerts — all checks passed.",
+      "overrideReason": "Override reason",
+      "severity": {
+        "minor": "Minor",
+        "moderate": "Moderate",
+        "major": "Major",
+        "contraindicated": "Contraindicated"
+      },
+      "kind": {
+        "interaction": "Drug interaction",
+        "allergy": "Allergy",
+        "duplicate_therapy": "Duplicate therapy",
+        "contraindication": "Contraindication",
+        "unresolved_item": "Not in catalog"
+      }
+    }
+  },
   "pagination": {
     "pageOf": "Page {page} of {totalPages}",
     "totalSuffix": "· {count} total",
