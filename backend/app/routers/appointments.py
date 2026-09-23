@@ -14,6 +14,7 @@ from sqlalchemy.orm import joinedload
 from app.config import settings
 from app.database import get_db
 from app.dependencies import get_active_clinic, get_current_doctor, get_current_user, require_active_clinic, require_admin
+from app.idempotency import IdempotentRoute, idempotent
 from app.models.appointment import Appointment
 from app.models.clinic import Clinic, ClinicBranch, ClinicMembership
 from app.models.doctor import Doctor
@@ -29,7 +30,13 @@ from app.schemas.appointments_response import (
 from app.services import access_service
 from app.services.notification_service import create_notification
 
-router = APIRouter(prefix="/api/v1/appointments", tags=["appointments"])
+router = APIRouter(
+    prefix="/api/v1/appointments",
+    tags=["appointments"],
+    # IdempotentRoute fulfils/discards claims created by the idempotent()
+    # dependency below; routes without the dep pass straight through.
+    route_class=IdempotentRoute,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -526,7 +533,12 @@ async def _check_patient_clinic_conflict(
 
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
-@router.post("", response_model=AppointmentResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=AppointmentResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(idempotent("appointments.create"))],
+)
 async def create_appointment(
     req: AppointmentCreate,
     current_user: User = Depends(get_current_user),
@@ -1224,7 +1236,12 @@ async def delete_appointment(
     await _notify_waitlist_on_cancellation(db, appt)
 
 
-@router.post("/guest", response_model=AppointmentResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/guest",
+    response_model=AppointmentResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(idempotent("appointments.guest"))],
+)
 async def create_guest_appointment(
     body: GuestAppointmentCreate,
     current_user: User = Depends(get_current_user),

@@ -173,6 +173,9 @@ function CreateBillModal({
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // Double-submit protection: one key per form-mount; regenerated after a
+  // successful submit so a deliberate second invoice is a fresh operation.
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -231,19 +234,24 @@ function CreateBillModal({
     setSaving(true);
     setError("");
     try {
-      await api.post("/api/v1/billing", {
-        patient_id: patient.id,
-        ...(hasItems
-          ? {
-              items: validItems.map((it) => ({
-                description: it.description.trim(),
-                quantity: Number(it.quantity),
-                unit_amount: Number(it.unit_amount),
-              })),
-            }
-          : { amount: parseFloat(amount) }),
-        notes: notes || undefined,
-      });
+      await api.post(
+        "/api/v1/billing",
+        {
+          patient_id: patient.id,
+          ...(hasItems
+            ? {
+                items: validItems.map((it) => ({
+                  description: it.description.trim(),
+                  quantity: Number(it.quantity),
+                  unit_amount: Number(it.unit_amount),
+                })),
+              }
+            : { amount: parseFloat(amount) }),
+          notes: notes || undefined,
+        },
+        { headers: { "Idempotency-Key": idempotencyKey } }
+      );
+      setIdempotencyKey(crypto.randomUUID());
       onCreated();
       onClose();
     } catch (err: unknown) {

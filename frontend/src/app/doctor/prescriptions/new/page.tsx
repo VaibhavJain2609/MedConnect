@@ -476,6 +476,9 @@ export default function NewPrescriptionPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  // Double-submit protection: one key per form-mount; regenerated after a
+  // successful submit so a deliberate second Rx is a fresh operation.
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
 
   // Safety-override flow: 409 SAFETY_OVERRIDE_REQUIRED → reason + resubmit
   const [overrideAlerts, setOverrideAlerts] = useState<any[] | null>(null);
@@ -974,13 +977,19 @@ export default function NewPrescriptionPage() {
           branch_id: selectedBranchId || undefined,
           appointment_id: appointmentId || undefined,
         },
-        selectedClinicId ? { headers: { "X-Clinic-Id": selectedClinicId } } : undefined
+        {
+          headers: {
+            "Idempotency-Key": idempotencyKey,
+            ...(selectedClinicId ? { "X-Clinic-Id": selectedClinicId } : {}),
+          },
+        }
       );
       try {
         localStorage.removeItem(DRAFT_STORAGE_KEY);
       } catch {
         // best-effort
       }
+      setIdempotencyKey(crypto.randomUUID());
       setSuccess(true);
       setTimeout(() => router.push("/doctor/prescriptions"), 1500);
     } catch (err: any) {
@@ -1034,13 +1043,19 @@ export default function NewPrescriptionPage() {
           appointment_id: appointmentId || undefined,
           safety_override_reason: overrideReason.trim(),
         },
-        selectedClinicId ? { headers: { "X-Clinic-Id": selectedClinicId } } : undefined
+        {
+          headers: {
+            "Idempotency-Key": idempotencyKey,
+            ...(selectedClinicId ? { "X-Clinic-Id": selectedClinicId } : {}),
+          },
+        }
       );
       try {
         localStorage.removeItem(DRAFT_STORAGE_KEY);
       } catch {
         // best-effort
       }
+      setIdempotencyKey(crypto.randomUUID());
       setSuccess(true);
       setTimeout(() => router.push("/doctor/prescriptions"), 1500);
     } catch (err: any) {

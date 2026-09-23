@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db, get_medicine_db
 from app.dependencies import get_active_clinic, get_current_doctor, get_verified_doctor
+from app.idempotency import IdempotentRoute, idempotent
 from app.models.clinic import ClinicMembership
 from app.models.doctor import Doctor
 from app.models.medical_record import MedicalRecord
@@ -61,7 +62,13 @@ class PrescriptionTemplateUpdate(BaseModel):
     diagnosis: Optional[str] = None
     notes: Optional[str] = None
 
-router = APIRouter(prefix="/api/v1/doctors", tags=["doctors"])
+router = APIRouter(
+    prefix="/api/v1/doctors",
+    tags=["doctors"],
+    # IdempotentRoute fulfils/discards claims created by the idempotent()
+    # dependency below; routes without the dep pass straight through.
+    route_class=IdempotentRoute,
+)
 
 
 @router.get("/patients")
@@ -516,7 +523,12 @@ async def patient_records(
     )
 
 
-@router.post("/records", response_model=RecordResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/records",
+    response_model=RecordResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(idempotent("doctors.records.create"))],
+)
 async def create_medical_record(
     req: RecordCreate,
     doctor_info: tuple[User, Doctor] = Depends(get_verified_doctor),
@@ -761,7 +773,12 @@ async def amend_record(
     return amended
 
 
-@router.post("/prescriptions", response_model=PrescriptionResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/prescriptions",
+    response_model=PrescriptionResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(idempotent("doctors.prescriptions.create"))],
+)
 async def create_rx(
     req: PrescriptionCreate,
     doctor_info: tuple[User, Doctor] = Depends(get_verified_doctor),

@@ -347,6 +347,9 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
   const effectiveDoctorId = doctorId ?? (pickedDoctorId || undefined);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  // Double-submit protection: one key per form-mount; regenerated after a
+  // successful submit so a deliberate second booking is a fresh operation.
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
 
   useEffect(() => {
     api
@@ -396,7 +399,8 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
           duration_minutes: duration,
           type,
           chief_complaint: chiefComplaint || undefined,
-        });
+        }, idempotencyKey);
+        setIdempotencyKey(crypto.randomUUID());
         onSuccess();
         onClose();
       } catch (err: any) {
@@ -420,7 +424,8 @@ function BookAppointmentModal({ onClose, onSuccess, doctorId }: BookAppointmentM
         duration_minutes: duration,
         type,
         chief_complaint: chiefComplaint || undefined,
-      });
+      }, idempotencyKey);
+      setIdempotencyKey(crypto.randomUUID());
       onSuccess();
       onClose();
     } catch (err: any) {

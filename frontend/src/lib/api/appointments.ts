@@ -132,12 +132,19 @@ export async function getAppointment(id: string): Promise<Appointment> {
 }
 
 /**
- * Create new appointment
+ * Create new appointment.
+ *
+ * ``idempotencyKey`` (a UUID generated once per form-mount) makes the POST
+ * retry-safe: the server replays the first response for a reused key instead
+ * of double-booking. Regenerate after a successful submit.
  */
 export async function createAppointment(
-  data: CreateAppointmentData
+  data: CreateAppointmentData,
+  idempotencyKey?: string
 ): Promise<Appointment> {
-  const response = await api.post("/api/v1/appointments", data);
+  const response = await api.post("/api/v1/appointments", data, {
+    headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+  });
   return response.data;
 }
 
@@ -200,10 +207,14 @@ export interface CreateGuestAppointmentData {
  */
 export async function createGuestAppointment(
   clinicId: string,
-  data: CreateGuestAppointmentData
+  data: CreateGuestAppointmentData,
+  idempotencyKey?: string
 ): Promise<Appointment> {
   const response = await api.post("/api/v1/appointments/guest", data, {
-    headers: { "X-Clinic-Id": clinicId },
+    headers: {
+      "X-Clinic-Id": clinicId,
+      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+    },
   });
   return response.data;
 }

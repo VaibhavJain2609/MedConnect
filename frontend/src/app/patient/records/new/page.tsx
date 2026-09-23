@@ -32,6 +32,9 @@ export default function PatientNewRecordPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  // Double-submit protection: one key per form-mount; regenerated after a
+  // successful upload so a deliberate second record is a fresh operation.
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
 
   // Dependent profiles — the record can optionally be filed under a family
   // member rather than the patient themselves.
@@ -85,14 +88,19 @@ export default function PatientNewRecordPage() {
       }
 
       // Step 3: Create the record
-      await api.post("/api/v1/patients/records", {
-        record_type: recordType,
-        title,
-        description: description || undefined,
-        document_url: documentUrl,
-        family_member_id: familyMemberId || undefined,
-      });
+      await api.post(
+        "/api/v1/patients/records",
+        {
+          record_type: recordType,
+          title,
+          description: description || undefined,
+          document_url: documentUrl,
+          family_member_id: familyMemberId || undefined,
+        },
+        { headers: { "Idempotency-Key": idempotencyKey } }
+      );
 
+      setIdempotencyKey(crypto.randomUUID());
       setSuccess(true);
       setTimeout(() => router.push("/patient/timeline"), 1200);
     } catch (err: any) {
