@@ -81,16 +81,22 @@ export async function initKeycloak(): Promise<boolean> {
   return initPromise;
 }
 
-export function loginRedirect() {
-  if (typeof window !== "undefined" && keycloak) {
-    keycloak.login({ redirectUri: window.location.origin + "/auth/callback" });
-  }
+export async function loginRedirect() {
+  if (typeof window === "undefined" || !keycloak) return;
+  // keycloak.login()/register() delegate to an adapter that only exists
+  // once init() has run — a direct hit on /login fires its useEffect
+  // before Providers' initAuth() (child effects precede parent effects),
+  // so ensure init has happened first or adapter.login() throws and the
+  // page never redirects. initKeycloak() dedupes, so this is a no-op
+  // wait when initAuth already kicked it off.
+  await initKeycloak();
+  keycloak.login({ redirectUri: window.location.origin + "/auth/callback" });
 }
 
-export function signupRedirect() {
-  if (typeof window !== "undefined" && keycloak) {
-    keycloak.register({ redirectUri: window.location.origin + "/auth/callback" });
-  }
+export async function signupRedirect() {
+  if (typeof window === "undefined" || !keycloak) return;
+  await initKeycloak();
+  keycloak.register({ redirectUri: window.location.origin + "/auth/callback" });
 }
 
 // Registered by Providers so logout() can purge cached server data.
