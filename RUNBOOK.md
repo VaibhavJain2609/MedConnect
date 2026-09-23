@@ -372,7 +372,14 @@ GET    /api/v1/clinics/{id}/webhooks/deliveries — delivery log (?status=&page=
 GET    /api/v1/clinics/{id}/webhooks/{ep}       — detail (masked)
 PATCH  /api/v1/clinics/{id}/webhooks/{ep}       — update url/event_types/is_active
 DELETE /api/v1/clinics/{id}/webhooks/{ep}       — deactivate (soft delete)
+POST   /api/v1/clinics/{id}/webhooks/deliveries/{delivery_id}/redeliver
+                                                — re-queue one failed delivery (409 unless status=failed)
+POST   /api/v1/clinics/{id}/webhooks/{ep}/redeliver-failed
+                                                — bulk re-queue up to 50 most-recent failed deliveries
 ```
+
+The same actions are available in the doctor portal at
+`/doctor/clinic/webhooks` (owner/admin memberships only).
 
 Delivery state machine: `pending` → `sent` | `failed` (after
 `WEBHOOK_MAX_ATTEMPTS` tries). Inspect failures via the deliveries endpoint or:
@@ -384,8 +391,13 @@ FROM webhook_deliveries ORDER BY created_at DESC LIMIT 20;
 
 Failure modes: rows stuck `pending` → enqueue failed or worker down (check
 `arq:health:reminder-worker` / `webhook_enqueue_failed` logs); `failed` with
-`last_error` → receiver 4xx/5xx or network error. Re-delivery is not
-implemented — create a new endpoint or replay manually.
+`last_error` → receiver 4xx/5xx or network error. Re-delivery: use the
+`redeliver` / `redeliver-failed` endpoints above (or the Redeliver buttons in
+`/doctor/clinic/webhooks`) — they flip `failed` rows back to `pending` and
+enqueue a fresh `deliver_webhook` job; the worker overwrites
+`attempts`/`last_error`/`delivered_at` with the new outcome. If the enqueue
+itself fails the row is reverted to `failed` (`webhook_redeliver_enqueue_failed`
+log) so it stays redeliverable.
 
 ## 12. Running e2e locally
 

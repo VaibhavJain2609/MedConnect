@@ -446,3 +446,158 @@ async def test_deliveries_list_paginated_and_filtered(
     _auth(client, await _make_user(db, "nobody-1"))
     resp = await client.get(base)
     assert resp.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Failed-delivery redelivery
+# ---------------------------------------------------------------------------
+
+
+async def _make_delivery_with_status(
+    db: AsyncSession, endpoint: WebhookEndpoint, status: str
+) -> WebhookDelivery:
+    d = WebhookDelivery(
+        id=uuid.uuid4(),
+        endpoint_id=endpoint.id,
+        event_type="appointment.booked",
+        payload_json={
+            "event_type": "appointment.booked",
+            "clinic_id": str(endpoint.clinic_id),
+            "appointment_id": str(uuid.uuid4()),
+        },
+        status=status,
+        attempts=3,
+        last_error="HTTP 500" if status == "failed" else None,
+    )
+    db.add(d)
+    await db.commit()
+    await db.refresh(d)
+    return d
+
+
+@pytest.mark.asyncio
+async def test_redeliver_requires_clinic_admin(
+    client, db: AsyncSession, clinic: Clinic, endpoint: WebhookEndpoint, arq_redis
+):
+    delivery = await _make_delivery_with_status(db, endpoint, "failed")
+    url = f"/api/v1/clinics/{clinic.id}/webhooks/deliveries/{delivery.id}/redeliver"
+
+    # Unauthenticated → 401/403
+    resp = await client.post(url)
+    assert resp.status_code in (401, 403)
+
+    # Non-member → 403
+    _auth(client, await _make_user(db, "redeliv-outsider"))
+    resp = await client.post(url)
+    assert resp.status_code == 403
+
+    # Plain 'doctor' membership → 403 (owner|admin only)
+    _auth(client, await _make_member(db, clinic.id, "doctor", "redeliv-doc"))
+    resp = await client.post(url)
+    assert resp.status_code == 403
+
+    # Admin membership → 200
+    _auth(client, await _make_member(db, clinic.id, "admin", "redeliv-admin"))
+    resp = await client.post(url)
+    assert resp.status_code == 200, resp.text
+
+    # Cross-clinic → 404 (delivery not scoped to that clinic)
+    other = Clinic(id=uuid.uuid4(), name="Other Clinic")
+    db.add(other)
+    await db.flush()
+    other_owner = await _make_member(db, other.id, "owner", "other-owner")
+    _auth(client, other_owner)
+    delivery2 = await _make_delivery_with_status(db, endpoint, "failed")
+    resp = await client.post(
+        f"/api/v1/clinics/{other.id}/webhooks/deliveries/{delivery2.id}/redeliver"
+    )
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_redeliver_failed_only_and_enqueues(
+    client, db: AsyncSession, clinic: Clinic, endpoint: WebhookEndpoint, arq_redis
+):
+    owner = await _make_member(db, clinic.id, "owner", "redeliv-owner")
+    _auth(client, owner)
+    base = f"/api/v1/clinics/{clinic.id}/webhooks/deliveries"
+
+    failed = await _make_delivery_with_status(db, endpoint, "failed")
+    resp = await client.post(f"{base}/{failed.id}/redeliver")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["id"] == str(failed.id)
+    assert body["status"] == "pending"
+    # attempts/last_error kept for history until the worker overwrites them
+    assert body["attempts"] == 3
+    assert body["last_error"] == "HTTP 500"
+
+    arq_redis.enqueue_job.assert_called_once_with("deliver_webhook", str(failed.id))
+
+    # 'sent' and 'pending' rows are rejected — 409, no enqueue
+    arq_redis.enqueue_job.reset_mock()
+    for st in ("sent", "pending"):
+        d = await _make_delivery_with_status(db, endpoint, st)
+        resp = await client.post(f"{base}/{d.id}/redeliver")
+        assert resp.status_code == 409, (st, resp.text)
+    arq_redis.enqueue_job.assert_not_called()
+
+    # Unknown delivery → 404
+    resp = await client.post(f"{base}/{uuid.uuid4()}/redeliver")
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_redeliver_failed_bulk_caps_at_50(
+    client, db: AsyncSession, clinic: Clinic, endpoint: WebhookEndpoint, arq_redis
+):
+    owner = await _make_member(db, clinic.id, "owner", "bulk-owner")
+    _auth(client, owner)
+
+    # 60 failed + 2 non-failed rows — only 50 failed are requeued
+    failed_ids = []
+    for _ in range(60):
+        d = await _make_delivery_with_status(db, endpoint, "failed")
+        failed_ids.append(d.id)
+    await _make_delivery_with_status(db, endpoint, "sent")
+    await _make_delivery_with_status(db, endpoint, "pending")
+
+    resp = await client.post(
+        f"/api/v1/clinics/{clinic.id}/webhooks/{endpoint.id}/redeliver-failed"
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["redelivered"] == 50
+    assert len(body["delivery_ids"]) == 50
+    assert set(body["delivery_ids"]) <= {str(i) for i in failed_ids}
+    assert arq_redis.enqueue_job.call_count == 50
+    for call in arq_redis.enqueue_job.call_args_list:
+        assert call.args[0] == "deliver_webhook"
+
+    # 10 failed rows remain (oldest, beyond the cap)
+    remaining = (
+        await db.execute(
+            select(WebhookDelivery).where(
+                WebhookDelivery.endpoint_id == endpoint.id,
+                WebhookDelivery.status == "failed",
+            )
+        )
+    ).scalars().all()
+    assert len(remaining) == 10
+
+    # Second call drains the rest; third is a no-op
+    resp = await client.post(
+        f"/api/v1/clinics/{clinic.id}/webhooks/{endpoint.id}/redeliver-failed"
+    )
+    assert resp.json()["redelivered"] == 10
+    resp = await client.post(
+        f"/api/v1/clinics/{clinic.id}/webhooks/{endpoint.id}/redeliver-failed"
+    )
+    assert resp.json()["redelivered"] == 0
+
+    # Bulk endpoint requires clinic-admin too
+    _auth(client, await _make_user(db, "bulk-outsider"))
+    resp = await client.post(
+        f"/api/v1/clinics/{clinic.id}/webhooks/{endpoint.id}/redeliver-failed"
+    )
+    assert resp.status_code == 403

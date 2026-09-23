@@ -23,6 +23,7 @@ import {
   ClipboardList,
   Link2,
   RefreshCcw,
+  Webhook,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
@@ -81,6 +82,7 @@ const navSections: NavSection[] = [
       { href: "/doctor/queue", labelKey: "doctorQueue", icon: ListOrdered },
       { href: "/doctor/clinic", labelKey: "doctorMyClinic", icon: Building2 },
       { href: "/doctor/clinic/invites", labelKey: "doctorStaffInvites", icon: UserPlus },
+      { href: "/doctor/clinic/webhooks", labelKey: "doctorWebhooks", icon: Webhook, clinicalOnly: true },
       { href: "/doctor/patients/link", labelKey: "doctorLinkPatient", icon: Link2, clinicalOnly: true },
     ],
   },
