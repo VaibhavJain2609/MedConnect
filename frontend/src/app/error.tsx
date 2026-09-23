@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 export default function Error({
   error,
@@ -9,6 +10,7 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const router = useRouter();
   useEffect(() => {
     console.error("Application error:", error);
     // Dynamic import: no-op unless NEXT_PUBLIC_SENTRY_DSN is set, and keeps
@@ -46,7 +48,7 @@ export default function Error({
             Try again
           </button>
           <button
-            onClick={() => (window.location.href = "/")}
+            onClick={() => router.push("/")}
             className="flex-1 rounded-lg border border-dreams-border px-4 py-2 text-dreams-textPrimary hover:bg-dreams-lightBg transition-colors"
           >
             Go home

@@ -20,19 +20,18 @@ export default function DoctorPatientsPage() {
   const [cursors, setCursors] = useState<Record<number, string | null>>({ 1: null });
   const [allPatients, setAllPatients] = useState<DoctorPatient[]>([]);
 
-  // Debounce search input so we don't fire a request per keystroke
+  // Debounce search input so we don't fire a request per keystroke. When the
+  // debounced value commits, also reset to the first page (the endpoint
+  // paginates by cursor, so each page's cursor is recorded as it is fetched).
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedQuery(searchQuery.trim()), 300);
+    const t = setTimeout(() => {
+      setDebouncedQuery(searchQuery.trim());
+      setPage(1);
+      setCursors({ 1: null });
+      setAllPatients([]);
+    }, 300);
     return () => clearTimeout(t);
   }, [searchQuery]);
-
-  // Reset to the first page when the search changes (the endpoint paginates
-  // by cursor, so each page's cursor is recorded as it is fetched).
-  useEffect(() => {
-    setPage(1);
-    setCursors({ 1: null });
-    setAllPatients([]);
-  }, [debouncedQuery]);
 
   const { data, isLoading, isFetching, error } = useQuery({
     queryKey: ["doctor-patients-list", debouncedQuery, page],

@@ -124,6 +124,11 @@ export function DataTable<TData, TValue>({
     return [selectionColumn, ...columns];
   }, [columns, enableRowSelection]);
 
+  // TanStack Table is a known React Compiler-incompatible library: the table
+  // instance intentionally returns unmemoizable functions, so this component
+  // can't be compiler-memoized no matter how it's written. There is no code
+  // change that removes the diagnostic short of dropping the library.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data,
     columns: allColumns,

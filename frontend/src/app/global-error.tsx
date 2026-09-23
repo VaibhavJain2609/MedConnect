@@ -49,6 +49,10 @@ export default function GlobalError({
                 Try again
               </button>
               <button
+                // global-error renders when the root layout itself failed, so
+                // the App Router context (useRouter) may be unavailable. A
+                // full document navigation is the only reliable escape hatch.
+                // eslint-disable-next-line @next/next/no-location-assign-relative-destination
                 onClick={() => (window.location.href = "/")}
                 className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"
               >
