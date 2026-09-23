@@ -39,4 +39,11 @@ class Prescription(Base):
         Index("idx_rx_clinic", "clinic_id", postgresql_where=(deleted_at.is_(None))),
         Index("idx_rx_branch", "branch_id", postgresql_where=(deleted_at.is_(None))),
         Index("idx_rx_appointment", "appointment_id", postgresql_where=(appointment_id.isnot(None))),
+        # Expiry worker scans valid_until ranges; admin stats scan created_at.
+        Index(
+            "idx_rx_valid_until",
+            "valid_until",
+            postgresql_where=(valid_until.isnot(None) & deleted_at.is_(None)),
+        ),
+        Index("idx_rx_created_at", "created_at", postgresql_where=(deleted_at.is_(None))),
     )

@@ -58,4 +58,5 @@ class User(Base):
         Index("idx_users_email", "email", postgresql_where=(deleted_at.is_(None))),
         Index("idx_users_phone", "phone", postgresql_where=(deleted_at.is_(None))),
         Index("idx_users_role", "role", postgresql_where=(deleted_at.is_(None))),
+        Index("idx_users_created_at", "created_at", postgresql_where=(deleted_at.is_(None))),
     )

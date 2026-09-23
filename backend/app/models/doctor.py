@@ -35,4 +35,5 @@ class Doctor(Base):
 
     __table_args__ = (
         Index("idx_doctors_user_id", "user_id", unique=True, postgresql_where=(deleted_at.is_(None))),
+        Index("idx_doctors_created_at", "created_at", postgresql_where=(deleted_at.is_(None))),
     )

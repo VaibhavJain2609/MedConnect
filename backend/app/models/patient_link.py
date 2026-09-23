@@ -37,6 +37,14 @@ class PatientClinicLink(Base):
         ),
         Index("idx_pcl_patient", "patient_id", postgresql_where=(deleted_at.is_(None))),
         Index("idx_pcl_clinic", "clinic_id", postgresql_where=(deleted_at.is_(None))),
+        # Access-control join: clinic_id = membership.clinic_id AND
+        # consent_status IN (...) — services/access_service.py.
+        Index(
+            "idx_pcl_clinic_consent",
+            "clinic_id",
+            "consent_status",
+            postgresql_where=(deleted_at.is_(None)),
+        ),
     )
 
 
