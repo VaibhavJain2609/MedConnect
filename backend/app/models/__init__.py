@@ -6,6 +6,7 @@ from app.models.prescription_safety_check import PrescriptionSafetyCheck
 from app.models.prescription_refill import PrescriptionRefillRequest
 from app.models.prescription_template import PrescriptionTemplate
 from app.models.notification import Notification, NotificationPreferences, NotificationType
+from app.models.medication_reminder import MedicationReminder
 from app.models.push_subscription import PushSubscription
 from app.models.clinic import Clinic, ClinicBranch, ClinicMembership
 from app.models.clinic_holiday import ClinicHoliday
@@ -74,6 +75,7 @@ __all__ = [
     "Notification",
     "NotificationPreferences",
     "NotificationType",
+    "MedicationReminder",
     "PushSubscription",
     "Clinic",
     "ClinicBranch",

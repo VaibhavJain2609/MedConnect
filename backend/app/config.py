@@ -130,6 +130,11 @@ class Settings(BaseSettings):
     WEBHOOK_TIMEOUT_SECONDS: float = 5.0
     WEBHOOK_MAX_ATTEMPTS: int = 3
 
+    # Medication adherence reminders — the 15-minute
+    # ``send_medication_reminders`` ARQ cron task notifies patients who opted
+    # in per prescription. False unregisters the cron job entirely.
+    MEDICATION_REMINDERS_ENABLED: bool = True
+
     # Audit-log retention — the daily ``audit_retention`` ARQ cron task moves
     # audit_logs rows older than this many days into audit_log_archive and
     # deletes them from the live table. 0 disables retention (keep forever).

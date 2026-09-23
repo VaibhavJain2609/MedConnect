@@ -32,6 +32,11 @@ import {
   requestRefill,
   type RefillStatus,
 } from "@/lib/api/refills";
+import {
+  getMedicationReminders,
+  type MedicationReminder,
+} from "@/lib/api/medication-reminders";
+import { MedicationReminderDialog } from "@/components/medications/medication-reminder-dialog";
 import { cn } from "@/lib/utils";
 
 function flattenMedications(
@@ -138,11 +143,13 @@ function SectionHeader({
 
 export default function PatientMedicationsPage() {
   const t = useTranslations("refills");
+  const tr = useTranslations("medReminders");
   const queryClient = useQueryClient();
   const [showPast, setShowPast] = useState(false);
   const { taken, toggle } = useTakenToday();
   const [refillTarget, setRefillTarget] = useState<MedicationEntry | null>(null);
   const [refillNote, setRefillNote] = useState("");
+  const [reminderTarget, setReminderTarget] = useState<MedicationEntry | null>(null);
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ["patient-medications"],
@@ -155,6 +162,21 @@ export default function PatientMedicationsPage() {
     queryFn: getMyRefillRequests,
     staleTime: 30_000,
   });
+
+  const { data: medicationReminders } = useQuery({
+    queryKey: ["medication-reminders"],
+    queryFn: () => getMedicationReminders(),
+    staleTime: 30_000,
+  });
+
+  // Live reminder per prescription (backend enforces one per patient/rx).
+  const reminderByPrescription = useMemo(() => {
+    const map = new Map<string, MedicationReminder>();
+    for (const r of medicationReminders ?? []) {
+      map.set(r.prescription_id, r);
+    }
+    return map;
+  }, [medicationReminders]);
 
   // Latest request per prescription (API returns newest first).
   const refillByPrescription = useMemo(() => {
@@ -182,7 +204,14 @@ export default function PatientMedicationsPage() {
     declined: t("statusDeclined"),
   };
 
-  const refillProps = (med: MedicationEntry) =>
+  const reminderLabels = {
+    remind: tr("remindMe"),
+    on: tr("remindersOn"),
+  };
+
+  // Prescription-level affordances are rendered on the first medicine card
+  // of each prescription (reminders and refills are per-rx, not per-med).
+  const firstItemProps = (med: MedicationEntry) =>
     med.itemIndex === 0
       ? {
           refillStatus: refillByPrescription.get(med.prescriptionId) ?? null,
@@ -194,6 +223,10 @@ export default function PatientMedicationsPage() {
             setRefillTarget(med);
           },
           refillLabels,
+          reminderActive:
+            reminderByPrescription.get(med.prescriptionId)?.enabled ?? false,
+          onManageReminders: () => setReminderTarget(med),
+          reminderLabels,
         }
       : {};
 
@@ -285,7 +318,7 @@ export default function PatientMedicationsPage() {
                     entry={med}
                     takenToday={taken.has(med.key)}
                     onToggleTaken={toggle}
-                    {...refillProps(med)}
+                    {...firstItemProps(med)}
                   />
                 ))}
               </div>
@@ -322,7 +355,7 @@ export default function PatientMedicationsPage() {
                       key={med.key}
                       entry={med}
                       takenToday={false}
-                      {...refillProps(med)}
+                      {...firstItemProps(med)}
                     />
                   ))}
                 </div>
@@ -382,6 +415,24 @@ export default function PatientMedicationsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* "Remind me" panel — per-prescription schedule (times + on/off) */}
+      <MedicationReminderDialog
+        open={reminderTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setReminderTarget(null);
+        }}
+        prescriptionId={reminderTarget?.prescriptionId ?? ""}
+        medName={reminderTarget?.name ?? ""}
+        existing={
+          reminderTarget
+            ? reminderByPrescription.get(reminderTarget.prescriptionId) ?? null
+            : null
+        }
+        onSaved={() =>
+          queryClient.invalidateQueries({ queryKey: ["medication-reminders"] })
+        }
+      />
     </div>
   );
 }

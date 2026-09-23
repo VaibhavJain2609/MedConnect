@@ -11,6 +11,7 @@ from arq.connections import RedisSettings
 from app.config import settings
 from app.workers.tasks.appointment_reminders import send_appointment_reminder
 from app.workers.tasks.audit_retention import audit_retention
+from app.workers.tasks.medication_reminders import send_medication_reminders
 from app.workers.tasks.prescription_expiry import check_prescription_expiry
 from app.workers.tasks.webhook_delivery import deliver_webhook
 
@@ -71,6 +72,14 @@ class WorkerSettings:
         # run (up to 100 batches × 1000 rows).
         cron(audit_retention, hour=9, minute=0, timeout=600),
     ]
+    # Opt-in medication adherence reminders — every 15 min, fires an in-app
+    # notification for times_of_day entries inside the current slot
+    # (Asia/Kolkata), deduped per (reminder, day, timeslot) via
+    # Notification.meta. Gated by settings.MEDICATION_REMINDERS_ENABLED.
+    if settings.MEDICATION_REMINDERS_ENABLED:
+        cron_jobs.append(
+            cron(send_medication_reminders, minute={0, 15, 30, 45}, timeout=120)
+        )
     on_startup = startup
     on_shutdown = shutdown
     redis_settings = _redis_settings
