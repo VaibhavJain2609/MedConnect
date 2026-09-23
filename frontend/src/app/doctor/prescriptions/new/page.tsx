@@ -14,6 +14,7 @@ import {
   type DrugInteraction,
 } from "@/lib/api/medicines-emr";
 import { getDoctorPatientProfile } from "@/lib/api/prescriptions";
+import { isRateLimitError } from "@/lib/rate-limit";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -707,7 +708,12 @@ export default function NewPrescriptionPage() {
     const timer = setTimeout(() => {
       checkDrugInteractions(saltIds)
         .then((res) => setInteractions(sortBySeverity(res || [])))
-        .catch(() => setInteractions([]));
+        .catch((err) => {
+          // Rate-limited checks are transient — the global toast already
+          // tells the user; just drop stale results.
+          if (!isRateLimitError(err)) console.warn("Interaction check failed:", err);
+          setInteractions([]);
+        });
     }, 600);
 
     return () => clearTimeout(timer);
@@ -995,7 +1001,10 @@ export default function NewPrescriptionPage() {
         );
       } else {
         const errorMsg =
-          detail?.error?.message || detail || "Failed to create prescription";
+          err.userMessage ||
+          detail?.error?.message ||
+          detail ||
+          "Failed to create prescription";
         setError(typeof errorMsg === "string" ? errorMsg : JSON.stringify(errorMsg));
       }
     } finally {
@@ -1045,6 +1054,7 @@ export default function NewPrescriptionPage() {
       setTimeout(() => router.push("/doctor/prescriptions"), 1500);
     } catch (err: any) {
       const errorMsg =
+        err.userMessage ||
         err.response?.data?.detail?.error?.message ||
         err.response?.data?.detail ||
         "Failed to create prescription";

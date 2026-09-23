@@ -5,6 +5,7 @@ import { Search, X, User, Stethoscope, Calendar, Pill, Clock, Building2, FileTex
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { globalSearch, type SearchResult } from "@/lib/api/search";
+import { isRateLimitError } from "@/lib/rate-limit";
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/ui/avatar";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -209,11 +210,19 @@ export const GlobalSearch: React.FC = () => {
           {/* Results */}
           <div className="max-h-96 overflow-y-auto">
             {error ? (
-              <EmptyState
-                icon={Search}
-                title="Search failed"
-                description="Something went wrong — please try again"
-              />
+              isRateLimitError(error) ? (
+                <EmptyState
+                  icon={Clock}
+                  title="Too many requests"
+                  description={error.userMessage}
+                />
+              ) : (
+                <EmptyState
+                  icon={Search}
+                  title="Search failed"
+                  description="Something went wrong — please try again"
+                />
+              )
             ) : isLoading ? (
               <div className="p-8 text-center">
                 <Spinner className="mx-auto" label="Searching" />

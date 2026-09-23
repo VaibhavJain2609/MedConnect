@@ -68,7 +68,10 @@
     "close": "Close",
     "cancel": "Cancel",
     "unknownPatient": "Unknown Patient",
-    "errorGeneric": "An error occurred"
+    "errorGeneric": "An error occurred",
+    "rateLimitedTitle": "Too many requests",
+    "rateLimitedRetry": "Please try again in {seconds}s.",
+    "rateLimitedGeneric": "Please slow down and try again shortly."
   },
   "timeline": {
     "breadcrumb": "Health Timeline",

@@ -68,7 +68,10 @@
     "close": "बंद करें",
     "cancel": "रद्द करें",
     "unknownPatient": "अज्ञात मरीज़",
-    "errorGeneric": "एक त्रुटि हुई"
+    "errorGeneric": "एक त्रुटि हुई",
+    "rateLimitedTitle": "बहुत अधिक अनुरोध",
+    "rateLimitedRetry": "कृपया {seconds} सेकंड बाद पुनः प्रयास करें।",
+    "rateLimitedGeneric": "कृपया धीरे-धीरे करें और थोड़ी देर बाद पुनः प्रयास करें।"
   },
   "timeline": {
     "breadcrumb": "स्वास्थ्य टाइमलाइन",
