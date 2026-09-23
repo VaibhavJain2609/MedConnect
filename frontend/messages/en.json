@@ -1110,6 +1110,12 @@
       "generic": "An error occurred"
     }
   },
+  "adminExport": {
+    "button": "Export CSV",
+    "exporting": "Exporting...",
+    "failedTitle": "Export failed",
+    "failedDesc": "Could not download the CSV export. Please try again."
+  },
   "catalogImport": {
     "title": "Import Medicine Catalog",
     "subtitle": "Upload a CSV file to bulk-import brands and pack rows",

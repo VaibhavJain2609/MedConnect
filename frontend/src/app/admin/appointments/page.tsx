@@ -3,15 +3,18 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Search, X, Pencil, XCircle } from "lucide-react";
+import { Plus, Search, X, Pencil, XCircle, Download } from "lucide-react";
+import { useTranslations } from "next-intl";
 import {
   getAppointments,
   createAppointment,
   updateAppointment,
   cancelAppointment,
+  exportAppointmentsCsv,
   type Appointment,
   type UpdateAppointmentData,
 } from "@/lib/api/appointments";
+import { toast } from "@/hooks/use-toast";
 import { getClinicBranches } from "@/lib/api/clinics";
 import api from "@/lib/api";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
@@ -761,12 +764,14 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 export default function AdminAppointmentsPage() {
+  const tExport = useTranslations("adminExport");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [clinicFilter, setClinicFilter] = useState("all");
   const [showModal, setShowModal] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [cancellingAppointment, setCancellingAppointment] = useState<Appointment | null>(null);
   const queryClient = useQueryClient();
@@ -803,6 +808,30 @@ export default function AdminAppointmentsPage() {
     if (toDate && a.scheduled_at.slice(0, 10) > toDate) return false;
     return true;
   });
+
+  // Server-side export — honors the page's current filters and downloads
+  // appointments-export-<date>.csv via the authenticated download helper.
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await exportAppointmentsCsv({
+        search: searchQuery || undefined,
+        status: statusFilter !== "all" ? statusFilter : undefined,
+        from: fromDate || undefined,
+        to: toDate || undefined,
+        clinic: clinicFilter !== "all" ? clinicFilter : undefined,
+      });
+    } catch (err) {
+      console.error("Appointment export failed:", err);
+      toast({
+        title: tExport("failedTitle"),
+        description: tExport("failedDesc"),
+        variant: "destructive",
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const columns: ColumnDef<Appointment>[] = [
     {
@@ -1056,6 +1085,16 @@ export default function AdminAppointmentsPage() {
             Clear filters
           </button>
         )}
+
+        {/* Export CSV — downloads the filtered list server-side */}
+        <button
+          onClick={handleExport}
+          disabled={exporting}
+          className="flex items-center gap-2 h-10 px-4 rounded-lg border border-dreams-border bg-white text-sm font-medium text-dreams-textPrimary hover:bg-dreams-lightBg transition-colors disabled:opacity-50 ml-auto"
+        >
+          <Download className="h-4 w-4" />
+          {exporting ? tExport("exporting") : tExport("button")}
+        </button>
       </div>
 
       {/* Data Table — client-side paginated over the filtered result set */}

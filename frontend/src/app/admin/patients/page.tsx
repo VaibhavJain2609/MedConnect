@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Search } from "lucide-react";
-import { getPatients, Patient } from "@/lib/api/patients";
+import { Download, Plus, Search } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { exportPatientsCsv, getPatients, Patient } from "@/lib/api/patients";
+import { toast } from "@/hooks/use-toast";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { ViewToggle, useViewMode, ViewMode } from "@/components/ui/view-toggle";
 import { ProfileCard } from "@/components/cards/profile-card";
@@ -176,6 +178,7 @@ function CreatePatientModal({
 // ---------------------------------------------------------------------------
 
 export default function AdminPatientsPage() {
+  const tExport = useTranslations("adminExport");
   const [viewMode, setViewMode] = useViewMode("admin-patients-view", "grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -183,6 +186,7 @@ export default function AdminPatientsPage() {
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const limit = viewMode === "table" ? 10 : 12;
   const [showModal, setShowModal] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const { activeClinicId } = useClinicStore();
   const queryClient = useQueryClient();
@@ -202,6 +206,29 @@ export default function AdminPatientsPage() {
 
   const patients = data?.patients;
   const totalPages = data?.totalPages || 1;
+
+  // Server-side export — honors the page's current filters (the backend
+  // maps the status dropdown's values onto is_active) and downloads
+  // patients-export-<date>.csv via the authenticated download helper.
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await exportPatientsCsv({
+        search: searchQuery || undefined,
+        status: statusFilter !== "all" ? statusFilter : undefined,
+        clinic_id: activeClinicId || undefined,
+      });
+    } catch (err) {
+      console.error("Patient export failed:", err);
+      toast({
+        title: tExport("failedTitle"),
+        description: tExport("failedDesc"),
+        variant: "destructive",
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // Table columns definition
   const columns: ColumnDef<Patient>[] = [
@@ -359,6 +386,16 @@ export default function AdminPatientsPage() {
           <option value="completed">Out Patient</option>
           <option value="pending">Scheduled</option>
         </select>
+
+        {/* Export CSV — downloads the filtered list server-side */}
+        <button
+          onClick={handleExport}
+          disabled={exporting}
+          className="flex items-center gap-2 h-10 px-4 rounded-lg border border-dreams-border bg-white text-sm font-medium text-dreams-textPrimary hover:bg-dreams-lightBg transition-colors disabled:opacity-50 ml-auto"
+        >
+          <Download className="h-4 w-4" />
+          {exporting ? tExport("exporting") : tExport("button")}
+        </button>
       </div>
 
       {/* Grid View */}
