@@ -67,6 +67,8 @@ export default function PatientProfilePage() {
     language_pref: "en",
     emergency_contact_name: "",
     emergency_contact_phone: "",
+    date_of_birth: "",
+    sex: "",
   });
 
   // Sync form when profile loads / refetches (adjusted during render).
@@ -79,6 +81,8 @@ export default function PatientProfilePage() {
         language_pref: profile.language_pref ?? "en",
         emergency_contact_name: profile.emergency_contact_name ?? "",
         emergency_contact_phone: profile.emergency_contact_phone ?? "",
+        date_of_birth: profile.date_of_birth ?? "",
+        sex: profile.sex ?? "",
       });
     }
   }
@@ -92,6 +96,9 @@ export default function PatientProfilePage() {
         payload.emergency_contact_name = data.emergency_contact_name || null;
       if (data.emergency_contact_phone !== (profile?.emergency_contact_phone ?? ""))
         payload.emergency_contact_phone = data.emergency_contact_phone || null;
+      if (data.date_of_birth !== (profile?.date_of_birth ?? ""))
+        payload.date_of_birth = data.date_of_birth || null;
+      if (data.sex !== (profile?.sex ?? "")) payload.sex = data.sex || null;
       const res = await api.put("/api/v1/patients/profile", payload);
       return res.data;
     },
@@ -139,6 +146,46 @@ export default function PatientProfilePage() {
             <label className="text-sm font-medium text-dreams-textSecondary">{t("email")}</label>
             <p className="text-dreams-textPrimary">{profile?.email ?? "—"}</p>
             <p className="text-xs text-dreams-textSecondary/60">{t("managedByProvider")}</p>
+          </div>
+        </div>
+
+        {/* Personal details (dob / sex — shown on prescriptions) */}
+        <div className="bg-white rounded-lg shadow-card p-6 space-y-4">
+          <h2 className="text-lg font-semibold text-dreams-textPrimary border-b border-dreams-border pb-3">
+            {t("personalDetails")}
+          </h2>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-dreams-textPrimary" htmlFor="dob">
+                {t("dateOfBirth")}
+              </label>
+              <input
+                id="dob"
+                type="date"
+                value={form.date_of_birth}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setForm((f) => ({ ...f, date_of_birth: e.target.value }))}
+                className="w-full h-10 rounded-lg border border-dreams-border px-3 py-2 text-sm bg-white focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-dreams-textPrimary" htmlFor="sex">
+                {t("sex")}
+              </label>
+              <select
+                id="sex"
+                value={form.sex}
+                onChange={(e) => setForm((f) => ({ ...f, sex: e.target.value }))}
+                className="w-full h-10 rounded-lg border border-dreams-border px-3 py-2 text-sm bg-white focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
+              >
+                <option value="">{t("sexPlaceholder")}</option>
+                <option value="male">{t("sexMale")}</option>
+                <option value="female">{t("sexFemale")}</option>
+                <option value="other">{t("sexOther")}</option>
+              </select>
+            </div>
           </div>
         </div>
 

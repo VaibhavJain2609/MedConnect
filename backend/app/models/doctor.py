@@ -24,6 +24,10 @@ class Doctor(Base):
     nhr_verification_status: Mapped[str] = mapped_column(String(20), default="not_checked")
     verification_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     onboarding_step: Mapped[str] = mapped_column(String(20), default="pending")
+    # NMC-compliant prescription credentials
+    qualifications: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    registration_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    signature_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

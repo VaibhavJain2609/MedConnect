@@ -352,6 +352,8 @@ async def get_profile(user: User = Depends(require_patient)):
         "language_pref": user.language_pref,
         "emergency_contact_name": user.emergency_contact_name,
         "emergency_contact_phone": user.emergency_contact_phone,
+        "date_of_birth": user.date_of_birth.isoformat() if user.date_of_birth else None,
+        "sex": user.sex,
     }
 
 
@@ -370,6 +372,10 @@ async def update_profile(
         user.emergency_contact_name = data["emergency_contact_name"]
     if "emergency_contact_phone" in data:
         user.emergency_contact_phone = data["emergency_contact_phone"]
+    if "date_of_birth" in data:
+        user.date_of_birth = data["date_of_birth"]
+    if "sex" in data:
+        user.sex = data["sex"]
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -381,6 +387,8 @@ async def update_profile(
         "language_pref": user.language_pref,
         "emergency_contact_name": user.emergency_contact_name,
         "emergency_contact_phone": user.emergency_contact_phone,
+        "date_of_birth": user.date_of_birth.isoformat() if user.date_of_birth else None,
+        "sex": user.sex,
     }
 
 

@@ -244,6 +244,8 @@ async def get_patient_profile(
         "chronic_conditions": patient.chronic_conditions or [],
         "height_cm": patient.height_cm,
         "weight_kg": patient.weight_kg,
+        "date_of_birth": patient.date_of_birth.isoformat() if patient.date_of_birth else None,
+        "sex": patient.sex,
         "access_status": access_status,
         "revoked_at": revoked_at,
     }
@@ -1058,6 +1060,12 @@ async def update_profile(
         doctor.facility_name = req.facility_name
     if req.facility_city is not None:
         doctor.facility_city = req.facility_city
+    if req.qualifications is not None:
+        doctor.qualifications = req.qualifications
+    if req.registration_number is not None:
+        doctor.registration_number = req.registration_number
+    if req.signature_url is not None:
+        doctor.signature_url = req.signature_url
     await db.flush()
     return doctor
 
@@ -1122,7 +1130,10 @@ async def get_prescription(
         "doctor": {
             "name": doctor_user.full_name if doctor_user else None,
             "specialization": doctor.specialization,
+            "qualifications": doctor.qualifications,
+            "registration_number": doctor.registration_number,
             "license_number": doctor.license_number,
+            "signature_url": doctor.signature_url,
             "facility_name": doctor.facility_name,
             "facility_city": doctor.facility_city,
         },
