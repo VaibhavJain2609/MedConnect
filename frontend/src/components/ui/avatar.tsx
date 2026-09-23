@@ -1,4 +1,5 @@
 import * as React from "react";
+import Image from "next/image";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
@@ -104,10 +105,16 @@ export const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
         {...props}
       >
         {src && !imageError ? (
-          <img
+          // `src` can be any remote URL (user uploads, presigned links), so
+          // the Next image optimizer can't be used — `unoptimized` renders a
+          // passthrough image and skips remote-pattern validation.
+          <Image
             src={src}
             alt={alt || "Avatar"}
-            className="h-full w-full object-cover"
+            fill
+            unoptimized
+            sizes="128px"
+            className="object-cover"
             onError={() => setImageError(true)}
           />
         ) : (

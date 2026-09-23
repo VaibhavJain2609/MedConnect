@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import * as z from "zod";
 import { ArrowLeft, Plus, X, Loader2 } from "lucide-react";
 import { getAccessToken } from "@/lib/auth";
@@ -97,7 +97,7 @@ export default function AddMedicinePage() {
     register,
     handleSubmit,
     setValue,
-    watch,
+    control,
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -108,9 +108,9 @@ export default function AddMedicinePage() {
     },
   });
 
-  const watchManufacturerId = watch("manufacturer_id");
-  const watchDrugType = watch("drug_type");
-  const watchIsDiscontinued = watch("is_discontinued");
+  const watchManufacturerId = useWatch({ control, name: "manufacturer_id" });
+  const watchDrugType = useWatch({ control, name: "drug_type" });
+  const watchIsDiscontinued = useWatch({ control, name: "is_discontinued" });
 
   // Create brand mutation
   const createMutation = useMutation({

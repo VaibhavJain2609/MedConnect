@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   FlaskConical,
@@ -197,14 +197,6 @@ export default function PatientLabResultsPage() {
   const [cursors, setCursors] = useState<Record<number, string | null>>({ 1: null });
   const [allResults, setAllResults] = useState<PatientLabResult[]>([]);
 
-  // Reset to the first page when the category filter changes (the endpoint
-  // paginates by cursor, so each page's cursor is recorded as it is fetched).
-  useEffect(() => {
-    setPage(1);
-    setCursors({ 1: null });
-    setAllResults([]);
-  }, [categoryFilter]);
-
   const { data, isLoading, isError, isFetching } = useQuery({
     queryKey: ["patient-lab-results", categoryFilter, page],
     queryFn: async () => {
@@ -268,7 +260,15 @@ export default function PatientLabResultsPage() {
         {categories.length > 0 && (
           <select
             value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
+            onChange={(e) => {
+              // Reset to the first page when the filter changes (the endpoint
+              // paginates by cursor, so each page's cursor is recorded as it
+              // is fetched).
+              setCategoryFilter(e.target.value);
+              setPage(1);
+              setCursors({ 1: null });
+              setAllResults([]);
+            }}
             className="h-10 px-3 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
           >
             <option value="">All Categories</option>

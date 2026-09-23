@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { WifiOff } from "lucide-react";
 
@@ -19,12 +20,12 @@ export default async function OfflinePage() {
           {t("title")}
         </h1>
         <p className="text-sm text-dreams-textSecondary">{t("body")}</p>
-        <a
+        <Link
           href="/"
           className="inline-block rounded-lg bg-dreams-blue px-6 py-3 text-white transition-opacity hover:opacity-90"
         >
           {t("retry")}
-        </a>
+        </Link>
       </div>
     </div>
   );

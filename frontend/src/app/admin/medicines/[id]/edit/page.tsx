@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import * as z from "zod";
 import { ArrowLeft, Plus, X, Loader2, Trash2 } from "lucide-react";
 import { getAccessToken } from "@/lib/auth";
@@ -43,6 +43,7 @@ import {
   type Manufacturer,
   type Salt,
   type SaltStrength,
+  type Brand,
   type BrandCompositionInput,
 } from "@/lib/api/medicines-emr";
 
@@ -74,6 +75,18 @@ interface CompositionEntry {
   sequence: number;
 }
 
+function toCompositionEntries(brand?: Brand): CompositionEntry[] {
+  if (!brand) return [];
+  return brand.compositions.map((comp) => ({
+    id: `existing-${comp.composition_id}`,
+    salt_id: "", // We don't have this in the response, would need to fetch if needed
+    salt_name: comp.salt_name,
+    salt_strength_id: "", // Would need to map this from the composition data
+    display_strength: comp.display_strength,
+    sequence: comp.sequence,
+  }));
+}
+
 export default function EditMedicinePage() {
   const router = useRouter();
   const params = useParams();
@@ -81,7 +94,9 @@ export default function EditMedicinePage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [compositions, setCompositions] = useState<CompositionEntry[]>([]);
+  // null while the user hasn't touched the list — `compositions` below then
+  // falls back to the entries loaded with the brand.
+  const [editedCompositions, setEditedCompositions] = useState<CompositionEntry[] | null>(null);
   const [selectedSaltId, setSelectedSaltId] = useState<string>("");
   const [selectedSaltName, setSelectedSaltName] = useState<string>("");
   const [selectedStrengthId, setSelectedStrengthId] = useState<string>("");
@@ -124,7 +139,7 @@ export default function EditMedicinePage() {
     register,
     handleSubmit,
     setValue,
-    watch,
+    control,
     reset,
     formState: { errors },
   } = useForm<FormData>({
@@ -136,11 +151,16 @@ export default function EditMedicinePage() {
     },
   });
 
-  const watchManufacturerId = watch("manufacturer_id");
-  const watchDrugType = watch("drug_type");
-  const watchIsDiscontinued = watch("is_discontinued");
+  const watchManufacturerId = useWatch({ control, name: "manufacturer_id" });
+  const watchDrugType = useWatch({ control, name: "drug_type" });
+  const watchIsDiscontinued = useWatch({ control, name: "is_discontinued" });
 
-  // Initialize form with brand data
+  // The composition list shown in the UI: the user's edits once they add or
+  // remove an entry, otherwise the entries loaded with the brand.
+  const compositions = editedCompositions ?? toCompositionEntries(brand);
+
+  // Initialize the RHF form fields once the brand data arrives (the
+  // compositions list is derived from `brand` above and needs no syncing).
   useEffect(() => {
     if (brand) {
       reset({
@@ -153,18 +173,6 @@ export default function EditMedicinePage() {
         ndhm_code: brand.ndhm_code || "",
         compositions: [],
       });
-
-      // Set compositions from brand data
-      const loadedCompositions: CompositionEntry[] = brand.compositions.map((comp, index) => ({
-        id: `existing-${comp.composition_id}`,
-        salt_id: "", // We don't have this in the response, would need to fetch if needed
-        salt_name: comp.salt_name,
-        salt_strength_id: "", // Would need to map this from the composition data
-        display_strength: comp.display_strength,
-        sequence: comp.sequence,
-      }));
-
-      setCompositions(loadedCompositions);
     }
   }, [brand, reset]);
 
@@ -253,7 +261,7 @@ export default function EditMedicinePage() {
     };
 
     const updatedCompositions = [...compositions, newComposition];
-    setCompositions(updatedCompositions);
+    setEditedCompositions(updatedCompositions);
 
     setValue(
       "compositions",
@@ -273,7 +281,7 @@ export default function EditMedicinePage() {
       .filter((c) => c.id !== id)
       .map((c, index) => ({ ...c, sequence: index + 1 }));
 
-    setCompositions(updatedCompositions);
+    setEditedCompositions(updatedCompositions);
     setValue(
       "compositions",
       updatedCompositions.map((c) => ({
