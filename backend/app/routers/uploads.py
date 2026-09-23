@@ -340,14 +340,15 @@ async def _user_can_access_object(db: AsyncSession, user: User, object_key: str)
     if user.role == "admin":
         return True
 
-    # A doctor can always fetch their own onboarding/license documents even
-    # after the upload-key TTL expired.
+    # A doctor can always fetch their own onboarding/license documents and
+    # signature image even after the upload-key TTL expired.
     if user.role == "doctor":
         own_doc = await db.execute(
             select(Doctor.id).where(
                 Doctor.user_id == user.id,
                 Doctor.deleted_at.is_(None),
-                Doctor.license_document_url == object_key,
+                (Doctor.license_document_url == object_key)
+                | (Doctor.signature_url == object_key),
             )
         )
         if own_doc.scalar_one_or_none() is not None:

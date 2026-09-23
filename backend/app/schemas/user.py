@@ -3,12 +3,38 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.schemas.record import _validate_document_url
+
+VALID_SEX_VALUES = {"male", "female", "other"}
+
 
 class DoctorProfileCreate(BaseModel):
     specialization: str | None = None
     license_number: str | None = None
     facility_name: str | None = None
     facility_city: str | None = None
+    qualifications: str | None = Field(None, max_length=255)
+    registration_number: str | None = Field(None, max_length=50)
+    signature_url: str | None = None
+
+    @field_validator("registration_number")
+    @classmethod
+    def validate_registration_number(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        v = v.strip()
+        if not v:
+            return None
+        if len(v) < 3:
+            raise ValueError("registration_number must be at least 3 characters")
+        return v
+
+    @field_validator("signature_url")
+    @classmethod
+    def validate_signature_url(cls, v: str | None) -> str | None:
+        # Same rules as record document_url: relative object key or https:// —
+        # the value is embedded in generated PDFs / rendered into links.
+        return _validate_document_url(v)
 
 
 class DoctorProfileResponse(BaseModel):
@@ -18,6 +44,9 @@ class DoctorProfileResponse(BaseModel):
     license_number: str | None
     facility_name: str | None
     facility_city: str | None
+    qualifications: str | None = None
+    registration_number: str | None = None
+    signature_url: str | None = None
     verified: bool
 
     model_config = ConfigDict(from_attributes=True)
@@ -28,6 +57,27 @@ class PatientProfileUpdate(BaseModel):
     language_pref: str | None = None
     emergency_contact_name: str | None = Field(None, max_length=255)
     emergency_contact_phone: str | None = Field(None, max_length=20)
+    date_of_birth: date | None = None
+    sex: str | None = None
+
+    @field_validator("date_of_birth")
+    @classmethod
+    def validate_date_of_birth(cls, v: date | None) -> date | None:
+        if v is not None and v > date.today():
+            raise ValueError("date_of_birth cannot be in the future")
+        return v
+
+    @field_validator("sex")
+    @classmethod
+    def validate_sex(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        v = v.strip().lower()
+        if not v:
+            return None
+        if v not in VALID_SEX_VALUES:
+            raise ValueError("sex must be one of: male, female, other")
+        return v
 
 
 class PatientProfileResponse(BaseModel):
@@ -38,6 +88,8 @@ class PatientProfileResponse(BaseModel):
     language_pref: str
     emergency_contact_name: str | None
     emergency_contact_phone: str | None
+    date_of_birth: date | None = None
+    sex: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

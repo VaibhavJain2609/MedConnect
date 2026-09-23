@@ -10,6 +10,7 @@ GET /api/v1/prescriptions/{prescription_id}/pdf
 """
 
 import io
+import os
 from datetime import date as _date
 from uuid import UUID
 from xml.sax.saxutils import escape
@@ -20,8 +21,10 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
+from reportlab.lib.utils import ImageReader
 from reportlab.platypus import (
     HRFlowable,
+    Image as RLImage,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -31,12 +34,14 @@ from reportlab.platypus import (
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.doctor import Doctor
 from app.models.medical_record import MedicalRecord
 from app.models.prescription import Prescription
 from app.models.user import User
+from app.services.storage_service import get_local_file_path
 from app.utils.pdf import fmt_date as _fmt_date
 
 router = APIRouter(prefix="/api/v1/prescriptions", tags=["prescriptions-pdf"])
@@ -55,9 +60,15 @@ def _build_pdf(
     valid_until,
     created_at,
     patient_name: str | None,
+    patient_dob: _date | None,
+    patient_sex: str | None,
     doctor_name: str | None,
     specialization: str | None,
+    qualifications: str | None,
     license_number: str | None,
+    registration_number: str | None,
+    signature_path: str | None,
+    signature_on_file: bool,
     facility_name: str | None,
     facility_city: str | None,
 ) -> bytes:
@@ -148,12 +159,17 @@ def _build_pdf(
     # -----------------------------------------------------------------------
     doctor_display = f"Dr. {escape(str(doctor_name))}" if doctor_name else "—"
     doctor_left = f"<b>{doctor_display}</b>"
+    if qualifications:
+        doctor_left += f"<br/>{escape(str(qualifications))}"
     if specialization:
         doctor_left += f"<br/>{escape(str(specialization))}"
 
+    # NMC/State Medical Council registration number takes precedence over the
+    # onboarding license number for the printed "Reg. No.".
     doctor_right = ""
-    if license_number:
-        doctor_right = f"Reg. No.: {escape(str(license_number))}"
+    reg_number = registration_number or license_number
+    if reg_number:
+        doctor_right = f"Reg. No.: {escape(str(reg_number))}"
 
     doctor_table = Table(
         [[Paragraph(doctor_left, style_normal), Paragraph(doctor_right, style_label)]],
@@ -179,9 +195,29 @@ def _build_pdf(
     # Patient & Date row
     # -----------------------------------------------------------------------
     patient_display = escape(str(patient_name)) if patient_name else "—"
+    patient_cell = f'<font color="#6B7280">Patient: </font><b>{patient_display}</b>'
+
+    # Age (from date of birth) and sex — shown when available; both are
+    # expected on a compliant Indian prescription.
+    age_sex_parts = []
+    if patient_dob:
+        today = _date.today()
+        age = today.year - patient_dob.year - (
+            (today.month, today.day) < (patient_dob.month, patient_dob.day)
+        )
+        if 0 <= age <= 150:
+            age_sex_parts.append(f"{age} yrs")
+    if patient_sex:
+        age_sex_parts.append(escape(str(patient_sex)).capitalize())
+    if age_sex_parts:
+        patient_cell += (
+            f'<br/><font color="#6B7280">Age/Sex: </font>'
+            f'{" / ".join(age_sex_parts)}'
+        )
+
     pt_date_table = Table(
         [[
-            Paragraph(f'<font color="#6B7280">Patient: </font><b>{patient_display}</b>', style_normal),
+            Paragraph(patient_cell, style_normal),
             Paragraph(f'<font color="#6B7280">Date: </font><b>{_fmt_date(created_at)}</b>', style_normal),
         ]],
         colWidths=[page_width * 0.65, page_width * 0.35],
@@ -290,21 +326,54 @@ def _build_pdf(
     # -----------------------------------------------------------------------
     # Signature block (right-aligned)
     # -----------------------------------------------------------------------
+    sig_style = ParagraphStyle(
+        "SigRight",
+        parent=style_normal,
+        alignment=2,  # right
+    )
+    sig_bold = ParagraphStyle("SigRightBold", parent=sig_style, fontName="Helvetica-Bold")
+
+    # Embedded signature image when the uploaded file is resolvable from local
+    # storage; otherwise a "signature on file" placeholder line.
+    if signature_path:
+        try:
+            img_reader = ImageReader(signature_path)
+            iw, ih = img_reader.getSize()
+            max_w, max_h = 45 * mm, 18 * mm
+            scale = min(max_w / iw, max_h / ih)
+            sig_img = RLImage(signature_path, width=iw * scale, height=ih * scale)
+            sig_img.hAlign = "RIGHT"
+            story.append(sig_img)
+            story.append(Spacer(1, 1 * mm))
+        except Exception:
+            # Unreadable/corrupt image — fall back to the on-file line.
+            signature_path = None
+            signature_on_file = True
+    if signature_on_file:
+        story.append(Paragraph('<font color="#6B7280"><i>(Signature on file)</i></font>', sig_style))
+        story.append(Spacer(1, 1 * mm))
+
     sig_text = f"Dr. {escape(str(doctor_name))}" if doctor_name else ""
-    sig_table = Table(
-        [[Paragraph(sig_text, style_bold)]],
-        colWidths=[page_width],
-    )
-    sig_table.setStyle(
-        TableStyle([
-            ("ALIGN", (0, 0), (0, 0), "RIGHT"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 0),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-            ("TOPPADDING", (0, 0), (-1, -1), 0),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-        ])
-    )
-    story.append(sig_table)
+    sig_lines = [Paragraph(sig_text, sig_bold)] if sig_text else []
+    if qualifications:
+        sig_lines.append(Paragraph(escape(str(qualifications)), sig_style))
+    if reg_number:
+        sig_lines.append(Paragraph(f"Reg. No.: {escape(str(reg_number))}", sig_style))
+    if sig_lines:
+        sig_table = Table(
+            [[line] for line in sig_lines],
+            colWidths=[page_width],
+        )
+        sig_table.setStyle(
+            TableStyle([
+                ("ALIGN", (0, 0), (0, 0), "RIGHT"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ])
+        )
+        story.append(sig_table)
     story.append(Spacer(1, 8 * mm))
 
     sig_line_table = Table(
@@ -372,9 +441,9 @@ async def get_prescription_pdf(
     - Admins can access any prescription.
     """
 
-    # Fetch the prescription, its record and patient name in one query
+    # Fetch the prescription, its record and patient details in one query
     stmt = (
-        select(Prescription, MedicalRecord, User.full_name.label("patient_name"))
+        select(Prescription, MedicalRecord, User)
         .join(MedicalRecord, MedicalRecord.id == Prescription.record_id)
         .outerjoin(User, User.id == Prescription.patient_id)
         .where(
@@ -392,7 +461,8 @@ async def get_prescription_pdf(
             detail={"error": {"code": "NOT_FOUND", "message": "Prescription not found"}},
         )
 
-    prescription, record, patient_name = row
+    prescription, record, patient_user = row
+    patient_name = patient_user.full_name if patient_user else None
 
     # Authorization check
     if current_user.role == "patient":
@@ -428,6 +498,19 @@ async def get_prescription_pdf(
         du_result = await db.execute(select(User).where(User.id == doctor_profile.user_id))
         doctor_user = du_result.scalar_one_or_none()
 
+    # Resolve the signature image to a local file path when the upload lives
+    # in local storage — remote/https signatures fall back to the
+    # "signature on file" line (no outbound fetch inside request handling).
+    signature_path = None
+    signature_url = doctor_profile.signature_url if doctor_profile else None
+    if signature_url and settings.STORAGE_BACKEND == "local" and not signature_url.startswith("http"):
+        try:
+            candidate = get_local_file_path(signature_url)
+            if os.path.isfile(candidate):
+                signature_path = candidate
+        except ValueError:
+            pass
+
     pdf_bytes = _build_pdf(
         prescription_id=str(prescription_id),
         medicines=prescription.medicines if isinstance(prescription.medicines, list) else [],
@@ -436,9 +519,15 @@ async def get_prescription_pdf(
         valid_until=prescription.valid_until,
         created_at=prescription.created_at,
         patient_name=patient_name,
+        patient_dob=patient_user.date_of_birth if patient_user else None,
+        patient_sex=patient_user.sex if patient_user else None,
         doctor_name=doctor_user.full_name if doctor_user else None,
         specialization=doctor_profile.specialization if doctor_profile else None,
+        qualifications=doctor_profile.qualifications if doctor_profile else None,
         license_number=doctor_profile.license_number if doctor_profile else None,
+        registration_number=doctor_profile.registration_number if doctor_profile else None,
+        signature_path=signature_path,
+        signature_on_file=bool(signature_url),
         facility_name=doctor_profile.facility_name if doctor_profile else None,
         facility_city=doctor_profile.facility_city if doctor_profile else None,
     )
