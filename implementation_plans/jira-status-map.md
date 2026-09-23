@@ -177,7 +177,12 @@
   - Medication adherence reminders — opt-in per-rx times_of_day (Asia/Kolkata), 15-min cron slot match, Notification-meta dedupe incl. soft-deleted, flag `MEDICATION_REMINDERS_ENABLED` (748506c)
   - Admin CSV exports — patients + appointments honoring live filters, 50k cap, EXPORT audit rows (cb96370)
   - Uploads authz audit — download path already secure; +7 regression tests (unauth 401, cross-patient 403, pending-link 403, revoked split pre/post) (bcf9b5a)
-- **Round-16 — 5 of 6 landed:**
+- **Round-16 — 9 of 10 landed:**
+  - Secure messaging — `message_threads`/`thread_messages`, participant-scoped (404 hides existence), per-side read cursors + unread counts, close/reopen, `/patient/messages` + `/doctor/messages` + deep-links (906fb51)
+  - Notification center — toasts on mark-all-read, doctor notifications page fully i18n'd (was 100% hardcoded), +4 backend tests (8ff0bcd)
+  - CSP audit — enforcing CSP already existed (kept); filled `frame-src` Keycloak-iframe gap + `form-action`/`worker-src`/`manifest-src`, stricter report-only twin, `payment=()` in PP, RUNBOOK §13 (c0d6e61)
+  - Doctor credentials + NMC Rx PDF — `Doctor.qualifications/registration_number/signature_url`, `User.date_of_birth/sex`, signature-image embed in PDF, doctor profile page + patient personal-details card (89d4863)
+  - In flight: e2e @auth first real run
   - Router coverage — +86 fns on the 3 zero-coverage routers (revenue, record-access, admin stats); **REAL BUG FOUND+FIXED**: `GET /revenue/monthly` always 500'd (date_trunc bound 3× → GroupingError; fixed by binding UTC expr once, matches /daily UTC bounds) (6a44fc4, 804d88d)
   - DPDP data export — `GET /patients/me/export` full own-scope JSON dump, 3/hr per-user rate limit, EXPORT audit + self-notification (4d018f4)
   - Patient reschedule — `POST /appointments/{id}/reschedule`, state-guarded (scheduled only), conflict-checked, reminders re-enqueued, doctor notified (55ad384)
