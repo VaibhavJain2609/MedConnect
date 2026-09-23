@@ -10,6 +10,7 @@ from arq.connections import RedisSettings
 
 from app.config import settings
 from app.workers.tasks.appointment_reminders import send_appointment_reminder
+from app.workers.tasks.audit_retention import audit_retention
 from app.workers.tasks.prescription_expiry import check_prescription_expiry
 from app.workers.tasks.webhook_delivery import deliver_webhook
 
@@ -62,7 +63,14 @@ class WorkerSettings:
     # local time — containers run UTC, so hour=8 == 08:00 UTC. The explicit
     # timeout overrides job_timeout (60s): a 500-row sweep with external
     # channel sends needs more headroom.
-    cron_jobs = [cron(check_prescription_expiry, hour=8, minute=0, timeout=300)]
+    cron_jobs = [
+        cron(check_prescription_expiry, hour=8, minute=0, timeout=300),
+        # Daily audit-log retention sweep — archives rows older than
+        # AUDIT_RETENTION_DAYS into audit_log_archive, then deletes them from
+        # the live table in 1000-row batches. Timeout headroom for a backlog
+        # run (up to 100 batches × 1000 rows).
+        cron(audit_retention, hour=9, minute=0, timeout=600),
+    ]
     on_startup = startup
     on_shutdown = shutdown
     redis_settings = _redis_settings

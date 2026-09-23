@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import require_admin
-from app.models.audit import AuditLog
+from app.models.audit import AuditLog, AuditLogArchive
 from app.models.user import User
 from app.services.audit_service import NIL_ENTITY_ID, log_change
 
@@ -54,32 +54,70 @@ def _audit_filters(
     to_date: Optional[datetime],
     changed_by_name: Optional[str],
     user_id: Optional[uuid.UUID] = None,
+    *,
+    model=AuditLog,
 ):
-    """Apply the shared audit-log filters to a select(AuditLog, changed_by_name) stmt."""
+    """Apply the shared audit-log filters to a select(model, changed_by_name) stmt.
+
+    ``model`` is AuditLog for the live table and AuditLogArchive for the
+    archived-logs endpoint — both share the same column layout.
+    """
     if table_name and table_name != "all":
-        stmt = stmt.where(AuditLog.table_name == table_name)
+        stmt = stmt.where(model.table_name == table_name)
     if record_id:
         # record_id is a UUID column — cast to text for substring matching.
         stmt = stmt.where(
-            cast(AuditLog.record_id, String).ilike(f"%{record_id}%")
+            cast(model.record_id, String).ilike(f"%{record_id}%")
         )
     if from_date:
-        stmt = stmt.where(AuditLog.changed_at >= from_date)
+        stmt = stmt.where(model.changed_at >= from_date)
     if to_date:
-        stmt = stmt.where(AuditLog.changed_at <= to_date)
+        stmt = stmt.where(model.changed_at <= to_date)
     if changed_by_name:
         stmt = stmt.where(User.full_name.ilike(f"%{changed_by_name}%"))
     if user_id:
         # Actor filter — rows where this user made the change.
-        stmt = stmt.where(AuditLog.changed_by == user_id)
+        stmt = stmt.where(model.changed_by == user_id)
     return stmt
 
 
-def _audit_base_query():
+def _audit_base_query(model=AuditLog):
     return (
-        select(AuditLog, User.full_name.label("changed_by_name"))
-        .outerjoin(User, AuditLog.changed_by == User.id)
+        select(model, User.full_name.label("changed_by_name"))
+        .outerjoin(User, model.changed_by == User.id)
     )
+
+
+def _serialize_audit_row(log, changer_name: str | None) -> dict:
+    """Serialize one audit row (live or archived) for the list endpoints."""
+    # Extract a short summary from new_values or old_values
+    changes_summary = None
+    if log.new_values:
+        skip_keys = {"id", "created_at", "updated_at", "deleted_at"}
+        preview = {k: v for k, v in log.new_values.items() if k not in skip_keys}
+        # Take the first 2 items for display
+        preview_items = list(preview.items())[:2]
+        changes_summary = ", ".join(f"{k}: {v}" for k, v in preview_items)
+
+    return {
+        "id": str(log.id),
+        "table_name": log.table_name,
+        "record_id": str(log.record_id),
+        "record_id_short": str(log.record_id)[:8],
+        "action": log.action,
+        "changed_by": str(log.changed_by) if log.changed_by else None,
+        "changed_by_name": changer_name,
+        "changed_at": log.changed_at.isoformat(),
+        "old_values": log.old_values,
+        "new_values": log.new_values,
+        "changes_summary": changes_summary,
+        # Present only on archive rows; None on the live list.
+        "archived_at": (
+            log.archived_at.isoformat()
+            if getattr(log, "archived_at", None)
+            else None
+        ),
+    }
 
 
 @router.get("")
@@ -108,33 +146,10 @@ async def list_audit_logs(
     result = await db.execute(stmt)
     rows = result.all()
 
-    data = []
-    for row in rows:
-        log: AuditLog = row[0]
-        changer_name: str | None = row[1]
-
-        # Extract a short summary from new_values or old_values
-        changes_summary = None
-        if log.new_values:
-            skip_keys = {"id", "created_at", "updated_at", "deleted_at"}
-            preview = {k: v for k, v in log.new_values.items() if k not in skip_keys}
-            # Take the first 2 items for display
-            preview_items = list(preview.items())[:2]
-            changes_summary = ", ".join(f"{k}: {v}" for k, v in preview_items)
-
-        data.append({
-            "id": str(log.id),
-            "table_name": log.table_name,
-            "record_id": str(log.record_id),
-            "record_id_short": str(log.record_id)[:8],
-            "action": log.action,
-            "changed_by": str(log.changed_by) if log.changed_by else None,
-            "changed_by_name": changer_name,
-            "changed_at": log.changed_at.isoformat(),
-            "old_values": log.old_values,
-            "new_values": log.new_values,
-            "changes_summary": changes_summary,
-        })
+    data = [
+        _serialize_audit_row(row[0], row[1])
+        for row in rows
+    ]
 
     return {
         "data": data,
@@ -342,3 +357,60 @@ async def export_audit_logs(
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@audit_logs_router.get("/archived")
+async def list_archived_audit_logs(
+    table_name: Optional[str] = Query(None),
+    record_id: Optional[str] = Query(None),
+    from_date: Optional[datetime] = Query(None),
+    to_date: Optional[datetime] = Query(None),
+    changed_by_name: Optional[str] = Query(None),
+    user_id: Optional[uuid.UUID] = Query(
+        None, description="Filter to changes made by this user (audit_log_archive.changed_by)"
+    ),
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """List archived audit logs — same filters/pagination as GET /admin/audit.
+
+    Reads ``audit_log_archive``, the cold-storage table populated by the daily
+    ``audit_retention`` worker task. Rows carry an extra ``archived_at``
+    timestamp recording when the retention sweep moved them out of the live
+    table. Newest first (by ``changed_at``).
+    """
+    stmt = _audit_filters(
+        _audit_base_query(AuditLogArchive),
+        table_name,
+        record_id,
+        from_date,
+        to_date,
+        changed_by_name,
+        user_id,
+        model=AuditLogArchive,
+    )
+
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    total = await db.scalar(count_stmt) or 0
+
+    stmt = (
+        stmt.order_by(AuditLogArchive.changed_at.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    data = [
+        _serialize_audit_row(row[0], row[1])
+        for row in rows
+    ]
+
+    return {
+        "data": data,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "totalPages": math.ceil(total / limit) if total else 0,
+    }
