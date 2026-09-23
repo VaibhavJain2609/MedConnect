@@ -177,7 +177,13 @@
   - Medication adherence reminders — opt-in per-rx times_of_day (Asia/Kolkata), 15-min cron slot match, Notification-meta dedupe incl. soft-deleted, flag `MEDICATION_REMINDERS_ENABLED` (748506c)
   - Admin CSV exports — patients + appointments honoring live filters, 50k cap, EXPORT audit rows (cb96370)
   - Uploads authz audit — download path already secure; +7 regression tests (unauth 401, cross-patient 403, pending-link 403, revoked split pre/post) (bcf9b5a)
-- **Round-16 queue (in flight):** secure patient↔clinic messaging, DPDP patient data export, patient reschedule, SMS/WhatsApp adapters (flag-gated), hot-path index audit, router coverage gap-fill
+- **Round-16 — 5 of 6 landed:**
+  - Router coverage — +86 fns on the 3 zero-coverage routers (revenue, record-access, admin stats); **REAL BUG FOUND+FIXED**: `GET /revenue/monthly` always 500'd (date_trunc bound 3× → GroupingError; fixed by binding UTC expr once, matches /daily UTC bounds) (6a44fc4, 804d88d)
+  - DPDP data export — `GET /patients/me/export` full own-scope JSON dump, 3/hr per-user rate limit, EXPORT audit + self-notification (4d018f4)
+  - Patient reschedule — `POST /appointments/{id}/reschedule`, state-guarded (scheduled only), conflict-checked, reminders re-enqueued, doctor notified (55ad384)
+  - SMS/WhatsApp adapters — CommProvider protocol + Twilio impl + NullProvider, flag-gated (`SMS_ENABLED`/`WHATSAPP_ENABLED`), PHI-minimal bodies, prefs opt-in already existed (745c0d0)
+  - Hot-path indexes — 9 justified btree partials (appt clinic+scheduled, downloads doc_url, rx valid_until, admin ORDER BYs, PCL clinic+consent) + `analysis/index-audit-r16.md` (ab510ce)
+  - In flight: secure patient↔clinic messaging
 - **Round-14 queue:** ABDM (BLOCKED), real LLM-OCR provider when creds exist, first real e2e CI run (@auth specs), medicine_import_sample.csv cleanup (done — stale file dropped)
 - **BLOCKED — ABDM/ABHA: awaiting regulatory approval (user-confirmed)** — do not implement: ABHA creation/linking, NRCeS-conformant FHIR, HIP module (tickets 107–116)
 - **Blocked/external:** SMS/WhatsApp live provider accounts (code adapters anyway), OCR/AI features, load testing env, i18n assets, barcode data source, push VAPID/service
