@@ -162,17 +162,7 @@ class TestRevenueAuth:
         "path",
         [
             "/daily",
-            # REAL BUG: /monthly always 500s — func.date_trunc() is emitted 3x
-            # (SELECT/GROUP BY/ORDER BY) with distinct bound params, so Postgres
-            # raises GroupingError "column billing.created_at must appear in the
-            # GROUP BY clause". See revenue.py monthly_revenue().
-            pytest.param(
-                "/monthly",
-                marks=pytest.mark.xfail(
-                    strict=True,
-                    reason="BUG: monthly revenue 500s — date_trunc GROUP BY param mismatch",
-                ),
-            ),
+            "/monthly",
             "/unpaid",
         ],
     )
@@ -261,15 +251,6 @@ class TestDailyRevenue:
 
 
 class TestMonthlyRevenue:
-    # REAL BUG: every successful /revenue/monthly call 500s — the endpoint
-    # emits func.date_trunc() three separate times (SELECT, GROUP BY,
-    # ORDER BY), each with its own bound parameter, so Postgres does not
-    # recognise the SELECT expression in GROUP BY → GroupingError → 500.
-    # revenue.py monthly_revenue(). Not fixed here per task instructions.
-    @pytest.mark.xfail(
-        strict=True,
-        reason="BUG: /revenue/monthly 500s — date_trunc GROUP BY param mismatch",
-    )
     async def test_breakdown_and_totals(self, client, db, admin_user, patient_user):
         await _make_bill(db, patient_user.id, 100.0, "paid", created_at=DAY)
         await _make_bill(db, patient_user.id, 200.0, "paid", created_at=DAY)
@@ -290,10 +271,6 @@ class TestMonthlyRevenue:
         assert body["daily_breakdown"][0]["date"] == "2024-03-15"
         assert body["daily_breakdown"][1]["date"] == "2024-03-16"
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="BUG: /revenue/monthly 500s — date_trunc GROUP BY param mismatch",
-    )
     async def test_empty_month(self, client, admin_user):
         resp = await client.get(
             "/api/v1/revenue/monthly",

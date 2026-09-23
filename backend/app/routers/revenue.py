@@ -135,9 +135,12 @@ async def monthly_revenue(
     month_start = datetime(year, month, 1, 0, 0, 0, tzinfo=timezone.utc)
     month_end = datetime(year, month, last_day, 23, 59, 59, tzinfo=timezone.utc)
 
-    # Aggregate per day
+    # Aggregate per UTC day (matches /daily's UTC day bounds). Bind the
+    # expression once: a fresh date_trunc per clause emits distinct bound
+    # params and Postgres rejects the GROUP BY.
+    day_expr = func.date_trunc("day", Billing.created_at.op("AT TIME ZONE")("UTC"))
     stmt = select(
-        func.date_trunc("day", Billing.created_at).label("day"),
+        day_expr.label("day"),
         func.coalesce(func.sum(Billing.amount), 0).label("total_paid"),
         func.count(Billing.id).label("bill_count"),
     ).where(
@@ -146,9 +149,9 @@ async def monthly_revenue(
         Billing.created_at >= month_start,
         Billing.created_at <= month_end,
     ).group_by(
-        func.date_trunc("day", Billing.created_at)
+        day_expr
     ).order_by(
-        func.date_trunc("day", Billing.created_at)
+        day_expr
     )
     if clinic_id:
         stmt = stmt.where(Billing.clinic_id == clinic_id)
