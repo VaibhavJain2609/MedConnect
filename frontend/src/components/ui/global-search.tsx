@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useTranslations } from "next-intl";
 import { Search, X, User, Stethoscope, Calendar, Pill, Clock, Building2, FileText, FlaskConical, ClipboardList } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -28,6 +29,8 @@ import { useUiStore } from "@/stores/ui-store";
  * <GlobalSearch />
  */
 export const GlobalSearch: React.FC = () => {
+  const t = useTranslations("search");
+  const tCommon = useTranslations("common");
   // Open state lives in the shared ui-store so header trigger buttons
   // and the ⌘K/Ctrl+K shortcut drive the same modal.
   const isOpen = useUiStore((s) => s.searchOpen);
@@ -142,21 +145,21 @@ export const GlobalSearch: React.FC = () => {
   const getTypeLabel = (type: SearchResult["type"]) => {
     switch (type) {
       case "patient":
-        return "Patient";
+        return t("types.patient");
       case "doctor":
-        return "Doctor";
+        return t("types.doctor");
       case "appointment":
-        return "Appointment";
+        return t("types.appointment");
       case "medicine":
-        return "Medicine";
+        return t("types.medicine");
       case "clinic":
-        return "Clinic";
+        return t("types.clinic");
       case "record":
-        return "Record";
+        return t("types.record");
       case "lab_result":
-        return "Lab Result";
+        return t("types.lab_result");
       case "prescription":
-        return "Prescription";
+        return t("types.prescription");
       default:
         return "";
     }
@@ -177,7 +180,7 @@ export const GlobalSearch: React.FC = () => {
         <div
           role="dialog"
           aria-modal="true"
-          aria-label="Global search"
+          aria-label={t("ariaLabel")}
           className="bg-white rounded-lg shadow-2xl w-full max-w-2xl mx-4"
         >
           {/* Search Input */}
@@ -186,7 +189,7 @@ export const GlobalSearch: React.FC = () => {
             <input
               ref={inputRef}
               type="text"
-              placeholder="Search patients, records, labs, prescriptions, medicines..."
+              placeholder={t("placeholder")}
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
@@ -201,7 +204,7 @@ export const GlobalSearch: React.FC = () => {
                 setSelectedIndex(0);
               }}
               className="p-1 rounded hover:bg-dreams-lightBg"
-              aria-label="Close search"
+              aria-label={t("close")}
             >
               <X className="h-5 w-5 text-dreams-textSecondary" />
             </button>
@@ -213,19 +216,19 @@ export const GlobalSearch: React.FC = () => {
               isRateLimitError(error) ? (
                 <EmptyState
                   icon={Clock}
-                  title="Too many requests"
+                  title={tCommon("rateLimitedTitle")}
                   description={error.userMessage}
                 />
               ) : (
                 <EmptyState
                   icon={Search}
-                  title="Search failed"
-                  description="Something went wrong — please try again"
+                  title={t("errorTitle")}
+                  description={t("errorDescription")}
                 />
               )
             ) : isLoading ? (
               <div className="p-8 text-center">
-                <Spinner className="mx-auto" label="Searching" />
+                <Spinner className="mx-auto" label={t("searching")} />
               </div>
             ) : results && results.length > 0 ? (
               <div className="py-2">
@@ -273,14 +276,14 @@ export const GlobalSearch: React.FC = () => {
             ) : searchQuery.length >= 2 ? (
               <EmptyState
                 icon={Search}
-                title="No results found"
-                description="Try searching with different keywords"
+                title={t("noResultsTitle")}
+                description={t("noResultsDescription")}
               />
             ) : (
               <EmptyState
                 icon={Search}
-                title="Start typing to search"
-                description="Search across patients, records, lab results, prescriptions, and medicines"
+                title={t("emptyTitle")}
+                description={t("emptyDescription")}
               />
             )}
           </div>
@@ -292,19 +295,19 @@ export const GlobalSearch: React.FC = () => {
                 <kbd className="px-2 py-1 rounded bg-white border border-dreams-border">
                   ↑↓
                 </kbd>
-                Navigate
+                {t("navigate")}
               </span>
               <span className="flex items-center gap-1">
                 <kbd className="px-2 py-1 rounded bg-white border border-dreams-border">
                   Enter
                 </kbd>
-                Select
+                {t("select")}
               </span>
               <span className="flex items-center gap-1">
                 <kbd className="px-2 py-1 rounded bg-white border border-dreams-border">
                   Esc
                 </kbd>
-                Close
+                {t("closeKey")}
               </span>
             </div>
           </div>
@@ -327,6 +330,7 @@ GlobalSearch.displayName = "GlobalSearch";
 export const GlobalSearchTrigger: React.FC<{
   onOpen?: () => void;
 }> = ({ onOpen }) => {
+  const t = useTranslations("search");
   const openSearch = useUiStore((s) => s.openSearch);
   const isMac =
     typeof window !== "undefined" &&
@@ -338,11 +342,11 @@ export const GlobalSearchTrigger: React.FC<{
         onOpen?.();
         openSearch();
       }}
-      aria-label="Open global search"
+      aria-label={t("triggerAriaLabel")}
       className="flex items-center gap-3 w-64 px-3 py-2 rounded-lg border border-dreams-border bg-white hover:bg-dreams-lightBg/50 transition-colors"
     >
       <Search className="h-4 w-4 text-dreams-textSecondary" />
-      <span className="text-sm text-dreams-textSecondary">Search...</span>
+      <span className="text-sm text-dreams-textSecondary">{t("triggerLabel")}</span>
       <kbd className="ml-auto px-2 py-0.5 text-xs rounded bg-dreams-lightBg border border-dreams-border text-dreams-textSecondary">
         {isMac ? "⌘K" : "Ctrl+K"}
       </kbd>

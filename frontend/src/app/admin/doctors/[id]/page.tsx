@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -28,12 +29,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
 // Verification checklist items — local UI state only (no backend persistence for now)
-const CHECKLIST_ITEMS = [
-  { id: "license", label: "License verified" },
-  { id: "identity", label: "Identity verified" },
-  { id: "credentials", label: "Credentials confirmed" },
-  { id: "background", label: "Background check passed" },
-];
+const CHECKLIST_ITEM_IDS = ["license", "identity", "credentials", "background"] as const;
 
 function RejectModal({
   doctorName,
@@ -46,6 +42,8 @@ function RejectModal({
   onConfirm: (reason: string) => void;
   isPending: boolean;
 }) {
+  const t = useTranslations("adminDoctorDetail.rejectModal");
+  const tCommon = useTranslations("common");
   const [reason, setReason] = useState("");
 
   return (
@@ -54,25 +52,24 @@ function RejectModal({
         <div className="flex items-center gap-3 mb-4">
           <XCircle className="h-6 w-6 text-red-500" />
           <h2 className="text-lg font-semibold text-dreams-textPrimary">
-            Reject Doctor
+            {t("title")}
           </h2>
         </div>
 
         <p className="text-dreams-textSecondary text-sm mb-4">
-          Reject {doctorName}&apos;s verification? Please provide a reason so
-          they can address the issue.
+          {t("desc", { name: doctorName })}
         </p>
 
         <div className="mb-5">
           <label className="block text-sm font-medium text-dreams-textPrimary mb-1.5">
-            Reason for rejection{" "}
+            {t("reasonLabel")}{" "}
             <span className="text-red-500">*</span>
           </label>
           <textarea
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={3}
-            placeholder="Explain what needs to be corrected..."
+            placeholder={t("reasonPlaceholder")}
             className="w-full px-3 py-2 border border-dreams-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue resize-none"
           />
         </div>
@@ -83,14 +80,14 @@ function RejectModal({
             disabled={isPending}
             className="px-4 py-2 text-sm font-medium text-dreams-textSecondary border border-dreams-border rounded-lg hover:bg-gray-50 transition-colors"
           >
-            Cancel
+            {tCommon("cancel")}
           </button>
           <button
             onClick={() => onConfirm(reason)}
             disabled={isPending || !reason.trim()}
             className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50"
           >
-            {isPending ? "Rejecting..." : "Reject"}
+            {isPending ? t("confirming") : t("confirm")}
           </button>
         </div>
       </div>
@@ -109,6 +106,8 @@ function ApproveModal({
   onConfirm: (reason: string) => void;
   isPending: boolean;
 }) {
+  const t = useTranslations("adminDoctorDetail.approveModal");
+  const tCommon = useTranslations("common");
   const [note, setNote] = useState("");
 
   return (
@@ -117,24 +116,23 @@ function ApproveModal({
         <div className="flex items-center gap-3 mb-4">
           <CheckCircle className="h-6 w-6 text-green-500" />
           <h2 className="text-lg font-semibold text-dreams-textPrimary">
-            Approve Doctor
+            {t("title")}
           </h2>
         </div>
 
         <p className="text-dreams-textSecondary text-sm mb-4">
-          Approve {doctorName}&apos;s verification? They will be notified and
-          can start seeing patients.
+          {t("desc", { name: doctorName })}
         </p>
 
         <div className="mb-5">
           <label className="block text-sm font-medium text-dreams-textPrimary mb-1.5">
-            Note (optional)
+            {t("noteLabel")}
           </label>
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
             rows={3}
-            placeholder="Add a welcome note..."
+            placeholder={t("notePlaceholder")}
             className="w-full px-3 py-2 border border-dreams-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue resize-none"
           />
         </div>
@@ -145,14 +143,14 @@ function ApproveModal({
             disabled={isPending}
             className="px-4 py-2 text-sm font-medium text-dreams-textSecondary border border-dreams-border rounded-lg hover:bg-gray-50 transition-colors"
           >
-            Cancel
+            {tCommon("cancel")}
           </button>
           <button
             onClick={() => onConfirm(note)}
             disabled={isPending}
             className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50"
           >
-            {isPending ? "Approving..." : "Approve"}
+            {isPending ? t("confirming") : t("confirm")}
           </button>
         </div>
       </div>
@@ -161,6 +159,7 @@ function ApproveModal({
 }
 
 export default function DoctorDetailPage() {
+  const t = useTranslations("adminDoctorDetail");
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -228,9 +227,9 @@ export default function DoctorDetailPage() {
   if (error || !doctor) {
     return (
       <div className="flex flex-col items-center justify-center py-12 space-y-4">
-        <p className="text-red-600 font-medium">Failed to load doctor</p>
+        <p className="text-red-600 font-medium">{t("loadError")}</p>
         <p className="text-dreams-textSecondary text-sm">
-          {error instanceof Error ? error.message : "Doctor not found"}
+          {error instanceof Error ? error.message : t("notFound")}
         </p>
       </div>
     );
@@ -240,7 +239,7 @@ export default function DoctorDetailPage() {
     <div className="space-y-6">
       <Breadcrumb
         items={[
-          { label: "Doctors", href: "/admin/doctors" },
+          { label: t("breadcrumbDoctors"), href: "/admin/doctors" },
           { label: doctor.name },
         ]}
       />
@@ -262,24 +261,25 @@ export default function DoctorDetailPage() {
               {doctor.verified ? (
                 <Badge variant="completed">
                   <ShieldCheck className="h-3 w-3 mr-1" />
-                  Verified
+                  {t("verified")}
                 </Badge>
               ) : (
                 <Badge variant="pending">
                   <ShieldX className="h-3 w-3 mr-1" />
-                  Pending Verification
+                  {t("pendingVerification")}
                 </Badge>
               )}
               {!doctor.is_active && (
-                <Badge variant="cancelled">Inactive</Badge>
+                <Badge variant="cancelled">{t("inactive")}</Badge>
               )}
             </div>
             <p className="text-dreams-textSecondary text-sm mt-0.5">
-              Registered{" "}
-              {new Date(doctor.created_at).toLocaleDateString("en-IN", {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
+              {t("registered", {
+                date: new Date(doctor.created_at).toLocaleDateString("en-IN", {
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                }),
               })}
             </p>
           </div>
@@ -294,7 +294,7 @@ export default function DoctorDetailPage() {
               className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
             >
               <XCircle className="h-4 w-4" />
-              Reject
+              {t("reject")}
             </button>
             <button
               onClick={() => setModal("approve")}
@@ -302,7 +302,7 @@ export default function DoctorDetailPage() {
               className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50"
             >
               <CheckCircle className="h-4 w-4" />
-              Approve
+              {t("approve")}
             </button>
           </div>
         )}
@@ -316,7 +316,7 @@ export default function DoctorDetailPage() {
             <div className="flex items-center gap-2 mb-5">
               <Stethoscope className="h-5 w-5 text-dreams-blue" />
               <h2 className="text-base font-semibold text-dreams-textPrimary">
-                Doctor Profile
+                {t("doctorProfile")}
               </h2>
             </div>
 
@@ -345,7 +345,7 @@ export default function DoctorDetailPage() {
               </div>
               <div>
                 <p className="text-xs text-dreams-textSecondary uppercase tracking-wider mb-1">
-                  License Number
+                  {t("licenseNumber")}
                 </p>
                 <div className="flex items-center gap-2 text-dreams-textPrimary font-medium">
                   <FileText className="h-4 w-4 text-dreams-textSecondary flex-shrink-0" />
@@ -354,7 +354,7 @@ export default function DoctorDetailPage() {
               </div>
               <div>
                 <p className="text-xs text-dreams-textSecondary uppercase tracking-wider mb-1">
-                  License Document
+                  {t("licenseDocument")}
                 </p>
                 <div className="flex items-center gap-2 text-dreams-textPrimary font-medium">
                   <FileText className="h-4 w-4 text-dreams-textSecondary flex-shrink-0" />
@@ -365,18 +365,18 @@ export default function DoctorDetailPage() {
                       className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-dreams-blue border border-dreams-blue/30 rounded-lg hover:bg-dreams-blue/5 transition-colors disabled:opacity-50"
                     >
                       <ExternalLink className="h-3 w-3" />
-                      {openingDoc ? "Opening..." : "View document"}
+                      {openingDoc ? t("opening") : t("viewDocument")}
                     </button>
                   ) : (
                     <span className="text-dreams-textSecondary font-normal">
-                      Not uploaded
+                      {t("notUploaded")}
                     </span>
                   )}
                 </div>
               </div>
               <div>
                 <p className="text-xs text-dreams-textSecondary uppercase tracking-wider mb-1">
-                  Facility
+                  {t("facility")}
                 </p>
                 <div className="flex items-center gap-2 text-dreams-textPrimary font-medium">
                   <Building2 className="h-4 w-4 text-dreams-textSecondary flex-shrink-0" />
@@ -399,7 +399,7 @@ export default function DoctorDetailPage() {
             <div className="flex items-center gap-2 mb-5">
               <FileImage className="h-5 w-5 text-dreams-blue" />
               <h2 className="text-base font-semibold text-dreams-textPrimary">
-                Uploaded Documents
+                {t("uploadedDocuments")}
               </h2>
             </div>
 
@@ -414,7 +414,7 @@ export default function DoctorDetailPage() {
                   }`}
                 />
                 <p className="text-sm font-medium text-dreams-textSecondary">
-                  License Certificate
+                  {t("licenseCertificate")}
                 </p>
                 {doctor.license_document_url ? (
                   <button
@@ -423,10 +423,10 @@ export default function DoctorDetailPage() {
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-dreams-blue border border-dreams-blue/30 rounded-lg hover:bg-dreams-blue/5 transition-colors disabled:opacity-50"
                   >
                     <ExternalLink className="h-3.5 w-3.5" />
-                    {openingDoc ? "Opening..." : "View document"}
+                    {openingDoc ? t("opening") : t("viewDocument")}
                   </button>
                 ) : (
-                  <p className="text-xs text-gray-400">Not uploaded</p>
+                  <p className="text-xs text-gray-400">{t("notUploaded")}</p>
                 )}
               </div>
 
@@ -434,17 +434,16 @@ export default function DoctorDetailPage() {
               <div className="border border-dashed border-dreams-border rounded-lg p-5 flex flex-col items-center justify-center text-center gap-2 bg-dreams-lightBg">
                 <FileImage className="h-8 w-8 text-gray-300" />
                 <p className="text-sm font-medium text-dreams-textSecondary">
-                  ID Proof
+                  {t("idProof")}
                 </p>
                 <p className="text-xs text-gray-400">
-                  No document uploaded yet
+                  {t("noDocumentYet")}
                 </p>
               </div>
             </div>
 
             <p className="text-xs text-dreams-textSecondary mt-4">
-              Additional document types (e.g. ID proof) will be available once
-              the document management feature is extended.
+              {t("docsNote")}
             </p>
           </div>
 
@@ -458,7 +457,7 @@ export default function DoctorDetailPage() {
           <div className="bg-white rounded-xl border border-dreams-border p-5 shadow-card">
             <div className="flex items-center gap-3 mb-2">
               <Pill className="h-5 w-5 text-dreams-blue" />
-              <p className="text-sm text-dreams-textSecondary">Prescriptions</p>
+              <p className="text-sm text-dreams-textSecondary">{t("stats.prescriptions")}</p>
             </div>
             <p className="text-3xl font-bold text-dreams-textPrimary">
               {doctor.prescriptions_count}
@@ -469,7 +468,7 @@ export default function DoctorDetailPage() {
             <div className="flex items-center gap-3 mb-2">
               <FileText className="h-5 w-5 text-dreams-blue" />
               <p className="text-sm text-dreams-textSecondary">
-                Medical Records
+                {t("stats.medicalRecords")}
               </p>
             </div>
             <p className="text-3xl font-bold text-dreams-textPrimary">
@@ -480,7 +479,7 @@ export default function DoctorDetailPage() {
           <div className="bg-white rounded-xl border border-dreams-border p-5 shadow-card">
             <div className="flex items-center gap-3 mb-2">
               <CalendarDays className="h-5 w-5 text-dreams-blue" />
-              <p className="text-sm text-dreams-textSecondary">Registered</p>
+              <p className="text-sm text-dreams-textSecondary">{t("stats.registered")}</p>
             </div>
             <p className="text-sm font-semibold text-dreams-textPrimary">
               {new Date(doctor.created_at).toLocaleDateString("en-IN", {
@@ -496,53 +495,52 @@ export default function DoctorDetailPage() {
             <div className="flex items-center gap-2 mb-4">
               <ClipboardList className="h-5 w-5 text-dreams-blue" />
               <h2 className="text-sm font-semibold text-dreams-textPrimary">
-                Verification Checklist
+                {t("checklist.title")}
               </h2>
             </div>
             <div className="space-y-3">
-              {CHECKLIST_ITEMS.map((item) => (
+              {CHECKLIST_ITEM_IDS.map((itemId) => (
                 <label
-                  key={item.id}
+                  key={itemId}
                   className="flex items-center gap-3 cursor-pointer group"
                 >
                   <input
                     type="checkbox"
-                    checked={checklist[item.id]}
-                    onChange={() => toggleCheck(item.id)}
+                    checked={checklist[itemId]}
+                    onChange={() => toggleCheck(itemId)}
                     className="h-4 w-4 rounded border-gray-300 text-dreams-blue focus:ring-dreams-blue cursor-pointer"
                   />
                   <span
                     className={`text-sm transition-colors ${
-                      checklist[item.id]
+                      checklist[itemId]
                         ? "text-dreams-textSecondary line-through"
                         : "text-dreams-textPrimary"
                     }`}
                   >
-                    {item.label}
+                    {t(`checklist.${itemId}`)}
                   </span>
                 </label>
               ))}
             </div>
             <p className="text-xs text-gray-400 mt-3">
-              Checklist state is session-local (not saved to the server) — use as a
-              review aid before approving.
+              {t("checklist.note")}
             </p>
           </div>
 
           {/* Admin Notes */}
           <div className="bg-white rounded-xl border border-dreams-border p-5 shadow-card">
             <h2 className="text-sm font-semibold text-dreams-textPrimary mb-3">
-              Admin Notes
+              {t("adminNotes")}
             </h2>
             <textarea
               value={adminNotes}
               onChange={(e) => setAdminNotes(e.target.value)}
               rows={4}
-              placeholder="Add internal notes about this doctor..."
+              placeholder={t("adminNotesPlaceholder")}
               className="w-full px-3 py-2 border border-dreams-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue resize-none text-dreams-textPrimary placeholder:text-gray-400"
             />
             <p className="text-xs text-gray-400 mt-2">
-              Notes are stored locally in this session.
+              {t("adminNotesHint")}
             </p>
           </div>
         </div>

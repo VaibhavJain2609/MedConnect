@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useTranslations } from "next-intl";
 import { Grid, List, LayoutGrid } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -34,6 +35,8 @@ export const ViewToggle: React.FC<ViewToggleProps> = ({
   modes = ["grid", "table"],
   className,
 }) => {
+  const t = useTranslations("viewToggle");
+
   const icons = {
     grid: LayoutGrid,
     table: Grid,
@@ -41,9 +44,9 @@ export const ViewToggle: React.FC<ViewToggleProps> = ({
   };
 
   const labels = {
-    grid: "Grid View",
-    table: "Table View",
-    list: "List View",
+    grid: t("grid"),
+    table: t("table"),
+    list: t("list"),
   };
 
   return (

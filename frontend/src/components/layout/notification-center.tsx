@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { Bell, Check, X, Calendar, TestTube, AlertCircle, Pill, CheckCircle, XCircle } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -38,6 +39,8 @@ function safeActionUrl(url?: string): string | undefined {
  * <NotificationCenter />
  */
 export const NotificationCenter: React.FC = () => {
+  const t = useTranslations("notifCenter");
+  const tNotif = useTranslations("notifications");
   const [isOpen, setIsOpen] = React.useState(false);
   const queryClient = useQueryClient();
   const router = useRouter();
@@ -136,10 +139,10 @@ export const NotificationCenter: React.FC = () => {
     const now = new Date();
     const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
 
-    if (diff < 60) return "Just now";
-    if (diff < 3600) return `${Math.floor(diff / 60)} minutes ago`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
-    if (diff < 604800) return `${Math.floor(diff / 86400)} days ago`;
+    if (diff < 60) return tNotif("justNow");
+    if (diff < 3600) return t("minutesAgo", { count: Math.floor(diff / 60) });
+    if (diff < 86400) return t("hoursAgo", { count: Math.floor(diff / 3600) });
+    if (diff < 604800) return t("daysAgo", { count: Math.floor(diff / 86400) });
     return date.toLocaleDateString();
   };
 
@@ -149,7 +152,7 @@ export const NotificationCenter: React.FC = () => {
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="relative p-2 rounded-lg hover:bg-dreams-lightBg transition-colors"
-        aria-label="Notifications"
+        aria-label={tNotif("title")}
         aria-haspopup="true"
         aria-expanded={isOpen}
       >
@@ -168,11 +171,11 @@ export const NotificationCenter: React.FC = () => {
           <div className="flex items-center justify-between p-4 border-b border-dreams-border">
             <div className="flex items-center gap-2">
               <h3 className="font-bold text-dreams-textPrimary">
-                Notifications
+                {tNotif("title")}
               </h3>
               {unreadCount > 0 && (
                 <Badge variant="pending" className="text-xs">
-                  {unreadCount} New
+                  {t("newBadge", { count: unreadCount })}
                 </Badge>
               )}
             </div>
@@ -181,7 +184,7 @@ export const NotificationCenter: React.FC = () => {
                 onClick={() => markAllAsReadMutation.mutate()}
                 className="text-xs text-dreams-blue hover:underline"
               >
-                Mark all read
+                {tNotif("markAllRead")}
               </button>
             )}
           </div>
@@ -242,7 +245,7 @@ export const NotificationCenter: React.FC = () => {
                             className="flex items-center gap-1 rounded-lg bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 hover:bg-green-100 disabled:opacity-50"
                           >
                             <CheckCircle className="h-3 w-3" />
-                            Approve
+                            {tNotif("approve")}
                           </button>
                           <button
                             disabled={consentActionMutation.isPending}
@@ -255,7 +258,7 @@ export const NotificationCenter: React.FC = () => {
                             className="flex items-center gap-1 rounded-lg bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
                           >
                             <XCircle className="h-3 w-3" />
-                            Reject
+                            {tNotif("reject")}
                           </button>
                         </div>
                       )}
@@ -269,7 +272,7 @@ export const NotificationCenter: React.FC = () => {
                           markAsReadMutation.mutate(notification.id);
                         }}
                         className="flex-shrink-0 p-1 rounded hover:bg-dreams-lightBg"
-                        aria-label="Mark as read"
+                        aria-label={tNotif("markAsRead")}
                       >
                         <Check className="h-4 w-4 text-dreams-textSecondary" />
                       </button>
@@ -281,7 +284,7 @@ export const NotificationCenter: React.FC = () => {
               <div className="p-8 text-center">
                 <Bell className="h-12 w-12 text-dreams-textSecondary mx-auto mb-3 opacity-50" />
                 <p className="text-dreams-textSecondary">
-                  No notifications yet
+                  {t("empty")}
                 </p>
               </div>
             )}
@@ -294,7 +297,7 @@ export const NotificationCenter: React.FC = () => {
                 href={notificationsPath}
                 className="text-sm text-dreams-blue hover:underline"
               >
-                View all notifications
+                {t("viewAll")}
               </a>
             </div>
           )}

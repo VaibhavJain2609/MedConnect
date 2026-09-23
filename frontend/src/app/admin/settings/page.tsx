@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Save, Settings } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
@@ -21,12 +22,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-const REMINDER_CHANNELS = [
-  { key: "in_app", label: "In-app" },
-  { key: "email", label: "Email" },
-  { key: "sms", label: "SMS" },
-  { key: "whatsapp", label: "WhatsApp" },
-  { key: "push", label: "Push" },
+const REMINDER_CHANNEL_KEYS = [
+  "in_app",
+  "email",
+  "sms",
+  "whatsapp",
+  "push",
 ] as const;
 
 const BOOLEAN_KEYS = new Set(["maintenance_mode", "registration_enabled"]);
@@ -94,6 +95,8 @@ function SettingCard({
   setting: PlatformSetting;
   onSaved: () => void;
 }) {
+  const t = useTranslations("adminSettings");
+  const tCommon = useTranslations("common");
   const [draft, setDraft] = useState<unknown>(setting.value);
   const [jsonText, setJsonText] = useState(
     JSON.stringify(setting.value, null, 2)
@@ -127,13 +130,16 @@ function SettingCard({
     setSaving(true);
     try {
       await updatePlatformSetting(setting.key, value);
-      toast({ title: "Setting saved", description: `${setting.key} updated.` });
+      toast({
+        title: t("toasts.savedTitle"),
+        description: t("toasts.savedDesc", { key: setting.key }),
+      });
       onSaved();
     } catch (err) {
       toast({
-        title: "Save failed",
+        title: t("toasts.saveFailedTitle"),
         description:
-          (err as { userMessage?: string })?.userMessage || (err instanceof Error ? err.message : "Could not update the setting."),
+          (err as { userMessage?: string })?.userMessage || (err instanceof Error ? err.message : t("toasts.saveFailedFallback")),
         variant: "destructive",
       });
     } finally {
@@ -147,7 +153,7 @@ function SettingCard({
       try {
         value = JSON.parse(jsonText);
       } catch {
-        setJsonError("Invalid JSON — fix the value before saving.");
+        setJsonError(t("toasts.invalidJson"));
         return;
       }
       setJsonError(null);
@@ -155,16 +161,16 @@ function SettingCard({
     if (isKnownNumber) {
       if (typeof value !== "number" || !Number.isFinite(value)) {
         toast({
-          title: "Invalid value",
-          description: `${setting.key} must be a number.`,
+          title: t("toasts.invalidValueTitle"),
+          description: t("toasts.mustBeNumber", { key: setting.key }),
           variant: "destructive",
         });
         return;
       }
       if (setting.key === "max_upload_mb" && (value < 1 || value > 50)) {
         toast({
-          title: "Invalid value",
-          description: "Max upload size must be between 1 and 50 MB.",
+          title: t("toasts.invalidValueTitle"),
+          description: t("toasts.uploadRange"),
           variant: "destructive",
         });
         return;
@@ -200,7 +206,7 @@ function SettingCard({
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-dreams-blue text-white text-xs font-medium hover:opacity-90 transition-opacity disabled:opacity-50 shrink-0"
         >
           <Save className="h-3.5 w-3.5" />
-          {saving ? "Saving..." : "Save"}
+          {saving ? t("saving") : t("save")}
         </button>
       </div>
 
@@ -213,7 +219,7 @@ function SettingCard({
             label={formatKey(setting.key)}
           />
           <span className="text-sm text-dreams-textPrimary">
-            {draft === true ? "Enabled" : "Disabled"}
+            {draft === true ? t("enabled") : t("disabled")}
           </span>
         </div>
       )}
@@ -222,9 +228,7 @@ function SettingCard({
         <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
           <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
           <p className="text-xs text-amber-800">
-            Enabling maintenance mode locks out all non-admin API calls.
-            Patients and doctors will be unable to use the platform until it
-            is turned back off.
+            {t("maintenanceWarning")}
           </p>
         </div>
       )}
@@ -245,20 +249,20 @@ function SettingCard({
 
       {isReminderChannels && (
         <div className="flex flex-wrap gap-4">
-          {REMINDER_CHANNELS.map((ch) => (
+          {REMINDER_CHANNEL_KEYS.map((key) => (
             <label
-              key={ch.key}
+              key={key}
               className="flex items-center gap-2 text-sm text-dreams-textPrimary cursor-pointer"
             >
               <input
                 type="checkbox"
-                checked={channels[ch.key] === true}
+                checked={channels[key] === true}
                 onChange={(e) =>
-                  setDraft({ ...channels, [ch.key]: e.target.checked })
+                  setDraft({ ...channels, [key]: e.target.checked })
                 }
                 className="h-4 w-4 rounded border-dreams-border accent-dreams-blue"
               />
-              {ch.label}
+              {t(`channels.${key}`)}
             </label>
           ))}
         </div>
@@ -267,7 +271,7 @@ function SettingCard({
       {!isTyped && (
         <div>
           <textarea
-            aria-label={`${formatKey(setting.key)} value (JSON)`}
+            aria-label={t("jsonValueAria", { label: formatKey(setting.key) })}
             value={jsonText}
             onChange={(e) => {
               setJsonText(e.target.value);
@@ -284,7 +288,7 @@ function SettingCard({
       )}
 
       <p className="text-xs text-dreams-textSecondary">
-        Last updated: {formatDateTime(setting.updated_at)}
+        {t("lastUpdated", { datetime: formatDateTime(setting.updated_at) })}
       </p>
 
       <AlertDialog
@@ -293,20 +297,18 @@ function SettingCard({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Enable maintenance mode?</AlertDialogTitle>
+            <AlertDialogTitle>{t("maintenanceDialog.title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This will lock out all non-admin API calls. Patients and doctors
-              will be unable to use the platform until maintenance mode is
-              turned back off.
+              {t("maintenanceDialog.desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{tCommon("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => void performSave(true)}
               className="bg-dreams-blue text-white hover:opacity-90"
             >
-              Enable maintenance mode
+              {t("maintenanceDialog.confirm")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -316,6 +318,8 @@ function SettingCard({
 }
 
 export default function AdminSettingsPage() {
+  const t = useTranslations("adminSettings");
+  const tCommon = useTranslations("common");
   const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useQuery<PlatformSetting[]>({
@@ -341,17 +345,17 @@ export default function AdminSettingsPage() {
     <div className="space-y-6">
       <Breadcrumb
         items={[
-          { label: "Dashboard", href: "/admin/dashboard" },
-          { label: "Settings" },
+          { label: t("breadcrumbDashboard"), href: "/admin/dashboard" },
+          { label: t("breadcrumb") },
         ]}
       />
 
       <div className="flex items-center gap-3">
         <Settings className="h-7 w-7 text-dreams-blue" />
         <div>
-          <h1 className="text-3xl font-bold text-dreams-textPrimary">Settings</h1>
+          <h1 className="text-3xl font-bold text-dreams-textPrimary">{t("title")}</h1>
           <p className="text-dreams-textSecondary mt-0.5">
-            Platform configuration and feature flags
+            {t("subtitle")}
           </p>
         </div>
       </div>
@@ -362,14 +366,14 @@ export default function AdminSettingsPage() {
         </div>
       ) : error ? (
         <div className="bg-white rounded-xl border border-dreams-border shadow-card p-12 text-center">
-          <p className="text-red-600 font-medium">Failed to load settings</p>
+          <p className="text-red-600 font-medium">{t("loadError")}</p>
           <p className="text-dreams-textSecondary text-sm mt-1">
-            {error instanceof Error ? error.message : "An error occurred"}
+            {error instanceof Error ? error.message : tCommon("errorGeneric")}
           </p>
         </div>
       ) : settings.length === 0 ? (
         <div className="bg-white rounded-xl border border-dreams-border shadow-card p-12 text-center">
-          <p className="text-dreams-textSecondary">No settings configured</p>
+          <p className="text-dreams-textSecondary">{t("empty")}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

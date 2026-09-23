@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useTranslations } from "next-intl";
 import { Plus, X, Loader2 } from "lucide-react";
 import api from "@/lib/api";
 
@@ -65,6 +66,7 @@ function PatientSearchInput({
 }: {
   onSelect: (p: PatientSuggestion) => void;
 }) {
+  const t = useTranslations("adminBilling");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PatientSuggestion[]>([]);
   const [open, setOpen] = useState(false);
@@ -103,7 +105,7 @@ function PatientSearchInput({
         type="text"
         value={query}
         onChange={handleChange}
-        placeholder="Search patient by name or phone..."
+        placeholder={t("patientSearchPlaceholder")}
         className="w-full h-10 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-2 focus:ring-dreams-blue/20"
         onFocus={() => results.length > 0 && setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 200)}
@@ -139,7 +141,7 @@ function PatientSearchInput({
           ))}
           {!loading && query.length >= 2 && results.length === 0 && (
             <div className="px-4 py-3 text-sm text-dreams-textSecondary">
-              No patients found.
+              {t("noPatients")}
             </div>
           )}
         </div>
@@ -165,6 +167,8 @@ function CreateBillModal({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const t = useTranslations("adminBilling.modal");
+  const tCommon = useTranslations("common");
   const [patient, setPatient] = useState<PatientSuggestion | null>(null);
   const [items, setItems] = useState<ItemDraft[]>([
     { description: "", quantity: "1", unit_amount: "" },
@@ -217,17 +221,17 @@ function CreateBillModal({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!patient) {
-      setError("Please select a patient.");
+      setError(t("errorPatient"));
       return;
     }
     if (hasItems && validItems.length === 0) {
-      setError("Complete each item row (description, qty, unit price) or remove it.");
+      setError(t("errorItems"));
       return;
     }
     if (!hasItems) {
       const amt = parseFloat(amount);
       if (!amount || isNaN(amt) || amt <= 0) {
-        setError("Please enter a valid amount or add line items.");
+        setError(t("errorAmount"));
         return;
       }
     }
@@ -263,7 +267,7 @@ function CreateBillModal({
         typeof axiosError.response.data.detail === "object" &&
         axiosError.response.data.detail.error?.message
           ? axiosError.response.data.detail.error.message
-          : "Failed to create invoice.";
+          : t("createFailed");
       setError(msg);
     } finally {
       setSaving(false);
@@ -278,18 +282,18 @@ function CreateBillModal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Create bill"
+        aria-label={t("ariaLabel")}
         className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 p-6 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-bold text-dreams-textPrimary mb-4">
-          New Bill
+          {t("title")}
         </h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-dreams-textPrimary mb-1">
-              Patient <span className="text-red-500">*</span>
+              {t("patient")} <span className="text-red-500">*</span>
             </label>
             {patient ? (
               <div className="flex items-center justify-between rounded-lg border border-dreams-border px-3 py-2">
@@ -313,14 +317,14 @@ function CreateBillModal({
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="block text-sm font-medium text-dreams-textPrimary">
-                Line Items
+                {t("lineItems")}
               </label>
               <button
                 type="button"
                 onClick={addItemRow}
                 className="flex items-center gap-1 text-xs font-medium text-dreams-blue hover:opacity-80"
               >
-                <Plus className="h-3.5 w-3.5" /> Add item
+                <Plus className="h-3.5 w-3.5" /> {t("addItem")}
               </button>
             </div>
             <div className="space-y-2">
@@ -330,7 +334,7 @@ function CreateBillModal({
                     type="text"
                     value={it.description}
                     onChange={(e) => updateItem(idx, "description", e.target.value)}
-                    placeholder="Description"
+                    placeholder={t("descPlaceholder")}
                     className="flex-1 h-9 rounded-lg border border-dreams-border px-3 text-sm focus:border-dreams-blue focus:outline-none focus:ring-1 focus:ring-dreams-blue/20"
                   />
                   <input
@@ -339,7 +343,7 @@ function CreateBillModal({
                     step="0.01"
                     value={it.quantity}
                     onChange={(e) => updateItem(idx, "quantity", e.target.value)}
-                    placeholder="Qty"
+                    placeholder={t("qtyPlaceholder")}
                     className="w-16 h-9 rounded-lg border border-dreams-border px-2 text-sm text-right focus:border-dreams-blue focus:outline-none focus:ring-1 focus:ring-dreams-blue/20"
                   />
                   <input
@@ -348,14 +352,14 @@ function CreateBillModal({
                     step="0.01"
                     value={it.unit_amount}
                     onChange={(e) => updateItem(idx, "unit_amount", e.target.value)}
-                    placeholder="Unit ₹"
+                    placeholder={t("unitPlaceholder")}
                     className="w-24 h-9 rounded-lg border border-dreams-border px-2 text-sm text-right focus:border-dreams-blue focus:outline-none focus:ring-1 focus:ring-dreams-blue/20"
                   />
                   <button
                     type="button"
                     onClick={() => removeItemRow(idx)}
                     className="h-9 px-1 text-dreams-textSecondary hover:text-red-500"
-                    aria-label="Remove item"
+                    aria-label={t("removeItem")}
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -364,7 +368,7 @@ function CreateBillModal({
             </div>
             {hasItems && (
               <div className="mt-2 flex justify-end text-sm">
-                <span className="text-dreams-textSecondary mr-2">Total:</span>
+                <span className="text-dreams-textSecondary mr-2">{t("total")}</span>
                 <span className="font-semibold text-dreams-textPrimary">
                   {formatCurrency(itemsTotal)}
                 </span>
@@ -376,7 +380,7 @@ function CreateBillModal({
           {!hasItems && (
             <div>
               <label className="block text-sm font-medium text-dreams-textPrimary mb-1">
-                Amount (₹) <span className="text-red-500">*</span>
+                {t("amount")} <span className="text-red-500">*</span>
               </label>
               <input
                 type="number"
@@ -384,7 +388,7 @@ function CreateBillModal({
                 step="0.01"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                placeholder="e.g. 500"
+                placeholder={t("amountPlaceholder")}
                 className="w-full px-3 py-2 border border-dreams-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue/30"
               />
             </div>
@@ -392,12 +396,12 @@ function CreateBillModal({
 
           <div>
             <label className="block text-sm font-medium text-dreams-textPrimary mb-1">
-              Notes (optional)
+              {t("notes")}
             </label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="e.g. Consultation fee"
+              placeholder={t("notesPlaceholder")}
               rows={2}
               className="w-full px-3 py-2 border border-dreams-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue/30 resize-none"
             />
@@ -415,14 +419,14 @@ function CreateBillModal({
               onClick={onClose}
               className="flex-1 px-4 py-2 text-sm border border-dreams-border rounded-lg text-dreams-textSecondary hover:bg-dreams-lightBg transition-colors"
             >
-              Cancel
+              {tCommon("cancel")}
             </button>
             <button
               type="submit"
               disabled={saving}
               className="flex-1 px-4 py-2 text-sm bg-dreams-blue text-white rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
-              {saving ? "Saving…" : "Create Bill"}
+              {saving ? t("saving") : t("submit")}
             </button>
           </div>
         </form>
@@ -432,6 +436,7 @@ function CreateBillModal({
 }
 
 export default function BillingPage() {
+  const t = useTranslations("adminBilling");
   const [bills, setBills] = useState<Bill[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -448,7 +453,7 @@ export default function BillingPage() {
         setBills(res.data.data ?? []);
         setTotal(res.data.total ?? 0);
       })
-      .catch(() => setError("Failed to load billing data."))
+      .catch(() => setError(t("loadError")))
       .finally(() => setLoading(false));
   }, [statusFilter, reloadKey]);
 
@@ -464,9 +469,9 @@ export default function BillingPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-dreams-textPrimary">Billing</h1>
+          <h1 className="text-2xl font-bold text-dreams-textPrimary">{t("title")}</h1>
           <p className="text-sm text-dreams-textSecondary mt-1">
-            Manage invoices and track revenue
+            {t("subtitle")}
           </p>
         </div>
         <button
@@ -474,7 +479,7 @@ export default function BillingPage() {
           onClick={() => setShowCreate(true)}
           className="flex items-center gap-2 rounded-lg bg-dreams-blue px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
         >
-          <Plus className="h-4 w-4" /> New Bill
+          <Plus className="h-4 w-4" /> {t("newBill")}
         </button>
       </div>
 
@@ -482,13 +487,13 @@ export default function BillingPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="rounded-xl border border-dreams-border bg-white p-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-dreams-textSecondary">
-            Total Bills
+            {t("summary.totalBills")}
           </p>
           <p className="text-2xl font-bold text-dreams-textPrimary mt-1">{total}</p>
         </div>
         <div className="rounded-xl border border-green-200 bg-green-50 p-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-green-700">
-            Revenue Collected
+            {t("summary.revenueCollected")}
           </p>
           <p className="text-2xl font-bold text-green-800 mt-1">
             {formatCurrency(String(totalPaid))}
@@ -496,7 +501,7 @@ export default function BillingPage() {
         </div>
         <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-yellow-700">
-            Outstanding
+            {t("summary.outstanding")}
           </p>
           <p className="text-2xl font-bold text-yellow-800 mt-1">
             {formatCurrency(String(totalPending))}
@@ -506,8 +511,8 @@ export default function BillingPage() {
 
       {/* Filter */}
       <div className="flex items-center gap-3">
-        <span className="text-sm text-dreams-textSecondary">Filter:</span>
-        {["", "pending", "paid", "cancelled", "refunded"].map((s) => (
+        <span className="text-sm text-dreams-textSecondary">{t("filterLabel")}</span>
+        {(["", "pending", "paid", "cancelled", "refunded"] as const).map((s) => (
           <button
             key={s}
             onClick={() => {
@@ -522,7 +527,7 @@ export default function BillingPage() {
                 : "border border-dreams-border text-dreams-textSecondary hover:bg-gray-50"
             }`}
           >
-            {s === "" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}
+            {s === "" ? t("status.all") : t(`status.${s}`)}
           </button>
         ))}
       </div>
@@ -546,22 +551,22 @@ export default function BillingPage() {
                 <thead>
                   <tr className="border-b border-dreams-border bg-dreams-lightBg">
                     <th className="px-4 py-3 text-left font-semibold text-dreams-textSecondary">
-                      Date
+                      {t("table.date")}
                     </th>
                     <th className="px-4 py-3 text-left font-semibold text-dreams-textSecondary">
-                      Patient
+                      {t("table.patient")}
                     </th>
                     <th className="px-4 py-3 text-left font-semibold text-dreams-textSecondary hidden sm:table-cell">
-                      Clinic
+                      {t("table.clinic")}
                     </th>
                     <th className="px-4 py-3 text-right font-semibold text-dreams-textSecondary">
-                      Amount
+                      {t("table.amount")}
                     </th>
                     <th className="px-4 py-3 text-center font-semibold text-dreams-textSecondary">
-                      Status
+                      {t("table.status")}
                     </th>
                     <th className="px-4 py-3 text-left font-semibold text-dreams-textSecondary hidden md:table-cell">
-                      Payment
+                      {t("table.payment")}
                     </th>
                   </tr>
                 </thead>
@@ -586,7 +591,12 @@ export default function BillingPage() {
                             STATUS_COLORS[bill.status] ?? "bg-gray-100 text-gray-600"
                           }`}
                         >
-                          {bill.status}
+                          {({
+                            pending: t("status.pending"),
+                            paid: t("status.paid"),
+                            cancelled: t("status.cancelled"),
+                            refunded: t("status.refunded"),
+                          } as Record<string, string>)[bill.status] ?? bill.status}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-dreams-textSecondary hidden md:table-cell capitalize">
@@ -599,7 +609,7 @@ export default function BillingPage() {
             </div>
             {bills.length === 0 && (
               <div className="py-12 text-center text-dreams-textSecondary text-sm">
-                No bills found.
+                {t("empty")}
               </div>
             )}
           </>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
 import {
   X,
@@ -42,6 +43,7 @@ export function PatientDetailDrawer({
   clinicId,
   consentStatus,
 }: PatientDetailDrawerProps) {
+  const t = useTranslations("adminPatients.drawer");
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [rxPage, setRxPage] = useState(1);
   const [recPage, setRecPage] = useState(1);
@@ -137,14 +139,16 @@ export function PatientDetailDrawer({
             <nav className="flex gap-1">
               {(
                 [
-                  { id: "overview" as Tab, label: "Overview" },
+                  { id: "overview" as Tab, label: t("tabOverview") },
                   {
                     id: "prescriptions" as Tab,
-                    label: `Prescriptions (${user.prescriptions_count})`,
+                    label: t("tabPrescriptions", {
+                      count: user.prescriptions_count,
+                    }),
                   },
                   {
                     id: "records" as Tab,
-                    label: `Records (${user.records_count})`,
+                    label: t("tabRecords", { count: user.records_count }),
                   },
                 ] as const
               ).map((tab) => (
@@ -195,12 +199,18 @@ export function PatientDetailDrawer({
                           <div className="flex items-center gap-2 text-dreams-textSecondary">
                             <Globe className="h-4 w-4 shrink-0" />
                             <span>
-                              Language: {user.language_pref.toUpperCase()}
+                              {t("languageLabel", {
+                                code: user.language_pref.toUpperCase(),
+                              })}
                             </span>
                           </div>
                           <div className="flex items-center gap-2 text-dreams-textSecondary">
                             <Droplets className="h-4 w-4 shrink-0" />
-                            <span>Blood Group: {user.blood_group ?? "—"}</span>
+                            <span>
+                              {t("bloodGroupLabel", {
+                                value: user.blood_group ?? "—",
+                              })}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -210,7 +220,7 @@ export function PatientDetailDrawer({
                       user.emergency_contact_phone) && (
                       <div className="border-t border-dreams-border pt-4">
                         <p className="text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider mb-2">
-                          Emergency Contact
+                          {t("emergencyContact")}
                         </p>
                         <div className="flex items-center gap-4 text-sm text-dreams-textSecondary">
                           <span>{user.emergency_contact_name ?? "—"}</span>
@@ -229,7 +239,7 @@ export function PatientDetailDrawer({
                       <div className="flex items-center gap-2 mb-1">
                         <FileText className="h-4 w-4 text-dreams-blue" />
                         <p className="text-xs text-dreams-textSecondary">
-                          Medical Records
+                          {t("medicalRecords")}
                         </p>
                       </div>
                       <p className="text-2xl font-bold text-dreams-textPrimary">
@@ -240,7 +250,7 @@ export function PatientDetailDrawer({
                       <div className="flex items-center gap-2 mb-1">
                         <Pill className="h-4 w-4 text-dreams-blue" />
                         <p className="text-xs text-dreams-textSecondary">
-                          Prescriptions
+                          {t("prescriptions")}
                         </p>
                       </div>
                       <p className="text-2xl font-bold text-dreams-textPrimary">
@@ -255,14 +265,14 @@ export function PatientDetailDrawer({
                       <div className="flex items-center gap-2 mb-4">
                         <Activity className="h-5 w-5 text-dreams-blue" />
                         <h3 className="text-sm font-semibold text-dreams-textPrimary">
-                          Vitals
+                          {t("vitals")}
                         </h3>
                       </div>
                       <div className="grid grid-cols-3 gap-3">
                         {user.height_cm && (
                           <div className="bg-dreams-lightBg rounded-lg p-3 text-center">
                             <p className="text-xs text-dreams-textSecondary mb-1">
-                              Height
+                              {t("height")}
                             </p>
                             <p className="text-lg font-bold text-dreams-textPrimary">
                               {user.height_cm}
@@ -275,7 +285,7 @@ export function PatientDetailDrawer({
                         {user.weight_kg && (
                           <div className="bg-dreams-lightBg rounded-lg p-3 text-center">
                             <p className="text-xs text-dreams-textSecondary mb-1">
-                              Weight
+                              {t("weight")}
                             </p>
                             <p className="text-lg font-bold text-dreams-textPrimary">
                               {user.weight_kg}
@@ -311,12 +321,12 @@ export function PatientDetailDrawer({
                       user.chronic_conditions.length > 0)) && (
                     <div className="bg-white rounded-xl border border-dreams-border p-5 shadow-card space-y-4">
                       <h3 className="text-sm font-semibold text-dreams-textPrimary">
-                        Health Information
+                        {t("healthInformation")}
                       </h3>
                       {user.allergies && user.allergies.length > 0 && (
                         <div>
                           <p className="text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider mb-2">
-                            Allergies
+                            {t("allergies")}
                           </p>
                           <div className="flex flex-wrap gap-2">
                             {user.allergies.map((a) => (
@@ -334,7 +344,7 @@ export function PatientDetailDrawer({
                         user.chronic_conditions.length > 0 && (
                           <div>
                             <p className="text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider mb-2">
-                              Chronic Conditions
+                              {t("chronicConditions")}
                             </p>
                             <div className="flex flex-wrap gap-2">
                               {user.chronic_conditions.map((c) => (
@@ -355,7 +365,7 @@ export function PatientDetailDrawer({
                   {relatedData?.data && relatedData.data.length > 0 && (
                     <div className="bg-amber-50 rounded-xl border border-amber-200 p-5">
                       <h3 className="text-sm font-semibold text-amber-800 mb-3">
-                        Family Group
+                        {t("familyGroup")}
                       </h3>
                       <div className="space-y-2">
                         {relatedData.data.map(
@@ -390,8 +400,7 @@ export function PatientDetailDrawer({
                   {consentBlocked ? (
                     <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border-b border-amber-200">
                       <span className="text-amber-600 text-sm font-medium">
-                        Consent pending — prescriptions are restricted until the
-                        patient approves clinic access.
+                        {t("consentPendingRx")}
                       </span>
                     </div>
                   ) : !prescriptions ? (
@@ -399,26 +408,26 @@ export function PatientDetailDrawer({
                       <Spinner />
                     </div>
                   ) : prescriptions.data.length === 0 ? (
-                    <EmptyState icon={Pill} title="No prescriptions found" />
+                    <EmptyState icon={Pill} title={t("noPrescriptions")} />
                   ) : (
                     <>
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b border-dreams-border bg-dreams-lightBg">
                             <th className="text-left px-4 py-3 text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider">
-                              Date
+                              {t("colDate")}
                             </th>
                             <th className="text-left px-4 py-3 text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider">
-                              Doctor
+                              {t("colDoctor")}
                             </th>
                             <th className="text-left px-4 py-3 text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider">
-                              Diagnosis
+                              {t("colDiagnosis")}
                             </th>
                             <th className="text-left px-4 py-3 text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider">
-                              Meds
+                              {t("colMeds")}
                             </th>
                             <th className="text-left px-4 py-3 text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider">
-                              Valid Until
+                              {t("colValidUntil")}
                             </th>
                           </tr>
                         </thead>
@@ -475,8 +484,7 @@ export function PatientDetailDrawer({
                   {consentBlocked ? (
                     <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border-b border-amber-200">
                       <span className="text-amber-600 text-sm font-medium">
-                        Consent pending — records are restricted until the
-                        patient approves clinic access.
+                        {t("consentPendingRecords")}
                       </span>
                     </div>
                   ) : !records ? (
@@ -486,7 +494,7 @@ export function PatientDetailDrawer({
                   ) : records.data.length === 0 ? (
                     <EmptyState
                       icon={FileText}
-                      title="No medical records found"
+                      title={t("noRecords")}
                     />
                   ) : (
                     <>
@@ -494,19 +502,19 @@ export function PatientDetailDrawer({
                         <thead>
                           <tr className="border-b border-dreams-border bg-dreams-lightBg">
                             <th className="text-left px-4 py-3 text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider">
-                              Date
+                              {t("colDate")}
                             </th>
                             <th className="text-left px-4 py-3 text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider">
-                              Type
+                              {t("colType")}
                             </th>
                             <th className="text-left px-4 py-3 text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider">
-                              Title
+                              {t("colTitle")}
                             </th>
                             <th className="text-left px-4 py-3 text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider">
-                              Doctor
+                              {t("colDoctor")}
                             </th>
                             <th className="text-left px-4 py-3 text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider">
-                              Source
+                              {t("colSource")}
                             </th>
                           </tr>
                         </thead>
@@ -566,11 +574,13 @@ function DrawerPagination({
   total: number;
   onPageChange: (p: number) => void;
 }) {
+  const tPagination = useTranslations("pagination");
   if (totalPages <= 1) return null;
   return (
     <div className="flex items-center justify-between px-4 py-3 border-t border-dreams-border">
       <p className="text-sm text-dreams-textSecondary">
-        Page {page} of {totalPages} ({total} total)
+        {tPagination("pageOf", { page, totalPages })}{" "}
+        {tPagination("totalSuffix", { count: total })}
       </p>
       <div className="flex items-center gap-2">
         <button

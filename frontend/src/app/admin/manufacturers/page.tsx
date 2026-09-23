@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Search, Plus, Trash2, Edit, Loader2, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,8 @@ import {
 } from "@/lib/api/medicines-emr";
 
 export default function AdminManufacturersPage() {
+  const t = useTranslations("adminManufacturers");
+  const tCommon = useTranslations("common");
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
@@ -73,11 +76,11 @@ export default function AdminManufacturersPage() {
       queryClient.invalidateQueries({ queryKey: ["admin-manufacturers-list"] });
       setShowCreateDialog(false);
       resetForm();
-      toast({ title: "Manufacturer created" });
+      toast({ title: t("toasts.created") });
     },
     onError: (err) => {
       toast({
-        title: "Failed to create manufacturer",
+        title: t("toasts.createFailed"),
         description: getApiErrorMessage(err),
         variant: "destructive",
       });
@@ -92,11 +95,11 @@ export default function AdminManufacturersPage() {
       setShowEditDialog(false);
       setEditingManufacturer(null);
       resetForm();
-      toast({ title: "Manufacturer updated" });
+      toast({ title: t("toasts.updated") });
     },
     onError: (err) => {
       toast({
-        title: "Failed to update manufacturer",
+        title: t("toasts.updateFailed"),
         description: getApiErrorMessage(err),
         variant: "destructive",
       });
@@ -109,11 +112,11 @@ export default function AdminManufacturersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-manufacturers-list"] });
       setDeletingManufacturer(null);
-      toast({ title: "Manufacturer deleted" });
+      toast({ title: t("toasts.deleted") });
     },
     onError: (err) => {
       toast({
-        title: "Failed to delete manufacturer",
+        title: t("toasts.deleteFailed"),
         description: getApiErrorMessage(err),
         variant: "destructive",
       });
@@ -157,20 +160,20 @@ export default function AdminManufacturersPage() {
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Manufacturers Management</h1>
-          <p className="text-muted-foreground">Manage pharmaceutical companies</p>
+          <h1 className="text-3xl font-bold">{t("title")}</h1>
+          <p className="text-muted-foreground">{t("subtitle")}</p>
         </div>
         <Button onClick={() => setShowCreateDialog(true)}>
           <Plus className="h-4 w-4 mr-2" />
-          Add Manufacturer
+          {t("addManufacturer")}
         </Button>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Manufacturers List</CardTitle>
+          <CardTitle>{t("listTitle")}</CardTitle>
           <CardDescription>
-            {data?.length || 0} total manufacturers
+            {t("totalCount", { count: data?.length || 0 })}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -179,7 +182,7 @@ export default function AdminManufacturersPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search manufacturers..."
+                placeholder={t("searchPlaceholder")}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
@@ -194,17 +197,17 @@ export default function AdminManufacturersPage() {
             </div>
           ) : error ? (
             <div className="text-center py-8 text-destructive">
-              Error loading manufacturers: {(error as Error).message}
+              {t("loadError", { message: (error as Error).message })}
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Country</TableHead>
-                  <TableHead>License Number</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t("table.name")}</TableHead>
+                  <TableHead>{t("table.country")}</TableHead>
+                  <TableHead>{t("table.licenseNumber")}</TableHead>
+                  <TableHead>{t("table.status")}</TableHead>
+                  <TableHead className="text-right">{t("table.actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -220,7 +223,7 @@ export default function AdminManufacturersPage() {
                     <TableCell className="font-mono text-sm">{manufacturer.license_number || "-"}</TableCell>
                     <TableCell>
                       <Badge variant={manufacturer.is_active ? "default" : "secondary"}>
-                        {manufacturer.is_active ? "Active" : "Inactive"}
+                        {manufacturer.is_active ? t("active") : t("inactive")}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
@@ -249,35 +252,35 @@ export default function AdminManufacturersPage() {
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create New Manufacturer</DialogTitle>
-            <DialogDescription>Add a new pharmaceutical company</DialogDescription>
+            <DialogTitle>{t("createDialog.title")}</DialogTitle>
+            <DialogDescription>{t("createDialog.desc")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
-              <Label htmlFor="manufacturer_name">Manufacturer Name *</Label>
+              <Label htmlFor="manufacturer_name">{t("form.name")}</Label>
               <Input
                 id="manufacturer_name"
                 value={formData.manufacturer_name}
                 onChange={(e) => setFormData({ ...formData, manufacturer_name: e.target.value })}
-                placeholder="e.g., GSK Pharmaceuticals"
+                placeholder={t("form.namePlaceholder")}
               />
             </div>
             <div>
-              <Label htmlFor="country">Country</Label>
+              <Label htmlFor="country">{t("form.country")}</Label>
               <Input
                 id="country"
                 value={formData.country}
                 onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                placeholder="e.g., India"
+                placeholder={t("form.countryPlaceholder")}
               />
             </div>
             <div>
-              <Label htmlFor="license_number">License Number</Label>
+              <Label htmlFor="license_number">{t("form.licenseNumber")}</Label>
               <Input
                 id="license_number"
                 value={formData.license_number}
                 onChange={(e) => setFormData({ ...formData, license_number: e.target.value })}
-                placeholder="Optional"
+                placeholder={t("form.licensePlaceholder")}
               />
             </div>
             <div className="flex items-center space-x-2">
@@ -288,16 +291,16 @@ export default function AdminManufacturersPage() {
                   setFormData({ ...formData, is_active: !!checked })
                 }
               />
-              <Label htmlFor="is_active">Active</Label>
+              <Label htmlFor="is_active">{t("form.active")}</Label>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
-              Cancel
+              {tCommon("cancel")}
             </Button>
             <Button onClick={handleCreate} disabled={createMutation.isPending}>
               {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create
+              {t("create")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -307,12 +310,12 @@ export default function AdminManufacturersPage() {
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Manufacturer</DialogTitle>
-            <DialogDescription>Update manufacturer information</DialogDescription>
+            <DialogTitle>{t("editDialog.title")}</DialogTitle>
+            <DialogDescription>{t("editDialog.desc")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
-              <Label htmlFor="edit_manufacturer_name">Manufacturer Name *</Label>
+              <Label htmlFor="edit_manufacturer_name">{t("form.name")}</Label>
               <Input
                 id="edit_manufacturer_name"
                 value={formData.manufacturer_name}
@@ -320,7 +323,7 @@ export default function AdminManufacturersPage() {
               />
             </div>
             <div>
-              <Label htmlFor="edit_country">Country</Label>
+              <Label htmlFor="edit_country">{t("form.country")}</Label>
               <Input
                 id="edit_country"
                 value={formData.country}
@@ -328,7 +331,7 @@ export default function AdminManufacturersPage() {
               />
             </div>
             <div>
-              <Label htmlFor="edit_license_number">License Number</Label>
+              <Label htmlFor="edit_license_number">{t("form.licenseNumber")}</Label>
               <Input
                 id="edit_license_number"
                 value={formData.license_number}
@@ -343,16 +346,16 @@ export default function AdminManufacturersPage() {
                   setFormData({ ...formData, is_active: !!checked })
                 }
               />
-              <Label htmlFor="edit_is_active">Active</Label>
+              <Label htmlFor="edit_is_active">{t("form.active")}</Label>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEditDialog(false)}>
-              Cancel
+              {tCommon("cancel")}
             </Button>
             <Button onClick={handleUpdate} disabled={updateMutation.isPending}>
               {updateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Update
+              {t("update")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -365,14 +368,13 @@ export default function AdminManufacturersPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Manufacturer</AlertDialogTitle>
+            <AlertDialogTitle>{t("deleteDialog.title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Delete manufacturer &quot;{deletingManufacturer?.name}&quot;? This will
-              fail if the manufacturer has any brands.
+              {t("deleteDialog.desc", { name: deletingManufacturer?.name ?? "" })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{tCommon("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() =>
                 deletingManufacturer && deleteMutation.mutate(deletingManufacturer.id)
@@ -380,7 +382,7 @@ export default function AdminManufacturersPage() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={deleteMutation.isPending}
             >
-              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+              {deleteMutation.isPending ? t("deleteDialog.deleting") : t("deleteDialog.confirm")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

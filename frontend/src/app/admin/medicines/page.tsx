@@ -75,6 +75,8 @@ export default function MedicinesPageEMR() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const tImport = useTranslations("catalogImport");
+  const t = useTranslations("adminMedicines");
+  const tCommon = useTranslations("common");
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [includeDiscontinued, setIncludeDiscontinued] = useState(false);
@@ -173,7 +175,7 @@ export default function MedicinesPageEMR() {
 
   const showMutationError = (action: string) => (err: unknown) => {
     toast({
-      title: `Failed to ${action}`,
+      title: t("toasts.mutationFailed", { action }),
       description: getApiErrorMessage(err),
       variant: "destructive",
     });
@@ -187,9 +189,9 @@ export default function MedicinesPageEMR() {
       queryClient.invalidateQueries({ queryKey: ["medicine-stats-emr"] });
       setShowCreateManufacturer(false);
       resetManufacturerForm();
-      toast({ title: "Manufacturer created" });
+      toast({ title: t("toasts.manufacturerCreated") });
     },
-    onError: showMutationError("create manufacturer"),
+    onError: showMutationError(t("mutationActions.createManufacturer")),
   });
 
   const updateManufacturerMutation = useMutation({
@@ -199,9 +201,9 @@ export default function MedicinesPageEMR() {
       setShowEditManufacturer(false);
       setEditingManufacturer(null);
       resetManufacturerForm();
-      toast({ title: "Manufacturer updated" });
+      toast({ title: t("toasts.manufacturerUpdated") });
     },
-    onError: showMutationError("update manufacturer"),
+    onError: showMutationError(t("mutationActions.updateManufacturer")),
   });
 
   const deleteManufacturerMutation = useMutation({
@@ -210,9 +212,9 @@ export default function MedicinesPageEMR() {
       queryClient.invalidateQueries({ queryKey: ["admin-manufacturers-list"] });
       queryClient.invalidateQueries({ queryKey: ["medicine-stats-emr"] });
       setDeleteTarget(null);
-      toast({ title: "Manufacturer deleted" });
+      toast({ title: t("toasts.manufacturerDeleted") });
     },
-    onError: showMutationError("delete manufacturer"),
+    onError: showMutationError(t("mutationActions.deleteManufacturer")),
   });
 
   // Salt mutations
@@ -223,9 +225,9 @@ export default function MedicinesPageEMR() {
       queryClient.invalidateQueries({ queryKey: ["medicine-stats-emr"] });
       setShowCreateSalt(false);
       resetSaltForm();
-      toast({ title: "Salt created" });
+      toast({ title: t("toasts.saltCreated") });
     },
-    onError: showMutationError("create salt"),
+    onError: showMutationError(t("mutationActions.createSalt")),
   });
 
   const updateSaltMutation = useMutation({
@@ -235,9 +237,9 @@ export default function MedicinesPageEMR() {
       setShowEditSalt(false);
       setEditingSalt(null);
       resetSaltForm();
-      toast({ title: "Salt updated" });
+      toast({ title: t("toasts.saltUpdated") });
     },
-    onError: showMutationError("update salt"),
+    onError: showMutationError(t("mutationActions.updateSalt")),
   });
 
   const deleteSaltMutation = useMutation({
@@ -246,9 +248,9 @@ export default function MedicinesPageEMR() {
       queryClient.invalidateQueries({ queryKey: ["admin-salts"] });
       queryClient.invalidateQueries({ queryKey: ["medicine-stats-emr"] });
       setDeleteTarget(null);
-      toast({ title: "Salt deleted" });
+      toast({ title: t("toasts.saltDeleted") });
     },
-    onError: showMutationError("delete salt"),
+    onError: showMutationError(t("mutationActions.deleteSalt")),
   });
 
   // Brand delete mutation
@@ -258,9 +260,9 @@ export default function MedicinesPageEMR() {
       queryClient.invalidateQueries({ queryKey: ["admin-brands"] });
       queryClient.invalidateQueries({ queryKey: ["medicine-stats-emr"] });
       setDeleteTarget(null);
-      toast({ title: "Brand deleted" });
+      toast({ title: t("toasts.brandDeleted") });
     },
-    onError: showMutationError("delete brand"),
+    onError: showMutationError(t("mutationActions.deleteBrand")),
   });
 
   // Fetch selected salt details
@@ -407,11 +409,7 @@ export default function MedicinesPageEMR() {
     deleteBrandMutation.isPending;
 
   const deleteDescription = deleteTarget
-    ? {
-        manufacturer: `Delete manufacturer "${deleteTarget.name}"? This will fail if the manufacturer has any brands.`,
-        salt: `Delete salt "${deleteTarget.name}"? This will fail if the salt has any strengths.`,
-        brand: `Delete brand "${deleteTarget.name}"? This action cannot be undone.`,
-      }[deleteTarget.type]
+    ? t(`deleteDesc.${deleteTarget.type}`, { name: deleteTarget.name })
     : "";
 
   const handleViewSalt = (saltId: string) => {
@@ -439,9 +437,9 @@ export default function MedicinesPageEMR() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Medicine Database (EMR)</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t("title")}</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Normalized pharmaceutical database with salts, strengths, and brands
+            {t("subtitle")}
           </p>
         </div>
         <div className="flex gap-2">
@@ -451,7 +449,7 @@ export default function MedicinesPageEMR() {
           </Button>
           <Button onClick={() => router.push("/admin/medicines/new")}>
             <Plus className="h-4 w-4 mr-2" />
-            Add Medicine
+            {t("addMedicine")}
           </Button>
         </div>
       </div>
@@ -472,7 +470,7 @@ export default function MedicinesPageEMR() {
         <div className="grid gap-4 md:grid-cols-4">
           <Card>
             <CardHeader className="pb-2">
-              <CardDescription>Total Salts (APIs)</CardDescription>
+              <CardDescription>{t("stats.totalSalts")}</CardDescription>
               <CardTitle className="text-3xl font-bold text-blue-600">
                 {stats?.total_salts.toLocaleString() || "0"}
               </CardTitle>
@@ -481,7 +479,7 @@ export default function MedicinesPageEMR() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardDescription>Total Brands</CardDescription>
+              <CardDescription>{t("stats.totalBrands")}</CardDescription>
               <CardTitle className="text-3xl font-bold text-green-600">
                 {stats?.total_brands.toLocaleString() || "0"}
               </CardTitle>
@@ -490,7 +488,7 @@ export default function MedicinesPageEMR() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardDescription>Manufacturers</CardDescription>
+              <CardDescription>{t("stats.manufacturers")}</CardDescription>
               <CardTitle className="text-3xl font-bold text-purple-600">
                 {stats?.total_manufacturers.toLocaleString() || "0"}
               </CardTitle>
@@ -499,7 +497,7 @@ export default function MedicinesPageEMR() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardDescription>Salt Strengths</CardDescription>
+              <CardDescription>{t("stats.saltStrengths")}</CardDescription>
               <CardTitle className="text-3xl font-bold text-orange-600">
                 {Math.round(stats?.total_strengths || 0).toLocaleString()}
               </CardTitle>
@@ -516,7 +514,7 @@ export default function MedicinesPageEMR() {
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
-                placeholder={`Search ${activeTab === "salts" ? "salts (APIs)" : "brands"}...`}
+                placeholder={t("searchPlaceholder", { target: t(`searchTargets.${activeTab}`) })}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
@@ -525,7 +523,7 @@ export default function MedicinesPageEMR() {
 
             <div className="flex gap-2 items-center">
               <Button type="submit" variant="outline">
-                Search
+                {t("search")}
               </Button>
               {activeTab === "brands" && (
                 <label className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer">
@@ -538,7 +536,7 @@ export default function MedicinesPageEMR() {
                     }}
                     className="rounded"
                   />
-                  <span className="text-sm">Show discontinued</span>
+                  <span className="text-sm">{t("showDiscontinued")}</span>
                 </label>
               )}
             </div>
@@ -551,15 +549,15 @@ export default function MedicinesPageEMR() {
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="manufacturers" className="flex items-center gap-2">
             <Building2 className="h-4 w-4" />
-            Manufacturers
+            {t("tabs.manufacturers")}
           </TabsTrigger>
           <TabsTrigger value="salts" className="flex items-center gap-2">
             <Beaker className="h-4 w-4" />
-            Salts (APIs)
+            {t("tabs.salts")}
           </TabsTrigger>
           <TabsTrigger value="brands" className="flex items-center gap-2">
             <Package className="h-4 w-4" />
-            Brands
+            {t("tabs.brands")}
           </TabsTrigger>
         </TabsList>
 
@@ -568,14 +566,14 @@ export default function MedicinesPageEMR() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
-                <CardTitle>Pharmaceutical Companies</CardTitle>
+                <CardTitle>{t("manufacturersCard.title")}</CardTitle>
                 <CardDescription>
-                  {manufacturersData?.length || 0} total manufacturers
+                  {t("manufacturersCard.count", { count: manufacturersData?.length || 0 })}
                 </CardDescription>
               </div>
               <Button onClick={() => setShowCreateManufacturer(true)}>
                 <Plus className="h-4 w-4 mr-2" />
-                Add Manufacturer
+                {t("addManufacturer")}
               </Button>
             </CardHeader>
             <CardContent>
@@ -585,17 +583,17 @@ export default function MedicinesPageEMR() {
                 </div>
               ) : manufacturersError ? (
                 <div className="text-center py-8 text-destructive">
-                  Error loading manufacturers: {(manufacturersError as Error).message}
+                  {t("manufacturersCard.loadError", { message: (manufacturersError as Error).message })}
                 </div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Country</TableHead>
-                      <TableHead>License Number</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead>{t("table.name")}</TableHead>
+                      <TableHead>{t("table.country")}</TableHead>
+                      <TableHead>{t("table.licenseNumber")}</TableHead>
+                      <TableHead>{t("table.status")}</TableHead>
+                      <TableHead className="text-right">{t("table.actions")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -611,7 +609,7 @@ export default function MedicinesPageEMR() {
                         <TableCell className="font-mono text-sm">{manufacturer.license_number || "—"}</TableCell>
                         <TableCell>
                           <Badge variant={manufacturer.is_active ? "default" : "secondary"}>
-                            {manufacturer.is_active ? "Active" : "Inactive"}
+                            {manufacturer.is_active ? t("active") : t("inactive")}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
@@ -642,7 +640,7 @@ export default function MedicinesPageEMR() {
           <div className="mb-4 flex justify-end">
             <Button onClick={() => setShowCreateSalt(true)}>
               <Plus className="h-4 w-4 mr-2" />
-              Add Salt
+              {t("addSalt")}
             </Button>
           </div>
           <SaltsTable
@@ -686,7 +684,7 @@ export default function MedicinesPageEMR() {
               <Beaker className="h-5 w-5" />
               {selectedSalt?.salt_name}
             </DialogTitle>
-            <DialogDescription>Active Pharmaceutical Ingredient Details</DialogDescription>
+            <DialogDescription>{t("saltDetails.subtitle")}</DialogDescription>
           </DialogHeader>
           {selectedSalt && (
             <SaltDetailsView salt={selectedSalt} interactions={saltInteractions ?? []} />
@@ -700,10 +698,10 @@ export default function MedicinesPageEMR() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <List className="h-5 w-5" />
-              Brands Available
+              {t("saltBrands.title")}
             </DialogTitle>
             <DialogDescription>
-              Commercial products containing this salt
+              {t("saltBrands.subtitle")}
             </DialogDescription>
           </DialogHeader>
           {saltBrands && <SaltBrandsView brands={saltBrands} />}
@@ -718,7 +716,7 @@ export default function MedicinesPageEMR() {
               <Package className="h-5 w-5" />
               {selectedBrand?.brand_name}
             </DialogTitle>
-            <DialogDescription>Commercial Medicine Details</DialogDescription>
+            <DialogDescription>{t("brandDetails.subtitle")}</DialogDescription>
           </DialogHeader>
           {selectedBrand && <BrandDetailsView brand={selectedBrand} />}
         </DialogContent>
@@ -730,10 +728,10 @@ export default function MedicinesPageEMR() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <List className="h-5 w-5" />
-              Alternative Brands
+              {t("alternativesView.title")}
             </DialogTitle>
             <DialogDescription>
-              Other brands with same composition
+              {t("alternativesView.subtitle")}
             </DialogDescription>
           </DialogHeader>
           {brandAlternatives && <BrandAlternativesView alternatives={brandAlternatives} />}
@@ -744,35 +742,35 @@ export default function MedicinesPageEMR() {
       <Dialog open={showCreateManufacturer} onOpenChange={setShowCreateManufacturer}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create New Manufacturer</DialogTitle>
-            <DialogDescription>Add a new pharmaceutical company</DialogDescription>
+            <DialogTitle>{t("manufacturerDialog.createTitle")}</DialogTitle>
+            <DialogDescription>{t("manufacturerDialog.createDesc")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
-              <Label htmlFor="manufacturer_name">Manufacturer Name *</Label>
+              <Label htmlFor="manufacturer_name">{t("manufacturerDialog.nameLabel")}</Label>
               <Input
                 id="manufacturer_name"
                 value={manufacturerFormData.manufacturer_name}
                 onChange={(e) => setManufacturerFormData({ ...manufacturerFormData, manufacturer_name: e.target.value })}
-                placeholder="e.g., GSK Pharmaceuticals"
+                placeholder={t("manufacturerDialog.namePlaceholder")}
               />
             </div>
             <div>
-              <Label htmlFor="country">Country</Label>
+              <Label htmlFor="country">{t("manufacturerDialog.countryLabel")}</Label>
               <Input
                 id="country"
                 value={manufacturerFormData.country}
                 onChange={(e) => setManufacturerFormData({ ...manufacturerFormData, country: e.target.value })}
-                placeholder="e.g., India"
+                placeholder={t("manufacturerDialog.countryPlaceholder")}
               />
             </div>
             <div>
-              <Label htmlFor="license_number">License Number</Label>
+              <Label htmlFor="license_number">{t("manufacturerDialog.licenseLabel")}</Label>
               <Input
                 id="license_number"
                 value={manufacturerFormData.license_number}
                 onChange={(e) => setManufacturerFormData({ ...manufacturerFormData, license_number: e.target.value })}
-                placeholder="Optional"
+                placeholder={t("manufacturerDialog.licensePlaceholder")}
               />
             </div>
             <div className="flex items-center space-x-2">
@@ -783,16 +781,16 @@ export default function MedicinesPageEMR() {
                   setManufacturerFormData({ ...manufacturerFormData, is_active: !!checked })
                 }
               />
-              <Label htmlFor="is_active">Active</Label>
+              <Label htmlFor="is_active">{t("manufacturerDialog.activeLabel")}</Label>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreateManufacturer(false)}>
-              Cancel
+              {tCommon("cancel")}
             </Button>
             <Button onClick={handleCreateManufacturer} disabled={createManufacturerMutation.isPending}>
               {createManufacturerMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create
+              {t("manufacturerDialog.create")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -802,12 +800,12 @@ export default function MedicinesPageEMR() {
       <Dialog open={showEditManufacturer} onOpenChange={setShowEditManufacturer}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Manufacturer</DialogTitle>
-            <DialogDescription>Update manufacturer information</DialogDescription>
+            <DialogTitle>{t("manufacturerDialog.editTitle")}</DialogTitle>
+            <DialogDescription>{t("manufacturerDialog.editDesc")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
-              <Label htmlFor="edit_manufacturer_name">Manufacturer Name *</Label>
+              <Label htmlFor="edit_manufacturer_name">{t("manufacturerDialog.nameLabel")}</Label>
               <Input
                 id="edit_manufacturer_name"
                 value={manufacturerFormData.manufacturer_name}
@@ -815,7 +813,7 @@ export default function MedicinesPageEMR() {
               />
             </div>
             <div>
-              <Label htmlFor="edit_country">Country</Label>
+              <Label htmlFor="edit_country">{t("manufacturerDialog.countryLabel")}</Label>
               <Input
                 id="edit_country"
                 value={manufacturerFormData.country}
@@ -823,7 +821,7 @@ export default function MedicinesPageEMR() {
               />
             </div>
             <div>
-              <Label htmlFor="edit_license_number">License Number</Label>
+              <Label htmlFor="edit_license_number">{t("manufacturerDialog.licenseLabel")}</Label>
               <Input
                 id="edit_license_number"
                 value={manufacturerFormData.license_number}
@@ -838,16 +836,16 @@ export default function MedicinesPageEMR() {
                   setManufacturerFormData({ ...manufacturerFormData, is_active: !!checked })
                 }
               />
-              <Label htmlFor="edit_is_active">Active</Label>
+              <Label htmlFor="edit_is_active">{t("manufacturerDialog.activeLabel")}</Label>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEditManufacturer(false)}>
-              Cancel
+              {tCommon("cancel")}
             </Button>
             <Button onClick={handleUpdateManufacturer} disabled={updateManufacturerMutation.isPending}>
               {updateManufacturerMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Update
+              {t("manufacturerDialog.update")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -857,35 +855,35 @@ export default function MedicinesPageEMR() {
       <Dialog open={showCreateSalt} onOpenChange={setShowCreateSalt}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create New Salt</DialogTitle>
-            <DialogDescription>Add a new active pharmaceutical ingredient</DialogDescription>
+            <DialogTitle>{t("saltDialog.createTitle")}</DialogTitle>
+            <DialogDescription>{t("saltDialog.createDesc")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
-              <Label htmlFor="salt_name">Salt Name *</Label>
+              <Label htmlFor="salt_name">{t("saltDialog.nameLabel")}</Label>
               <Input
                 id="salt_name"
                 value={saltFormData.salt_name}
                 onChange={(e) => setSaltFormData({ ...saltFormData, salt_name: e.target.value })}
-                placeholder="e.g., Paracetamol"
+                placeholder={t("saltDialog.namePlaceholder")}
               />
             </div>
             <div>
-              <Label htmlFor="description">Description</Label>
+              <Label htmlFor="description">{t("saltDialog.descLabel")}</Label>
               <Textarea
                 id="description"
                 value={saltFormData.description}
                 onChange={(e) => setSaltFormData({ ...saltFormData, description: e.target.value })}
-                placeholder="Optional description"
+                placeholder={t("saltDialog.descPlaceholder")}
               />
             </div>
             <div>
-              <Label htmlFor="chemical_formula">Chemical Formula</Label>
+              <Label htmlFor="chemical_formula">{t("saltDialog.formulaLabel")}</Label>
               <Input
                 id="chemical_formula"
                 value={saltFormData.chemical_formula}
                 onChange={(e) => setSaltFormData({ ...saltFormData, chemical_formula: e.target.value })}
-                placeholder="e.g., C8H9NO2"
+                placeholder={t("saltDialog.formulaPlaceholder")}
               />
             </div>
             <div className="flex items-center space-x-2">
@@ -896,7 +894,7 @@ export default function MedicinesPageEMR() {
                   setSaltFormData({ ...saltFormData, prescription_required: !!checked })
                 }
               />
-              <Label htmlFor="prescription_required">Prescription Required</Label>
+              <Label htmlFor="prescription_required">{t("saltDialog.prescriptionRequired")}</Label>
             </div>
             <div className="flex items-center space-x-2">
               <Checkbox
@@ -906,16 +904,16 @@ export default function MedicinesPageEMR() {
                   setSaltFormData({ ...saltFormData, habit_forming: !!checked })
                 }
               />
-              <Label htmlFor="habit_forming">Habit Forming</Label>
+              <Label htmlFor="habit_forming">{t("saltDialog.habitForming")}</Label>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreateSalt(false)}>
-              Cancel
+              {tCommon("cancel")}
             </Button>
             <Button onClick={handleCreateSalt} disabled={createSaltMutation.isPending}>
               {createSaltMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create
+              {t("saltDialog.create")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -925,12 +923,12 @@ export default function MedicinesPageEMR() {
       <Dialog open={showEditSalt} onOpenChange={setShowEditSalt}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Salt</DialogTitle>
-            <DialogDescription>Update salt information</DialogDescription>
+            <DialogTitle>{t("saltDialog.editTitle")}</DialogTitle>
+            <DialogDescription>{t("saltDialog.editDesc")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
-              <Label htmlFor="edit_salt_name">Salt Name *</Label>
+              <Label htmlFor="edit_salt_name">{t("saltDialog.nameLabel")}</Label>
               <Input
                 id="edit_salt_name"
                 value={saltFormData.salt_name}
@@ -938,7 +936,7 @@ export default function MedicinesPageEMR() {
               />
             </div>
             <div>
-              <Label htmlFor="edit_description">Description</Label>
+              <Label htmlFor="edit_description">{t("saltDialog.descLabel")}</Label>
               <Textarea
                 id="edit_description"
                 value={saltFormData.description}
@@ -946,7 +944,7 @@ export default function MedicinesPageEMR() {
               />
             </div>
             <div>
-              <Label htmlFor="edit_chemical_formula">Chemical Formula</Label>
+              <Label htmlFor="edit_chemical_formula">{t("saltDialog.formulaLabel")}</Label>
               <Input
                 id="edit_chemical_formula"
                 value={saltFormData.chemical_formula}
@@ -961,7 +959,7 @@ export default function MedicinesPageEMR() {
                   setSaltFormData({ ...saltFormData, prescription_required: !!checked })
                 }
               />
-              <Label htmlFor="edit_prescription_required">Prescription Required</Label>
+              <Label htmlFor="edit_prescription_required">{t("saltDialog.prescriptionRequired")}</Label>
             </div>
             <div className="flex items-center space-x-2">
               <Checkbox
@@ -971,16 +969,16 @@ export default function MedicinesPageEMR() {
                   setSaltFormData({ ...saltFormData, habit_forming: !!checked })
                 }
               />
-              <Label htmlFor="edit_habit_forming">Habit Forming</Label>
+              <Label htmlFor="edit_habit_forming">{t("saltDialog.habitForming")}</Label>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEditSalt(false)}>
-              Cancel
+              {tCommon("cancel")}
             </Button>
             <Button onClick={handleUpdateSalt} disabled={updateSaltMutation.isPending}>
               {updateSaltMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Update
+              {t("saltDialog.update")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -994,23 +992,20 @@ export default function MedicinesPageEMR() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Delete{" "}
-              {deleteTarget?.type === "brand"
-                ? "Brand"
-                : deleteTarget?.type === "salt"
-                  ? "Salt"
-                  : "Manufacturer"}
+              {deleteTarget
+                ? t("deleteTitle", { type: t(`typeLabels.${deleteTarget.type}`) })
+                : ""}
             </AlertDialogTitle>
             <AlertDialogDescription>{deleteDescription}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{tCommon("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={deleteInFlight}
             >
-              {deleteInFlight ? "Deleting..." : "Delete"}
+              {deleteInFlight ? t("deleting") : t("delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

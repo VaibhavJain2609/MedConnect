@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
@@ -25,21 +26,6 @@ const ACTION_VARIANTS: Record<string, string> = {
   READ: "pending",
 };
 
-function formatRelativeTime(isoString: string): string {
-  const date = new Date(isoString);
-  const diffMs = Date.now() - date.getTime();
-  const diffSec = Math.floor(diffMs / 1000);
-  const diffMin = Math.floor(diffSec / 60);
-  const diffHour = Math.floor(diffMin / 60);
-  const diffDay = Math.floor(diffHour / 24);
-
-  if (diffSec < 60) return "just now";
-  if (diffMin < 60) return `${diffMin}m ago`;
-  if (diffHour < 24) return `${diffHour}h ago`;
-  if (diffDay < 7) return `${diffDay}d ago`;
-  return date.toLocaleDateString();
-}
-
 function isScalar(v: unknown): boolean {
   return v === null || v === undefined || typeof v !== "object";
 }
@@ -63,6 +49,7 @@ function FieldDiff({
   oldValues: Record<string, any> | null;
   newValues: Record<string, any> | null;
 }) {
+  const t = useTranslations("adminUserDetail.activityTimeline");
   const keys = Array.from(
     new Set([
       ...Object.keys(oldValues ?? {}),
@@ -73,7 +60,7 @@ function FieldDiff({
   if (keys.length === 0) {
     return (
       <p className="text-xs text-dreams-textSecondary">
-        No field-level values recorded.
+        {t("noFieldValues")}
       </p>
     );
   }
@@ -95,7 +82,7 @@ function FieldDiff({
               <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
                   <p className="mb-1 font-semibold text-dreams-textSecondary uppercase tracking-wider text-[10px]">
-                    Old
+                    {t("old")}
                   </p>
                   <pre className="max-h-48 overflow-auto rounded bg-dreams-lightBg p-2 font-mono text-[11px] text-dreams-textSecondary">
                     {oldV === undefined
@@ -105,7 +92,7 @@ function FieldDiff({
                 </div>
                 <div>
                   <p className="mb-1 font-semibold text-dreams-textSecondary uppercase tracking-wider text-[10px]">
-                    New
+                    {t("new")}
                   </p>
                   <pre className="max-h-48 overflow-auto rounded bg-dreams-lightBg p-2 font-mono text-[11px] text-dreams-textPrimary">
                     {newV === undefined
@@ -145,8 +132,27 @@ function FieldDiff({
  * admin user detail page and the admin doctor detail page.
  */
 export function UserActivityTimeline({ userId }: { userId: string }) {
+  const t = useTranslations("adminUserDetail.activityTimeline");
+  const tNotif = useTranslations("notifications");
+  const tPagination = useTranslations("pagination");
+  const tCommon = useTranslations("common");
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const formatRelativeTime = (isoString: string): string => {
+    const date = new Date(isoString);
+    const diffMs = Date.now() - date.getTime();
+    const diffSec = Math.floor(diffMs / 1000);
+    const diffMin = Math.floor(diffSec / 60);
+    const diffHour = Math.floor(diffMin / 60);
+    const diffDay = Math.floor(diffHour / 24);
+
+    if (diffSec < 60) return tNotif("justNow");
+    if (diffMin < 60) return tNotif("minutesAgo", { count: diffMin });
+    if (diffHour < 24) return tNotif("hoursAgo", { count: diffHour });
+    if (diffDay < 7) return tNotif("daysAgo", { count: diffDay });
+    return date.toLocaleDateString();
+  };
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin-user-activity", userId, page],
@@ -163,11 +169,11 @@ export function UserActivityTimeline({ userId }: { userId: string }) {
       <div className="flex items-center gap-2 px-6 pt-5 pb-4 border-b border-dreams-border">
         <Activity className="h-5 w-5 text-dreams-blue" />
         <h2 className="text-base font-semibold text-dreams-textPrimary">
-          Activity
+          {t("title")}
         </h2>
         {data && data.total > 0 && (
           <span className="text-xs text-dreams-textSecondary">
-            · {data.total} {data.total === 1 ? "event" : "events"}
+            {t("countSuffix", { count: data.total })}
           </span>
         )}
       </div>
@@ -186,17 +192,17 @@ export function UserActivityTimeline({ userId }: { userId: string }) {
       ) : error ? (
         <div className="px-6 py-10 text-center">
           <p className="text-sm text-red-600 font-medium">
-            Failed to load activity
+            {t("loadError")}
           </p>
           <p className="text-xs text-dreams-textSecondary mt-1">
-            {error instanceof Error ? error.message : "An error occurred"}
+            {error instanceof Error ? error.message : tCommon("errorGeneric")}
           </p>
         </div>
       ) : logs.length === 0 ? (
         <EmptyState
           icon={Activity}
-          title="No recorded activity"
-          description="Changes made by this user will appear here."
+          title={t("emptyTitle")}
+          description={t("emptyDescription")}
         />
       ) : (
         <>
@@ -263,14 +269,15 @@ export function UserActivityTimeline({ userId }: { userId: string }) {
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-6 py-3 border-t border-dreams-border">
               <p className="text-sm text-dreams-textSecondary">
-                Page {page} of {totalPages} ({data?.total} total)
+                {tPagination("pageOf", { page, totalPages })}{" "}
+                {tPagination("totalSuffix", { count: data?.total ?? 0 })}
               </p>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setPage((p) => p - 1)}
                   disabled={page <= 1}
                   className="p-1.5 rounded-lg border border-dreams-border text-dreams-textSecondary hover:bg-dreams-lightBg disabled:opacity-40 disabled:cursor-not-allowed"
-                  aria-label="Previous page"
+                  aria-label={tPagination("previousPage")}
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </button>
@@ -278,7 +285,7 @@ export function UserActivityTimeline({ userId }: { userId: string }) {
                   onClick={() => setPage((p) => p + 1)}
                   disabled={page >= totalPages}
                   className="p-1.5 rounded-lg border border-dreams-border text-dreams-textSecondary hover:bg-dreams-lightBg disabled:opacity-40 disabled:cursor-not-allowed"
-                  aria-label="Next page"
+                  aria-label={tPagination("nextPage")}
                 >
                   <ChevronRight className="h-4 w-4" />
                 </button>
