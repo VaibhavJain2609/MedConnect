@@ -144,6 +144,7 @@ def _serialize_appointment(
         "cancelled_reason": appt.cancelled_reason,
         "meeting_url": appt.meeting_url,
         "teleconsult_url": appt.meeting_url,
+        "source_encounter_id": str(appt.source_encounter_id) if appt.source_encounter_id else None,
         "is_provisional": is_provisional,
         "patient_phone": patient_phone,
         "created_by": str(appt.created_by),

@@ -4,6 +4,16 @@
  */
 
 import api from "../api";
+import type { Appointment } from "./appointments";
+
+export interface FollowUpSummary {
+  id: string;
+  scheduled_at: string;
+  duration_minutes: number;
+  type: "in-person" | "teleconsult" | "follow-up";
+  status: "scheduled" | "arrived" | "in-progress" | "completed" | "cancelled" | "no-show";
+  notes: string | null;
+}
 
 export interface Encounter {
   id: string;
@@ -19,6 +29,7 @@ export interface Encounter {
   assessment: string | null;
   plan: string | null;
   vitals_snapshot: Record<string, unknown> | null;
+  follow_up: FollowUpSummary | null;
   created_at: string;
   updated_at: string;
 }
@@ -112,4 +123,28 @@ export async function updateEncounter(
  */
 export async function deleteEncounter(id: string): Promise<void> {
   await api.delete(`/api/v1/encounters/${id}`);
+}
+
+export interface CreateFollowUpData {
+  /** Combined date+time, ISO-8601 (naive values treated as UTC). */
+  scheduled_at: string;
+  duration_minutes?: number;
+  type?: "in-person" | "teleconsult" | "follow-up";
+  notes?: string | null;
+}
+
+/**
+ * Book a follow-up appointment from an encounter (verified doctor; author or
+ * clinic member). Idempotent — returns the existing follow-up appointment
+ * when one is already linked to the encounter.
+ */
+export async function createEncounterFollowUp(
+  encounterId: string,
+  data: CreateFollowUpData
+): Promise<Appointment> {
+  const response = await api.post(
+    `/api/v1/encounters/${encounterId}/follow-up`,
+    data
+  );
+  return response.data;
 }

@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, Pencil, Trash2 } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { CalendarPlus, Download, Pencil, Trash2 } from "lucide-react";
 import {
   deleteEncounter,
   getEncounter,
@@ -12,6 +13,7 @@ import {
 import { downloadFile } from "@/lib/download";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
+import { FollowUpModal } from "@/components/appointments/follow-up-modal";
 
 const VITAL_LABELS: Record<string, string> = {
   bp_systolic: "BP Systolic",
@@ -38,6 +40,8 @@ export default function EncounterDetailPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const id = params.id as string;
+  const tFollowUp = useTranslations("followUp");
+  const tApptStatus = useTranslations("appointments.status");
 
   const [editing, setEditing] = useState(false);
   const [subjective, setSubjective] = useState("");
@@ -46,6 +50,7 @@ export default function EncounterDetailPage() {
   const [plan, setPlan] = useState("");
   const [error, setError] = useState("");
   const [downloading, setDownloading] = useState(false);
+  const [followUpOpen, setFollowUpOpen] = useState(false);
 
   const { data: enc, isLoading, error: loadError } = useQuery({
     queryKey: ["encounter", id],
@@ -154,6 +159,15 @@ export default function EncounterDetailPage() {
 
         {!editing && (
           <div className="flex items-center gap-2">
+            {!enc.follow_up && (
+              <button
+                onClick={() => setFollowUpOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-dreams-blue text-white text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
+              >
+                <CalendarPlus className="h-4 w-4" />
+                {tFollowUp("schedule")}
+              </button>
+            )}
             <button
               onClick={handleDownloadSummary}
               disabled={downloading}
@@ -188,6 +202,31 @@ export default function EncounterDetailPage() {
       {error && (
         <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
           {error}
+        </div>
+      )}
+
+      {/* Follow-up appointment */}
+      {enc.follow_up && (
+        <div className="bg-white rounded-lg border border-dreams-border p-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-dreams-textSecondary mb-1">
+              {tFollowUp("scheduledTitle")}
+            </h2>
+            <p className="text-sm text-dreams-textPrimary">
+              {formatDateTime(enc.follow_up.scheduled_at)}
+              {" · "}
+              {enc.follow_up.duration_minutes}
+              {tFollowUp("minutesSuffix")}
+            </p>
+            {enc.follow_up.notes && (
+              <p className="text-sm text-dreams-textSecondary mt-1">
+                {enc.follow_up.notes}
+              </p>
+            )}
+          </div>
+          <Badge variant="upcoming" className="text-sm px-3 py-1">
+            {tApptStatus(enc.follow_up.status)}
+          </Badge>
         </div>
       )}
 
@@ -273,6 +312,15 @@ export default function EncounterDetailPage() {
           ))}
         </div>
       )}
+
+      <FollowUpModal
+        encounterId={id}
+        open={followUpOpen}
+        onClose={() => setFollowUpOpen(false)}
+        onScheduled={() => {
+          queryClient.invalidateQueries({ queryKey: ["encounter", id] });
+        }}
+      />
     </div>
   );
 }

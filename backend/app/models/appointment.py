@@ -34,6 +34,20 @@ class Appointment(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     cancelled_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     meeting_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Set when this appointment was booked as a follow-up from an encounter
+    # (POST /api/v1/encounters/{id}/follow-up). One live follow-up per
+    # encounter is enforced by uq_appointments_source_encounter below.
+    # use_alter=True + a named constraint breaks the metadata-level cycle
+    # with encounters.appointment_id so create_all/drop_all can still sort.
+    source_encounter_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "encounters.id",
+            use_alter=True,
+            name="fk_appointments_source_encounter",
+        ),
+        nullable=True,
+    )
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -60,4 +74,10 @@ class Appointment(Base):
         Index("idx_appointments_clinic", "clinic_id", postgresql_where=(deleted_at.is_(None))),
         Index("idx_appointments_status", "status", postgresql_where=(deleted_at.is_(None))),
         Index("idx_appointments_branch", "branch_id", postgresql_where=(deleted_at.is_(None))),
+        Index(
+            "uq_appointments_source_encounter",
+            "source_encounter_id",
+            unique=True,
+            postgresql_where=(source_encounter_id.is_not(None) & deleted_at.is_(None)),
+        ),
     )

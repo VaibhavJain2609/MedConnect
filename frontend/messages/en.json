@@ -1065,5 +1065,21 @@
       "error": "Error"
     },
     "importButton": "Import CSV"
+  },
+  "followUp": {
+    "schedule": "Schedule follow-up",
+    "scheduledTitle": "Follow-up appointment",
+    "minutesSuffix": " min",
+    "title": "Schedule follow-up",
+    "date": "Date *",
+    "time": "Time *",
+    "duration": "Duration",
+    "durationOption": "{count} min",
+    "notes": "Notes",
+    "notesPlaceholder": "e.g., Review blood reports, recheck BP",
+    "submit": "Schedule",
+    "scheduling": "Scheduling…",
+    "errorSelectDateTime": "Please pick a date and time",
+    "errorFailed": "Failed to schedule the follow-up. Please try again."
   }
 }
