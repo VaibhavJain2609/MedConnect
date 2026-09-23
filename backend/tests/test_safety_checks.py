@@ -57,6 +57,7 @@ async def _create_rx(doctor_client: AsyncClient, db: AsyncSession, patient_id, *
     return res.json()
 
 
+@pytest.mark.smoke
 @pytest.mark.asyncio
 async def test_safety_check_row_written_on_create(
     doctor_client: AsyncClient, doctor_profile, patient_user, db: AsyncSession
@@ -91,6 +92,7 @@ async def test_safety_check_row_written_on_create(
     assert body["override_reason"] is None
 
 
+@pytest.mark.smoke
 @pytest.mark.asyncio
 async def test_override_path_records_reason(
     doctor_client: AsyncClient,

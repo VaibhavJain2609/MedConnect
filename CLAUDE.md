@@ -177,6 +177,7 @@ docker-compose exec backend alembic downgrade -1
 
 # Tests
 pytest                                             # all tests
+pytest -m smoke                                    # smoke tier: ~37 critical-path tests, <2min (make test-smoke)
 pytest tests/test_auth.py                          # single file
 pytest tests/test_auth.py::test_function_name      # single test
 pytest -v --cov=app                                # verbose + coverage
@@ -227,6 +228,13 @@ Tests use separate test databases (see `conftest.py`):
 - `create_test_token(sub, email, name, roles)` — Creates signed JWT mimicking Keycloak
 
 JWKS validation is mocked via `patch("app.utils.security.get_jwks_client", ...)` — no real Keycloak needed for tests.
+
+**Smoke tier:** `pytest -m smoke` (or `make test-smoke`) runs ~37 pre-selected
+tests covering the critical paths — auth auto-provisioning, appointment
+booking/transitions, queue check-in/transitions, prescription create + safety
+gate, record create + read scoping, billing, webhooks, config guards, clinic
+invites, patient links, health probes, and search. Use it as a pre-merge sanity
+gate; the marker is registered in `backend/pyproject.toml`.
 
 ## Implementation Patterns
 

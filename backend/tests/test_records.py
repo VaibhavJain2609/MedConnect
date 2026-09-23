@@ -27,6 +27,7 @@ async def create_doctor_and_patient(client: AsyncClient, db) -> tuple[str, str, 
     return doctor_token, patient_token, patient_id
 
 
+@pytest.mark.smoke
 @pytest.mark.asyncio
 async def test_create_record(client: AsyncClient, db):
     doctor_token, patient_token, patient_id = await create_doctor_and_patient(client, db)
@@ -73,6 +74,7 @@ async def test_patient_timeline(client: AsyncClient, db):
     assert data["pagination"]["has_more"] is False
 
 
+@pytest.mark.smoke
 @pytest.mark.asyncio
 async def test_patient_cannot_access_other_records(client: AsyncClient, db):
     doctor_token, patient_token, patient_id = await create_doctor_and_patient(client, db)

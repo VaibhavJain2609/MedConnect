@@ -172,6 +172,7 @@ async def test_create_vital_rejects_doctor_role(doctor_client: AsyncClient):
     assert resp.status_code == 403
 
 
+@pytest.mark.smoke
 async def test_create_vital_happy_path(patient_client: AsyncClient, patient_user: User):
     recorded = "2025-01-15T10:30:00+00:00"
     resp = await patient_client.post(

@@ -368,6 +368,7 @@ class TestReceptionistClinicalAccess:
         assert body["patient_name"] == "Patient User"
         assert body["doctor_name"] == "Doctor User"
 
+    @pytest.mark.smoke
     async def test_receptionist_can_run_front_desk_queue(
         self, doctor_client, clinic, receptionist_membership, patient_user
     ):
@@ -388,6 +389,7 @@ class TestReceptionistClinicalAccess:
 
 
 class TestQueueOperations:
+    @pytest.mark.smoke
     async def test_sequential_queue_numbers(
         self, doctor_client, db, clinic, owner_membership, patient_user
     ):
@@ -471,6 +473,7 @@ class TestQueueOperations:
         assert bad.status_code == 400
         assert bad.json()["error"]["code"] == "INVALID_STATUS"
 
+    @pytest.mark.smoke
     async def test_status_transition_happy_path(
         self, doctor_client, clinic, owner_membership, patient_user
     ):

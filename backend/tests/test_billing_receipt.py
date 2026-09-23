@@ -96,6 +96,7 @@ async def _membership(db: AsyncSession, clinic_id, user_id, role: str) -> Clinic
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 async def test_receipt_paid_bill_returns_pdf(
     client: AsyncClient, db: AsyncSession, patient_user: User
 ):

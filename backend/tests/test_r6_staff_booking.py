@@ -275,6 +275,7 @@ class TestStaffBooking:
 
 
 class TestStaffStatusTransitions:
+    @pytest.mark.smoke
     async def test_receptionist_advances_scheduled_to_arrived(
         self, client, db, clinic, receptionist_user, receptionist_membership,
         doctor_user, doctor_profile, doctor_membership, patient_user,

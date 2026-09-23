@@ -165,6 +165,7 @@ async def _count_encounters(db: AsyncSession) -> int:
 
 
 class TestEncounterCreate:
+    @pytest.mark.smoke
     async def test_create_full_soap_fields(
         self, doctor_client, doctor_profile, clinic, owner_membership,
         approved_link, patient_user,

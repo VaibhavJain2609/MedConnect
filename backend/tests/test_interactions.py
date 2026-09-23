@@ -9,6 +9,7 @@ from app.models.medicine.clinical_safety import DrugInteraction
 from app.services.interaction_service import InteractionService
 
 
+@pytest.mark.smoke
 @pytest.mark.asyncio
 async def test_check_interactions_single_pair(medicine_db: AsyncSession):
     """Test checking interactions between two salts."""

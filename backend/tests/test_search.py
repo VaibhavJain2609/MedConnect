@@ -172,6 +172,7 @@ async def test_missing_query_is_422(patient_client: AsyncClient):
     assert resp.status_code == 422
 
 
+@pytest.mark.smoke
 @pytest.mark.asyncio
 async def test_response_contract(patient_client: AsyncClient, patient_user: User):
     resp = await patient_client.get("/api/v1/search", params={"q": "anything"})
@@ -207,6 +208,7 @@ async def test_invalid_type_falls_back_to_all(patient_client: AsyncClient, db: A
 # Patient role — own data only
 # ---------------------------------------------------------------------------
 
+@pytest.mark.smoke
 @pytest.mark.asyncio
 async def test_patient_finds_own_record(patient_client: AsyncClient, db: AsyncSession, patient_user: User):
     record = await make_record(db, patient_user.id, "Fever consultation notes")

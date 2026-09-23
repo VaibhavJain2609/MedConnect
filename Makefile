@@ -39,7 +39,7 @@ TEST_DB_MEDICINE := postgresql+asyncpg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@l
 .PHONY: help up up-build down down-v restart ps logs health \
         migrate migrate-new migrate-down seed \
         psql psql-medicine redis-cli backup restore-drill \
-        test-backend test-frontend test-e2e lint lint-backend lint-frontend typecheck \
+        test-backend test-smoke test-frontend test-e2e lint lint-backend lint-frontend typecheck \
         gen-api-types check-api-types \
         backend-install frontend-install build clean \
         loadtest loadtest-smoke \
@@ -127,6 +127,9 @@ restore-drill: ## End-to-end drill: fresh backup → restore into scratch DBs �
 
 test-backend: ## Run backend pytest locally (needs `make up` postgres + backend-install)
 	cd backend && TEST_DATABASE_URL="$(TEST_DB_MAIN)" TEST_MEDICINE_DATABASE_URL="$(TEST_DB_MEDICINE)" $(PYTEST) -v
+
+test-smoke: ## Run the fast smoke tier — pytest -m smoke (~35 critical-path tests, <2min; needs `make up` postgres + backend-install)
+	cd backend && TEST_DATABASE_URL="$(TEST_DB_MAIN)" TEST_MEDICINE_DATABASE_URL="$(TEST_DB_MEDICINE)" $(PYTEST) -m smoke -q
 
 test-frontend: ## Run frontend jest tests
 	cd frontend && npm test

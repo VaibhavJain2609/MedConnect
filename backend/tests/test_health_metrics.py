@@ -42,6 +42,7 @@ def _failing_factory():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 async def test_livez(client: AsyncClient):
     """Shallow liveness: always 200, no dependency checks."""
     resp = await client.get("/livez")
@@ -97,6 +98,7 @@ async def test_health_degraded_when_medicine_db_down(client: AsyncClient, monkey
     assert body["medicine_db"] == "error"
 
 
+@pytest.mark.smoke
 async def test_health_never_requires_auth(client: AsyncClient):
     """The readiness probe is unauthenticated (load balancer hits it)."""
     resp = await client.get("/health")

@@ -131,6 +131,7 @@ class TestMeetingUrlDeterminism:
 
 
 class TestRevokedConsentWrites:
+    @pytest.mark.smoke
     async def test_doctor_cannot_book_after_revoke(
         self, doctor_client, doctor_profile, patient_user, clinic, membership, revoked_link
     ):

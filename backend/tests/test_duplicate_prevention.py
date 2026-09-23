@@ -9,6 +9,7 @@ from app.models.medicine.commercial import Manufacturer, Brand, BrandComposition
 from app.models.medicine.salts import Salt, SaltStrength
 
 
+@pytest.mark.smoke
 @pytest.mark.asyncio
 async def test_duplicate_brand_same_manufacturer_rejected(medicine_db: AsyncSession):
     """Test that duplicate brand name from same manufacturer is rejected."""

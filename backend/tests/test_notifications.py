@@ -61,6 +61,7 @@ async def test_get_notifications_requires_auth(client: AsyncClient):
     assert response.status_code == 401
 
 
+@pytest.mark.smoke
 @pytest.mark.asyncio
 async def test_get_notifications_list(patient_client: AsyncClient, user_with_notifications):
     """GET /api/v1/notifications returns user's notifications."""

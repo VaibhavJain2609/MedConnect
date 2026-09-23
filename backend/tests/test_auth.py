@@ -6,6 +6,7 @@ from httpx import AsyncClient
 from tests.conftest import create_test_token
 
 
+@pytest.mark.smoke
 @pytest.mark.asyncio
 async def test_me_auto_provisions_patient(client: AsyncClient):
     """First request with a valid Keycloak token auto-provisions the user."""
@@ -20,6 +21,7 @@ async def test_me_auto_provisions_patient(client: AsyncClient):
     assert data["role"] == "patient"
 
 
+@pytest.mark.smoke
 @pytest.mark.asyncio
 async def test_me_auto_provisions_doctor(client: AsyncClient):
     """Doctor role in token creates both User and Doctor profile."""
@@ -64,6 +66,7 @@ async def test_me_syncs_updated_claims(client: AsyncClient):
     assert resp2.json()["full_name"] == "New Name"
 
 
+@pytest.mark.smoke
 @pytest.mark.asyncio
 async def test_invalid_token_returns_401(client: AsyncClient):
     """A garbage token should be rejected."""
