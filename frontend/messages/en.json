@@ -184,6 +184,19 @@
       "confirm": "Yes, Cancel",
       "cancelling": "Cancelling…"
     },
+    "reschedule": "Reschedule",
+    "rescheduleDialog": {
+      "ariaLabel": "Reschedule appointment",
+      "title": "Reschedule Appointment",
+      "withDoctor": "with {doctor}",
+      "date": "New date *",
+      "time": "New time *",
+      "duration": "Duration",
+      "submit": "Reschedule",
+      "submitting": "Rescheduling…",
+      "success": "Appointment rescheduled",
+      "errorFailed": "Failed to reschedule appointment"
+    },
     "booking": {
       "ariaLabel": "Book appointment",
       "title": "Book Appointment",

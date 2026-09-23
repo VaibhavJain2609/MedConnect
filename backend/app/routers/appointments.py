@@ -13,7 +13,7 @@ from sqlalchemy.orm import joinedload
 
 from app.config import settings
 from app.database import get_db
-from app.dependencies import get_active_clinic, get_current_doctor, get_current_user, require_active_clinic, require_admin
+from app.dependencies import get_active_clinic, get_current_doctor, get_current_user, require_active_clinic, require_admin, require_patient
 from app.idempotency import IdempotentRoute, idempotent
 from app.models.appointment import Appointment
 from app.models.clinic import Clinic, ClinicBranch, ClinicMembership
@@ -97,6 +97,19 @@ class AppointmentUpdate(BaseModel):
     type: str | None = None
     chief_complaint: str | None = None
     notes: str | None = None
+
+
+class AppointmentReschedule(BaseModel):
+    """Patient-initiated reschedule — only the time (and optionally the
+    duration) changes; doctor/clinic/branch/type stay put."""
+
+    scheduled_at: datetime
+    duration_minutes: int | None = Field(default=None, ge=5, le=480)
+
+    @field_validator("scheduled_at")
+    @classmethod
+    def _scheduled_at_utc(cls, v: datetime) -> datetime:
+        return v.replace(tzinfo=timezone.utc) if v.tzinfo is None else v
 
 
 class GuestAppointmentCreate(BaseModel):
@@ -1063,6 +1076,127 @@ async def update_appointment(
     if req.scheduled_at is not None:
         await _unschedule_appointment_reminders(appt)
         await _enqueue_appointment_reminders(appt)
+
+    return await _load_appointment_with_names(db, appt)
+
+
+@router.post("/{appointment_id}/reschedule", response_model=AppointmentResponse)
+async def reschedule_appointment(
+    appointment_id: UUID,
+    req: AppointmentReschedule,
+    current_user: User = Depends(require_patient),
+    db: AsyncSession = Depends(get_db),
+):
+    """Patient reschedules their own appointment. Only the time (and
+    optionally the duration) changes — doctor/clinic/branch/type are kept.
+
+    Guards mirror create: the appointment must still be ``scheduled``, the
+    new time must be in the future, the doctor must be free, and — for
+    clinic-scoped appointments — the patient's clinic link must still be
+    approved and the new slot must not collide with another of the
+    patient's appointments at that clinic.
+    """
+    result = await db.execute(
+        select(Appointment).where(
+            Appointment.id == appointment_id,
+            Appointment.deleted_at.is_(None),
+        )
+    )
+    appt = result.scalar_one_or_none()
+    if not appt:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "NOT_FOUND", "message": "Appointment not found"}},
+        )
+
+    # Patients may only touch their own appointments.
+    if appt.patient_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": {"code": "FORBIDDEN", "message": "Access denied"}},
+        )
+
+    # State machine: reschedule is only meaningful while the appointment is
+    # still 'scheduled' — anything further along (or terminal) is a 409.
+    if appt.status != "scheduled":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": {
+                    "code": "INVALID_STATE",
+                    "message": f"Cannot reschedule an appointment with status '{appt.status}'",
+                }
+            },
+        )
+
+    _ensure_not_in_past(req.scheduled_at)
+
+    # Clinic-scoped appointments: the patient's link to the clinic must still
+    # be approved — a revoked/pending link blocks moving the appointment.
+    if appt.clinic_id is not None:
+        await access_service.check_patient_consent(db, appt.patient_id, appt.clinic_id)
+
+    new_duration = req.duration_minutes if req.duration_minutes is not None else appt.duration_minutes
+
+    # Same overlap rules as create/update — exclude this appointment so
+    # rescheduling within its own old slot still works.
+    await _check_doctor_conflict(
+        db, appt.doctor_id, req.scheduled_at, new_duration, exclude_id=appt.id
+    )
+    if appt.clinic_id:
+        await _check_patient_clinic_conflict(
+            db, appt.patient_id, appt.clinic_id, req.scheduled_at, new_duration,
+            exclude_id=appt.id,
+        )
+
+    previous_scheduled_at = appt.scheduled_at
+    appt.scheduled_at = req.scheduled_at
+    appt.duration_minutes = new_duration
+    _ensure_meeting_url(appt)  # teleconsult room is derived from appt.id — no-op when set
+    try:
+        await db.flush()
+    except IntegrityError:
+        # Exclusion constraint caught a concurrent double-booking race
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": {"code": "DOCTOR_UNAVAILABLE", "message": "Doctor has a conflicting appointment at this time"}},
+        )
+    await db.refresh(appt)
+
+    # Move the deferred reminders to the new time.
+    await _unschedule_appointment_reminders(appt)
+    await _enqueue_appointment_reminders(appt)
+
+    # Notify the doctor their appointment moved.
+    doctor_user_id = (
+        await db.execute(
+            select(Doctor.user_id).where(Doctor.id == appt.doctor_id, Doctor.deleted_at.is_(None))
+        )
+    ).scalar_one_or_none()
+    if doctor_user_id is not None:
+        await create_notification(
+            db=db,
+            user_id=doctor_user_id,
+            notif_type="appointment",
+            title="Appointment rescheduled",
+            body=(
+                f"{current_user.full_name} rescheduled their appointment "
+                f"from {previous_scheduled_at.isoformat()} to {appt.scheduled_at.isoformat()}."
+            ),
+            action_url="/doctor/appointments",
+            metadata={
+                "appointment_id": str(appt.id),
+                "previous_scheduled_at": previous_scheduled_at.isoformat(),
+                "scheduled_at": appt.scheduled_at.isoformat(),
+            },
+        )
+
+    # Outbound webhook — PHI-minimal payload, fire-and-forget.
+    await _emit_appointment_webhook(
+        db, appt, "appointment.rescheduled",
+        {"previous_scheduled_at": previous_scheduled_at.isoformat()},
+    )
 
     return await _load_appointment_with_names(db, appt)
 
