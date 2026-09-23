@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -49,12 +50,6 @@ const roleBadgeVariant: Record<string, string> = {
   patient: "completed",
 };
 
-const roleLabel: Record<string, string> = {
-  admin: "Admin",
-  doctor: "Doctor",
-  patient: "Patient",
-};
-
 const recordTypeBadge: Record<string, string> = {
   lab_result: "inProgress",
   prescription: "completed",
@@ -66,6 +61,9 @@ const recordTypeBadge: Record<string, string> = {
 type Tab = "overview" | "prescriptions" | "records" | "activity";
 
 export default function AdminUserDetailPage() {
+  const t = useTranslations("adminUserDetail");
+  const tUsers = useTranslations("adminUsers");
+  const tCommon = useTranslations("common");
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -114,9 +112,9 @@ export default function AdminUserDetailPage() {
   if (error || !user) {
     return (
       <div className="flex flex-col items-center justify-center py-12 space-y-4">
-        <p className="text-red-600 font-medium">Failed to load user</p>
+        <p className="text-red-600 font-medium">{t("loadError")}</p>
         <p className="text-dreams-textSecondary text-sm">
-          {error instanceof Error ? error.message : "User not found"}
+          {error instanceof Error ? error.message : t("notFound")}
         </p>
       </div>
     );
@@ -124,21 +122,21 @@ export default function AdminUserDetailPage() {
 
   const tabs: { id: Tab; label: string }[] = isPatient
     ? [
-        { id: "overview", label: "Overview" },
-        { id: "prescriptions", label: `Prescriptions (${user.prescriptions_count})` },
-        { id: "records", label: `Medical Records (${user.records_count})` },
-        { id: "activity", label: "Activity" },
+        { id: "overview", label: t("tabs.overview") },
+        { id: "prescriptions", label: t("tabs.prescriptions", { count: user.prescriptions_count }) },
+        { id: "records", label: t("tabs.records", { count: user.records_count }) },
+        { id: "activity", label: t("tabs.activity") },
       ]
     : [
-        { id: "overview", label: "Overview" },
-        { id: "activity", label: "Activity" },
+        { id: "overview", label: t("tabs.overview") },
+        { id: "activity", label: t("tabs.activity") },
       ];
 
   return (
     <div className="space-y-6">
       <Breadcrumb
         items={[
-          { label: "Users", href: "/admin/users" },
+          { label: t("breadcrumbUsers"), href: "/admin/users" },
           { label: user.full_name },
         ]}
       />
@@ -158,19 +156,29 @@ export default function AdminUserDetailPage() {
                 {user.full_name}
               </h1>
               <Badge variant={roleBadgeVariant[user.role] as any}>
-                {roleLabel[user.role] ?? user.role}
+                {({
+                  patient: tUsers("roles.patient"),
+                  doctor: tUsers("roles.doctor"),
+                  admin: tUsers("roles.admin"),
+                } as Record<string, string>)[user.role] ?? user.role}
               </Badge>
               <Badge variant={user.is_active ? "completed" : "pending"}>
-                {user.is_active ? "Active" : "Inactive"}
+                {user.is_active
+                  ? tUsers("status.active")
+                  : tUsers("status.inactive")}
               </Badge>
             </div>
             <div className="flex items-center gap-4 mt-0.5">
               <p className="text-dreams-textSecondary text-sm">
-                Member since {new Date(user.created_at).toLocaleDateString()}
+                {t("memberSince", {
+                  date: new Date(user.created_at).toLocaleDateString(),
+                })}
               </p>
               {user.last_visit && (
                 <p className="text-dreams-textSecondary text-sm">
-                  Last visit {new Date(user.last_visit).toLocaleDateString()}
+                  {t("lastVisit", {
+                    date: new Date(user.last_visit).toLocaleDateString(),
+                  })}
                 </p>
               )}
             </div>
@@ -189,25 +197,25 @@ export default function AdminUserDetailPage() {
                 }`}
               >
                 {isToggling
-                  ? "Updating..."
+                  ? t("updating")
                   : user.is_active
-                  ? "Deactivate User"
-                  : "Activate User"}
+                  ? t("deactivateUser")
+                  : t("activateUser")}
               </button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>
-                  {user.is_active ? "Deactivate" : "Activate"} User
+                  {user.is_active ? t("deactivateTitle") : t("activateTitle")}
                 </AlertDialogTitle>
                 <AlertDialogDescription>
                   {user.is_active
-                    ? `Deactivate ${user.full_name}? They will no longer be able to sign in or use the platform.`
-                    : `Reactivate ${user.full_name}? They will regain access to the platform.`}
+                    ? t("deactivateDesc", { name: user.full_name })
+                    : t("activateDesc", { name: user.full_name })}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogCancel>{tCommon("cancel")}</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={() => toggleActive()}
                   className={
@@ -216,7 +224,7 @@ export default function AdminUserDetailPage() {
                       : undefined
                   }
                 >
-                  {user.is_active ? "Deactivate" : "Activate"}
+                  {user.is_active ? t("deactivate") : t("activate")}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -267,11 +275,19 @@ export default function AdminUserDetailPage() {
                     </div>
                     <div className="flex items-center gap-2 text-dreams-textSecondary">
                       <Globe className="h-4 w-4 flex-shrink-0" />
-                      <span>Language: {user.language_pref.toUpperCase()}</span>
+                      <span>
+                        {t("languageLabel", {
+                          code: user.language_pref.toUpperCase(),
+                        })}
+                      </span>
                     </div>
                     <div className="flex items-center gap-2 text-dreams-textSecondary">
                       <Droplets className="h-4 w-4 flex-shrink-0" />
-                      <span>Blood Group: {user.blood_group ?? "—"}</span>
+                      <span>
+                        {t("bloodGroupLabel", {
+                          value: user.blood_group ?? "—",
+                        })}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -280,7 +296,7 @@ export default function AdminUserDetailPage() {
               {(user.emergency_contact_name || user.emergency_contact_phone) && (
                 <div className="border-t border-dreams-border pt-4">
                   <p className="text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider mb-3">
-                    Emergency Contact
+                    {t("emergencyContact")}
                   </p>
                   <div className="flex items-center gap-4 text-sm text-dreams-textSecondary">
                     <span>{user.emergency_contact_name ?? "—"}</span>
@@ -301,13 +317,13 @@ export default function AdminUserDetailPage() {
                     <div className="flex items-center gap-2 mb-4">
                       <Activity className="h-5 w-5 text-dreams-blue" />
                       <h2 className="text-base font-semibold text-dreams-textPrimary">
-                        Vitals
+                        {t("vitals")}
                       </h2>
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                       {user.height_cm && (
                         <div className="bg-dreams-lightBg rounded-lg p-3 text-center">
-                          <p className="text-xs text-dreams-textSecondary mb-1">Height</p>
+                          <p className="text-xs text-dreams-textSecondary mb-1">{t("height")}</p>
                           <p className="text-lg font-bold text-dreams-textPrimary">
                             {user.height_cm}
                           </p>
@@ -316,7 +332,7 @@ export default function AdminUserDetailPage() {
                       )}
                       {user.weight_kg && (
                         <div className="bg-dreams-lightBg rounded-lg p-3 text-center">
-                          <p className="text-xs text-dreams-textSecondary mb-1">Weight</p>
+                          <p className="text-xs text-dreams-textSecondary mb-1">{t("weight")}</p>
                           <p className="text-lg font-bold text-dreams-textPrimary">
                             {user.weight_kg}
                           </p>
@@ -340,12 +356,12 @@ export default function AdminUserDetailPage() {
                   (user.chronic_conditions && user.chronic_conditions.length > 0)) && (
                   <div className="bg-white rounded-xl border border-dreams-border p-6 shadow-card space-y-4">
                     <h2 className="text-base font-semibold text-dreams-textPrimary">
-                      Health Information
+                      {t("healthInformation")}
                     </h2>
                     {user.allergies && user.allergies.length > 0 && (
                       <div>
                         <p className="text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider mb-2">
-                          Allergies
+                          {t("allergies")}
                         </p>
                         <div className="flex flex-wrap gap-2">
                           {user.allergies.map((a) => (
@@ -362,7 +378,7 @@ export default function AdminUserDetailPage() {
                     {user.chronic_conditions && user.chronic_conditions.length > 0 && (
                       <div>
                         <p className="text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider mb-2">
-                          Chronic Conditions
+                          {t("chronicConditions")}
                         </p>
                         <div className="flex flex-wrap gap-2">
                           {user.chronic_conditions.map((c) => (
@@ -387,19 +403,19 @@ export default function AdminUserDetailPage() {
                 <div className="flex items-center gap-2 mb-4">
                   <Stethoscope className="h-5 w-5 text-dreams-blue" />
                   <h2 className="text-base font-semibold text-dreams-textPrimary">
-                    Doctor Profile
+                    {t("doctorProfile")}
                   </h2>
                   {user.doctor_profile.verified && (
                     <div className="flex items-center gap-1 ml-2 text-green-600 text-xs font-medium">
                       <ShieldCheck className="h-4 w-4" />
-                      Verified
+                      {t("verified")}
                     </div>
                   )}
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                   <div>
                     <p className="text-dreams-textSecondary text-xs uppercase tracking-wider mb-1">
-                      Specialization
+                      {t("specialization")}
                     </p>
                     <p className="text-dreams-textPrimary font-medium">
                       {user.doctor_profile.specialization ?? "—"}
@@ -407,7 +423,7 @@ export default function AdminUserDetailPage() {
                   </div>
                   <div>
                     <p className="text-dreams-textSecondary text-xs uppercase tracking-wider mb-1">
-                      License Number
+                      {t("licenseNumber")}
                     </p>
                     <p className="text-dreams-textPrimary font-medium">
                       {user.doctor_profile.license_number ?? "—"}
@@ -436,7 +452,7 @@ export default function AdminUserDetailPage() {
             <div className="bg-white rounded-xl border border-dreams-border p-5 shadow-card">
               <div className="flex items-center gap-3 mb-2">
                 <FileText className="h-5 w-5 text-dreams-blue" />
-                <p className="text-sm text-dreams-textSecondary">Medical Records</p>
+                <p className="text-sm text-dreams-textSecondary">{t("stats.medicalRecords")}</p>
               </div>
               <p className="text-3xl font-bold text-dreams-textPrimary">
                 {user.records_count}
@@ -446,7 +462,7 @@ export default function AdminUserDetailPage() {
             <div className="bg-white rounded-xl border border-dreams-border p-5 shadow-card">
               <div className="flex items-center gap-3 mb-2">
                 <Pill className="h-5 w-5 text-dreams-blue" />
-                <p className="text-sm text-dreams-textSecondary">Prescriptions</p>
+                <p className="text-sm text-dreams-textSecondary">{t("stats.prescriptions")}</p>
               </div>
               <p className="text-3xl font-bold text-dreams-textPrimary">
                 {user.prescriptions_count}
@@ -456,7 +472,7 @@ export default function AdminUserDetailPage() {
             <div className="bg-white rounded-xl border border-dreams-border p-5 shadow-card">
               <div className="flex items-center gap-3 mb-2">
                 <CalendarDays className="h-5 w-5 text-dreams-blue" />
-                <p className="text-sm text-dreams-textSecondary">Member Since</p>
+                <p className="text-sm text-dreams-textSecondary">{t("stats.memberSince")}</p>
               </div>
               <p className="text-sm font-semibold text-dreams-textPrimary">
                 {new Date(user.created_at).toLocaleDateString("en-IN", {
@@ -471,7 +487,7 @@ export default function AdminUserDetailPage() {
               <div className="bg-white rounded-xl border border-dreams-border p-5 shadow-card">
                 <div className="flex items-center gap-3 mb-2">
                   <Activity className="h-5 w-5 text-dreams-blue" />
-                  <p className="text-sm text-dreams-textSecondary">Last Visit</p>
+                  <p className="text-sm text-dreams-textSecondary">{t("stats.lastVisit")}</p>
                 </div>
                 <p className="text-sm font-semibold text-dreams-textPrimary">
                   {new Date(user.last_visit).toLocaleDateString("en-IN", {
@@ -496,7 +512,7 @@ export default function AdminUserDetailPage() {
           ) : prescriptions.data.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-dreams-textSecondary">
               <Pill className="h-10 w-10 mb-3 opacity-30" />
-              <p className="text-sm">No prescriptions found</p>
+              <p className="text-sm">{t("noPrescriptions")}</p>
             </div>
           ) : (
             <>
@@ -504,19 +520,19 @@ export default function AdminUserDetailPage() {
                 <thead>
                   <tr className="border-b border-dreams-border bg-dreams-lightBg">
                     <th className="text-left px-5 py-3 text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider">
-                      Date
+                      {t("rxTable.date")}
                     </th>
                     <th className="text-left px-5 py-3 text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider">
-                      Doctor
+                      {t("rxTable.doctor")}
                     </th>
                     <th className="text-left px-5 py-3 text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider">
-                      Diagnosis
+                      {t("rxTable.diagnosis")}
                     </th>
                     <th className="text-left px-5 py-3 text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider">
-                      Medicines
+                      {t("rxTable.medicines")}
                     </th>
                     <th className="text-left px-5 py-3 text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider">
-                      Valid Until
+                      {t("rxTable.validUntil")}
                     </th>
                   </tr>
                 </thead>
@@ -538,7 +554,7 @@ export default function AdminUserDetailPage() {
                         </td>
                         <td className="px-5 py-3">
                           <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
-                            {medCount} {medCount === 1 ? "medicine" : "medicines"}
+                            {t("medicinesCount", { count: medCount })}
                           </span>
                         </td>
                         <td className="px-5 py-3 text-dreams-textSecondary whitespace-nowrap">
@@ -572,7 +588,7 @@ export default function AdminUserDetailPage() {
           ) : records.data.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-dreams-textSecondary">
               <FileText className="h-10 w-10 mb-3 opacity-30" />
-              <p className="text-sm">No medical records found</p>
+              <p className="text-sm">{t("noRecords")}</p>
             </div>
           ) : (
             <>
@@ -580,19 +596,19 @@ export default function AdminUserDetailPage() {
                 <thead>
                   <tr className="border-b border-dreams-border bg-dreams-lightBg">
                     <th className="text-left px-5 py-3 text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider">
-                      Date
+                      {t("recTable.date")}
                     </th>
                     <th className="text-left px-5 py-3 text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider">
-                      Type
+                      {t("recTable.type")}
                     </th>
                     <th className="text-left px-5 py-3 text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider">
-                      Title
+                      {t("recTable.title")}
                     </th>
                     <th className="text-left px-5 py-3 text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider">
-                      Doctor
+                      {t("recTable.doctor")}
                     </th>
                     <th className="text-left px-5 py-3 text-xs font-semibold text-dreams-textSecondary uppercase tracking-wider">
-                      Source
+                      {t("recTable.source")}
                     </th>
                   </tr>
                 </thead>
@@ -653,11 +669,13 @@ function Pagination({
   total: number;
   onPageChange: (p: number) => void;
 }) {
+  const tPagination = useTranslations("pagination");
   if (totalPages <= 1) return null;
   return (
     <div className="flex items-center justify-between px-5 py-3 border-t border-dreams-border">
       <p className="text-sm text-dreams-textSecondary">
-        Page {page} of {totalPages} ({total} total)
+        {tPagination("pageOf", { page, totalPages })}{" "}
+        {tPagination("totalSuffix", { count: total })}
       </p>
       <div className="flex items-center gap-2">
         <button

@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
 
@@ -99,23 +100,13 @@ const STATUS_TONE: Record<string, StatusTone> = {
   other: "neutral",
 };
 
-// Display labels for statuses that don't humanize cleanly.
-const STATUS_LABELS: Record<string, string> = {
-  "in-progress": "In Progress",
-  in_progress: "In Progress",
-  "no-show": "No Show",
-  no_show: "No Show",
-  in_consultation: "In Consultation",
-  opd_note: "OPD Note",
-  diagnostic_report: "Diagnostic Report",
-  discharge_summary: "Discharge Summary",
-  lab_report: "Lab Report",
-  lab_result: "Lab Result",
-  clinical_note: "Clinical Note",
-};
-
 function normalize(status: string): string {
   return status.trim().toLowerCase();
+}
+
+/** Normalized status → camelCase message key ("in-progress" → "inProgress"). */
+function messageKey(status: string): string {
+  return status.replace(/[_-]+(.)/g, (_, c) => c.toUpperCase());
 }
 
 function humanize(status: string): string {
@@ -138,9 +129,15 @@ function StatusBadge({
   className,
   ...props
 }: StatusBadgeProps) {
+  const t = useTranslations("statusBadge");
   const key = normalize(status);
   const tone = STATUS_TONE[key] ?? "neutral";
-  const text = label ?? STATUS_LABELS[key] ?? humanize(key);
+  const i18nKey = messageKey(key);
+  // i18nKey is derived from arbitrary API status strings — cast to the
+  // typed key union; `t.has` guards against statuses without a translation.
+  const text =
+    label ??
+    (t.has(i18nKey as never) ? t(i18nKey as never) : humanize(key));
 
   return (
     <span

@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
@@ -93,6 +94,7 @@ function DependencyCard({
   ok: boolean | null;
   latency: string;
 }) {
+  const t = useTranslations("adminSystem.depStatus");
   return (
     <div className="bg-white rounded-lg shadow-card p-5">
       <div className="flex items-start justify-between">
@@ -136,7 +138,7 @@ function DependencyCard({
                 : "text-red-600"
           )}
         >
-          {ok === null ? "Unknown" : ok ? "Healthy" : "Down"}
+          {ok === null ? t("unknown") : ok ? t("healthy") : t("down")}
         </span>
         <span className="text-xs text-dreams-textSecondary">
           {latency}
@@ -173,6 +175,7 @@ function CountCard({
 }
 
 export default function AdminSystemPage() {
+  const t = useTranslations("adminSystem");
   const healthQuery = useQuery({
     queryKey: ["system-public-health"],
     queryFn: fetchHealthWithRtt,
@@ -217,22 +220,22 @@ export default function AdminSystemPage() {
   return (
     <div className="space-y-6">
       <Breadcrumb
-        items={[{ label: "System" }, { label: "System Health" }]}
+        items={[{ label: t("breadcrumbSystem") }, { label: t("breadcrumb") }]}
       />
 
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-dreams-textPrimary">
-            System Health
+            {t("title")}
           </h1>
           <p className="text-dreams-textSecondary mt-1">
-            Live status of platform dependencies — auto-refreshes every 30s
+            {t("subtitle")}
           </p>
         </div>
         <div className="flex items-center gap-3">
           {status?.checked_at && (
             <span className="text-xs text-dreams-textSecondary">
-              Checked {formatDateTime(status.checked_at)}
+              {t("checked", { datetime: formatDateTime(status.checked_at) })}
             </span>
           )}
           <button
@@ -250,7 +253,7 @@ export default function AdminSystemPage() {
                   "animate-spin"
               )}
             />
-            Refresh
+            {t("refresh")}
           </button>
         </div>
       </div>
@@ -291,15 +294,18 @@ export default function AdminSystemPage() {
                 )}
               >
                 {overallOk
-                  ? "All systems operational"
+                  ? t("statusOk")
                   : anyDown
-                    ? "One or more dependencies are down"
-                    : "Status unknown — probes still loading or unreachable"}
+                    ? t("statusDown")
+                    : t("statusUnknown")}
               </p>
               {status && (
                 <p className="text-xs text-dreams-textSecondary mt-0.5">
-                  API v{status.version} · uptime {formatUptime(status.uptime_seconds)} ·
-                  started {formatDateTime(status.started_at)}
+                  {t("apiMeta", {
+                    version: status.version,
+                    uptime: formatUptime(status.uptime_seconds),
+                    started: formatDateTime(status.started_at),
+                  })}
                 </p>
               )}
             </div>
@@ -308,29 +314,29 @@ export default function AdminSystemPage() {
           {/* Dependency status cards */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <DependencyCard
-              title="API"
-              subtitle="GET /health probe"
+              title={t("deps.apiTitle")}
+              subtitle={t("deps.apiSubtitle")}
               icon={Server}
               ok={apiOk}
-              latency={apiRtt !== null ? `${apiRtt} ms rtt` : "—"}
+              latency={apiRtt !== null ? t("rtt", { ms: apiRtt }) : "—"}
             />
             <DependencyCard
-              title="PostgreSQL"
-              subtitle="Main application DB"
+              title={t("deps.pgTitle")}
+              subtitle={t("deps.pgSubtitle")}
               icon={Database}
               ok={dbOk}
               latency={formatLatency(deps?.db.latency_ms)}
             />
             <DependencyCard
-              title="Medicine DB"
-              subtitle="Pharmaceutical catalog"
+              title={t("deps.medDbTitle")}
+              subtitle={t("deps.medDbSubtitle")}
               icon={Tablets}
               ok={medDbOk}
               latency={formatLatency(deps?.medicine_db.latency_ms)}
             />
             <DependencyCard
-              title="Redis"
-              subtitle="Cache · rate limit · queue"
+              title={t("deps.redisTitle")}
+              subtitle={t("deps.redisSubtitle")}
               icon={HardDrive}
               ok={redisOk}
               latency={formatLatency(deps?.redis.latency_ms)}
@@ -341,11 +347,12 @@ export default function AdminSystemPage() {
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-center gap-3">
               <Activity className="h-5 w-5 text-amber-600 flex-shrink-0" />
               <p className="text-sm text-amber-800">
-                Admin diagnostics endpoint (
-                <code className="text-xs">/api/v1/admin/system/status</code>)
-                is unreachable — showing the public /health probe only. A main-DB
-                outage also blocks admin auth, so this usually means the API or
-                database is down.
+                {t.rich("diagWarning", {
+                  url: "/api/v1/admin/system/status",
+                  code: (chunks) => (
+                    <code className="text-xs">{chunks}</code>
+                  ),
+                })}
               </p>
             </div>
           )}
@@ -354,12 +361,12 @@ export default function AdminSystemPage() {
           <div className="grid gap-4 lg:grid-cols-3">
             <div className="bg-white rounded-lg shadow-card p-6">
               <h2 className="text-lg font-bold text-dreams-textPrimary mb-4">
-                Worker Queue (ARQ)
+                {t("queue.title")}
               </h2>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-dreams-textSecondary">
-                    Pending jobs
+                    {t("queue.pendingJobs")}
                   </span>
                   <span className="text-sm font-semibold text-dreams-textPrimary">
                     {status?.queue.pending ?? "—"}
@@ -367,7 +374,7 @@ export default function AdminSystemPage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-dreams-textSecondary">
-                    Deferred (scheduled reminders)
+                    {t("queue.deferred")}
                   </span>
                   <span className="text-sm font-semibold text-dreams-textPrimary">
                     {status?.queue.deferred ?? "—"}
@@ -375,7 +382,7 @@ export default function AdminSystemPage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-dreams-textSecondary">
-                    In progress
+                    {t("queue.inProgress")}
                   </span>
                   <span className="text-sm font-semibold text-dreams-textPrimary">
                     {status?.queue.in_progress ?? "—"}
@@ -383,7 +390,7 @@ export default function AdminSystemPage() {
                 </div>
                 <div className="pt-3 border-t border-dreams-border">
                   <p className="text-xs text-dreams-textSecondary">
-                    Worker last heartbeat
+                    {t("queue.heartbeat")}
                   </p>
                   <p className="text-sm font-medium text-dreams-textPrimary mt-0.5">
                     {formatDateTime(status?.queue.worker_last_heartbeat)}
@@ -394,27 +401,27 @@ export default function AdminSystemPage() {
 
             <div className="lg:col-span-2 grid gap-4 sm:grid-cols-2">
               <CountCard
-                label="Total Users"
+                label={t("counts.totalUsers")}
                 value={status?.counts?.users}
                 icon={Users}
               />
               <CountCard
-                label="Patients"
+                label={t("counts.patients")}
                 value={status?.counts?.patients}
                 icon={Users}
               />
               <CountCard
-                label="Doctors"
+                label={t("counts.doctors")}
                 value={status?.counts?.doctors}
                 icon={Stethoscope}
               />
               <CountCard
-                label="Clinics"
+                label={t("counts.clinics")}
                 value={status?.counts?.clinics}
                 icon={Building2}
               />
               <CountCard
-                label="Appointments Today"
+                label={t("counts.appointmentsToday")}
                 value={status?.counts?.appointments_today}
                 icon={Calendar}
               />
@@ -425,7 +432,7 @@ export default function AdminSystemPage() {
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm text-dreams-textSecondary">
-                      Last Audit Event
+                      {t("counts.lastAudit")}
                     </p>
                     <p className="text-sm font-semibold text-dreams-textPrimary truncate">
                       {formatDateTime(status?.last_audit_at)}
@@ -439,16 +446,15 @@ export default function AdminSystemPage() {
           {/* Metrics note */}
           <div className="bg-white rounded-lg shadow-card p-5">
             <p className="text-sm text-dreams-textSecondary">
-              Prometheus metrics are exposed at{" "}
-              <code className="text-xs bg-dreams-lightBg px-1.5 py-0.5 rounded">
-                {API_URL}/metrics
-              </code>{" "}
-              (scraped in-cluster only — not publicly routable). Shallow liveness
-              probe:{" "}
-              <code className="text-xs bg-dreams-lightBg px-1.5 py-0.5 rounded">
-                {API_URL}/livez
-              </code>
-              .
+              {t.rich("metricsNote", {
+                metricsUrl: `${API_URL}/metrics`,
+                livezUrl: `${API_URL}/livez`,
+                code: (chunks) => (
+                  <code className="text-xs bg-dreams-lightBg px-1.5 py-0.5 rounded">
+                    {chunks}
+                  </code>
+                ),
+              })}
             </p>
           </div>
         </>

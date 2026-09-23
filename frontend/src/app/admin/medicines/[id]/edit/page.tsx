@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter, useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -47,24 +48,26 @@ import {
   type BrandCompositionInput,
 } from "@/lib/api/medicines-emr";
 
-// Form validation schema
-const formSchema = z.object({
-  brand_name: z.string().min(1, "Brand name is required").max(255),
-  manufacturer_id: z.string().uuid("Please select a manufacturer"),
+// Form validation schema shape (messages are translated inside the component)
+const formSchemaShape = {
+  brand_name: z.string().min(1).max(255),
+  manufacturer_id: z.string().uuid(),
   drug_type: z.enum(["allopathy", "ayurveda", "homeopathy"]),
   is_discontinued: z.boolean().default(false),
   launch_date: z.string().optional(),
   discontinuation_date: z.string().optional(),
   ndhm_code: z.string().max(50).optional(),
-  compositions: z.array(
-    z.object({
-      salt_strength_id: z.string().uuid(),
-      sequence: z.number().int().positive(),
-    })
-  ).min(1, "At least one composition is required"),
-});
+  compositions: z
+    .array(
+      z.object({
+        salt_strength_id: z.string().uuid(),
+        sequence: z.number().int().positive(),
+      })
+    )
+    .min(1),
+};
 
-type FormData = z.infer<typeof formSchema>;
+type FormData = z.infer<z.ZodObject<typeof formSchemaShape>>;
 
 interface CompositionEntry {
   id: string;
@@ -88,11 +91,25 @@ function toCompositionEntries(brand?: Brand): CompositionEntry[] {
 }
 
 export default function EditMedicinePage() {
+  const t = useTranslations("adminMedicines.form");
+  const tCommon = useTranslations("common");
   const router = useRouter();
   const params = useParams();
   const brandId = params.id as string;
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const formSchema = useMemo(
+    () =>
+      z.object({
+        ...formSchemaShape,
+        brand_name: z.string().min(1, t("brandNameRequired")).max(255),
+        manufacturer_id: z.string().uuid(t("manufacturerRequired")),
+        compositions: z
+          .array(formSchemaShape.compositions.element)
+          .min(1, t("compositionRequired")),
+      }),
+    [t]
+  );
 
   // null while the user hasn't touched the list — `compositions` below then
   // falls back to the entries loaded with the brand.
@@ -184,8 +201,8 @@ export default function EditMedicinePage() {
     },
     onSuccess: () => {
       toast({
-        title: "Success",
-        description: "Brand updated successfully",
+        title: t("successTitle"),
+        description: t("brandUpdated"),
       });
       queryClient.invalidateQueries({ queryKey: ["brand", brandId] });
       queryClient.invalidateQueries({ queryKey: ["admin-brands"] });
@@ -193,7 +210,7 @@ export default function EditMedicinePage() {
     },
     onError: (error: Error) => {
       toast({
-        title: "Error",
+        title: t("errorTitle"),
         description: error.message,
         variant: "destructive",
       });
@@ -208,15 +225,15 @@ export default function EditMedicinePage() {
     },
     onSuccess: () => {
       toast({
-        title: "Success",
-        description: "Brand deleted successfully",
+        title: t("successTitle"),
+        description: t("brandDeleted"),
       });
       queryClient.invalidateQueries({ queryKey: ["admin-brands"] });
       router.push("/admin/medicines");
     },
     onError: (error: Error) => {
       toast({
-        title: "Error",
+        title: t("errorTitle"),
         description: error.message,
         variant: "destructive",
       });
@@ -230,8 +247,8 @@ export default function EditMedicinePage() {
     setSelectedSaltName(saltName);
     setSelectedStrengthId("");
     toast({
-      title: "Salt Added",
-      description: `"${saltName}" will be created when you save the brand`,
+      title: t("saltAddedTitle"),
+      description: t("saltAddedDesc", { name: saltName }),
     });
   };
 
@@ -239,8 +256,8 @@ export default function EditMedicinePage() {
   const handleAddComposition = () => {
     if (!selectedSaltId || !selectedStrengthId) {
       toast({
-        title: "Validation Error",
-        description: "Please select both salt and strength",
+        title: t("validationError"),
+        description: t("selectBoth"),
         variant: "destructive",
       });
       return;
@@ -294,8 +311,8 @@ export default function EditMedicinePage() {
   const onSubmit = (data: FormData) => {
     if (compositions.length === 0) {
       toast({
-        title: "Validation Error",
-        description: "Please add at least one composition",
+        title: t("validationError"),
+        description: t("addOneComposition"),
         variant: "destructive",
       });
       return;
@@ -322,12 +339,12 @@ export default function EditMedicinePage() {
       <div className="container mx-auto py-6">
         <Card>
           <CardHeader>
-            <CardTitle>Error</CardTitle>
-            <CardDescription>Brand not found or failed to load</CardDescription>
+            <CardTitle>{t("errorTitle")}</CardTitle>
+            <CardDescription>{t("brandNotFound")}</CardDescription>
           </CardHeader>
           <CardContent>
             <Button onClick={() => router.push("/admin/medicines")}>
-              Back to Medicines
+              {t("backToMedicines")}
             </Button>
           </CardContent>
         </Card>
@@ -344,32 +361,31 @@ export default function EditMedicinePage() {
           className="mb-4"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Medicines
+          {t("backToMedicines")}
         </Button>
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-3xl font-bold">Edit Medicine</h1>
+            <h1 className="text-3xl font-bold">{t("editTitle")}</h1>
             <p className="text-muted-foreground mt-2">
-              Update brand details and composition
+              {t("editSubtitle")}
             </p>
           </div>
           <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
             <AlertDialogTrigger asChild>
               <Button variant="destructive" size="sm">
                 <Trash2 className="h-4 w-4 mr-2" />
-                Delete
+                {t("delete")}
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Delete Brand</AlertDialogTitle>
+                <AlertDialogTitle>{t("deleteTitle")}</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Are you sure you want to delete "{brand.brand_name}"? This action cannot
-                  be undone and will remove all associated data.
+                  {t("deleteDesc", { name: brand.brand_name })}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogCancel>{tCommon("cancel")}</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={handleDelete}
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
@@ -377,7 +393,7 @@ export default function EditMedicinePage() {
                   {deleteMutation.isPending && (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   )}
-                  Delete
+                  {t("delete")}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -390,16 +406,16 @@ export default function EditMedicinePage() {
           {/* Basic Information */}
           <Card>
             <CardHeader>
-              <CardTitle>Basic Information</CardTitle>
-              <CardDescription>Update the brand details</CardDescription>
+              <CardTitle>{t("basicInfo")}</CardTitle>
+              <CardDescription>{t("basicInfoDescEdit")}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label htmlFor="brand_name">Brand Name *</Label>
+                <Label htmlFor="brand_name">{t("brandName")}</Label>
                 <Input
                   id="brand_name"
                   {...register("brand_name")}
-                  placeholder="e.g., Crocin 500"
+                  placeholder={t("brandNamePlaceholder")}
                 />
                 {errors.brand_name && (
                   <p className="text-sm text-destructive mt-1">{errors.brand_name.message}</p>
@@ -407,7 +423,7 @@ export default function EditMedicinePage() {
               </div>
 
               <div>
-                <Label htmlFor="manufacturer_id">Manufacturer * (type to search)</Label>
+                <Label htmlFor="manufacturer_id">{t("manufacturerEdit")}</Label>
                 <Autocomplete
                   options={manufacturers.map((m: Manufacturer) => ({
                     value: m.manufacturer_id,
@@ -416,8 +432,8 @@ export default function EditMedicinePage() {
                   value={watchManufacturerId}
                   onValueChange={(value) => setValue("manufacturer_id", value)}
                   onSearchChange={setManufacturerSearchQuery}
-                  placeholder="Type manufacturer name..."
-                  emptyText="No manufacturers found."
+                  placeholder={t("manufacturerPlaceholder")}
+                  emptyText={t("noManufacturers")}
                 />
                 {errors.manufacturer_id && (
                   <p className="text-sm text-destructive mt-1">
@@ -427,7 +443,7 @@ export default function EditMedicinePage() {
               </div>
 
               <div>
-                <Label htmlFor="drug_type">Drug Type *</Label>
+                <Label htmlFor="drug_type">{t("drugType")}</Label>
                 <Select
                   value={watchDrugType}
                   onValueChange={(value: "allopathy" | "ayurveda" | "homeopathy") =>
@@ -438,9 +454,9 @@ export default function EditMedicinePage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="allopathy">Allopathy</SelectItem>
-                    <SelectItem value="ayurveda">Ayurveda</SelectItem>
-                    <SelectItem value="homeopathy">Homeopathy</SelectItem>
+                    <SelectItem value="allopathy">{t("drugTypes.allopathy")}</SelectItem>
+                    <SelectItem value="ayurveda">{t("drugTypes.ayurveda")}</SelectItem>
+                    <SelectItem value="homeopathy">{t("drugTypes.homeopathy")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -454,13 +470,13 @@ export default function EditMedicinePage() {
                   }
                 />
                 <Label htmlFor="is_discontinued" className="font-normal cursor-pointer">
-                  Mark as discontinued
+                  {t("markDiscontinued")}
                 </Label>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="launch_date">Launch Date</Label>
+                  <Label htmlFor="launch_date">{t("launchDate")}</Label>
                   <Input
                     id="launch_date"
                     type="date"
@@ -470,7 +486,7 @@ export default function EditMedicinePage() {
 
                 {watchIsDiscontinued && (
                   <div>
-                    <Label htmlFor="discontinuation_date">Discontinuation Date</Label>
+                    <Label htmlFor="discontinuation_date">{t("discontinuationDate")}</Label>
                     <Input
                       id="discontinuation_date"
                       type="date"
@@ -481,11 +497,11 @@ export default function EditMedicinePage() {
               </div>
 
               <div>
-                <Label htmlFor="ndhm_code">NDHM Code (Optional)</Label>
+                <Label htmlFor="ndhm_code">{t("ndhmCode")}</Label>
                 <Input
                   id="ndhm_code"
                   {...register("ndhm_code")}
-                  placeholder="ABDM integration code"
+                  placeholder={t("ndhmPlaceholder")}
                 />
               </div>
             </CardContent>
@@ -494,15 +510,15 @@ export default function EditMedicinePage() {
           {/* Composition */}
           <Card>
             <CardHeader>
-              <CardTitle>Salt Composition *</CardTitle>
+              <CardTitle>{t("compositionTitle")}</CardTitle>
               <CardDescription>
-                Modify salt compositions (changes will replace all existing compositions)
+                {t("compositionDescEdit")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Current compositions (read-only display) */}
               <div>
-                <Label className="text-sm text-muted-foreground">Current Composition:</Label>
+                <Label className="text-sm text-muted-foreground">{t("currentComposition")}</Label>
                 <p className="text-sm mt-1">{brand.salt_composition}</p>
               </div>
 
@@ -510,7 +526,7 @@ export default function EditMedicinePage() {
               <div className="space-y-2">
                 <div className="flex gap-2">
                   <div className="flex-1">
-                    <Label>Select Salt (type to search or create new)</Label>
+                    <Label>{t("selectSalt")}</Label>
                     <Autocomplete
                       options={(saltsData?.salts || []).map((salt: Salt) => ({
                         value: salt.salt_id,
@@ -522,22 +538,22 @@ export default function EditMedicinePage() {
                         setSelectedStrengthId("");
                       }}
                       onSearchChange={setSaltSearchQuery}
-                      placeholder="Type salt name (e.g., Paracetamol)..."
-                      emptyText="No salts found."
+                      placeholder={t("saltPlaceholder")}
+                      emptyText={t("noSalts")}
                       allowCreate={true}
                       onCreateNew={handleCreateSalt}
                     />
                   </div>
 
                   <div className="flex-1">
-                    <Label>Select Strength</Label>
+                    <Label>{t("selectStrength")}</Label>
                     <Select
                       value={selectedStrengthId}
                       onValueChange={setSelectedStrengthId}
                       disabled={!selectedSaltId}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder={!selectedSaltId ? "Select salt first" : "Select strength"} />
+                        <SelectValue placeholder={!selectedSaltId ? t("selectSaltFirst") : t("selectStrengthPlaceholder")} />
                       </SelectTrigger>
                       <SelectContent>
                         {saltStrengths.map((strength: SaltStrength) => (
@@ -559,7 +575,7 @@ export default function EditMedicinePage() {
                       disabled={!selectedSaltId || !selectedStrengthId}
                     >
                       <Plus className="h-4 w-4 mr-2" />
-                      Add
+                      {t("add")}
                     </Button>
                   </div>
                 </div>
@@ -569,7 +585,7 @@ export default function EditMedicinePage() {
               {compositions.length > 0 && (
                 <div className="space-y-2">
                   <Label className="text-sm text-muted-foreground">
-                    New Composition (will replace current):
+                    {t("newComposition")}
                   </Label>
                   {compositions.map((comp) => (
                     <div
@@ -612,13 +628,13 @@ export default function EditMedicinePage() {
               onClick={() => router.push("/admin/medicines")}
               disabled={updateMutation.isPending}
             >
-              Cancel
+              {tCommon("cancel")}
             </Button>
             <Button type="submit" disabled={updateMutation.isPending}>
               {updateMutation.isPending && (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               )}
-              Update Brand
+              {t("updateBrand")}
             </Button>
           </div>
         </div>

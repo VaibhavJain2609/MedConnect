@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useTranslations } from "next-intl";
 import {
   ColumnDef,
   flexRender,
@@ -82,13 +83,14 @@ export function DataTable<TData, TValue>({
   data,
   pageSize = 10,
   searchColumn,
-  searchPlaceholder = "Search...",
+  searchPlaceholder,
   className,
   hidePagination = false,
   enableRowSelection = false,
   onSelectionChange,
   emptyState,
 }: DataTableProps<TData, TValue>) {
+  const t = useTranslations("dataTable");
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
     []
@@ -110,19 +112,19 @@ export function DataTable<TData, TValue>({
           onCheckedChange={(value) =>
             table.toggleAllPageRowsSelected(!!value)
           }
-          aria-label="Select all rows"
+          aria-label={t("selectAllRows")}
         />
       ),
       cell: ({ row }) => (
         <Checkbox
           checked={row.getIsSelected()}
           onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label="Select row"
+          aria-label={t("selectRow")}
         />
       ),
     };
     return [selectionColumn, ...columns];
-  }, [columns, enableRowSelection]);
+  }, [columns, enableRowSelection, t]);
 
   // TanStack Table is a known React Compiler-incompatible library: the table
   // instance intentionally returns unmemoizable functions, so this component
@@ -169,7 +171,7 @@ export function DataTable<TData, TValue>({
         <div className="flex items-center">
           <input
             type="text"
-            placeholder={searchPlaceholder}
+            placeholder={searchPlaceholder ?? t("searchPlaceholder")}
             value={
               (table.getColumn(searchColumn)?.getFilterValue() as string) ?? ""
             }
@@ -239,8 +241,8 @@ export function DataTable<TData, TValue>({
                     {emptyState ?? (
                       <EmptyState
                         icon={SearchX}
-                        title="No results found"
-                        description="Try adjusting your search or filters."
+                        title={t("emptyTitle")}
+                        description={t("emptyDescription")}
                         className="py-4"
                       />
                     )}
@@ -256,25 +258,18 @@ export function DataTable<TData, TValue>({
       {!hidePagination && (
       <div className="flex items-center justify-between px-2">
         <div className="text-sm text-dreams-textSecondary">
-          Showing{" "}
-          <span className="font-medium">
-            {table.getState().pagination.pageIndex *
-              table.getState().pagination.pageSize +
-              1}
-          </span>{" "}
-          to{" "}
-          <span className="font-medium">
-            {Math.min(
+          {t("showingRange", {
+            start:
+              table.getState().pagination.pageIndex *
+                table.getState().pagination.pageSize +
+              1,
+            end: Math.min(
               (table.getState().pagination.pageIndex + 1) *
                 table.getState().pagination.pageSize,
               table.getFilteredRowModel().rows.length
-            )}
-          </span>{" "}
-          of{" "}
-          <span className="font-medium">
-            {table.getFilteredRowModel().rows.length}
-          </span>{" "}
-          results
+            ),
+            total: table.getFilteredRowModel().rows.length,
+          })}
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -285,11 +280,10 @@ export function DataTable<TData, TValue>({
             <ChevronLeft className="h-4 w-4" />
           </button>
           <span className="text-sm text-dreams-textSecondary">
-            Page{" "}
-            <span className="font-medium">
-              {table.getState().pagination.pageIndex + 1}
-            </span>{" "}
-            of <span className="font-medium">{table.getPageCount()}</span>
+            {t("pageOf", {
+              page: table.getState().pagination.pageIndex + 1,
+              totalPages: table.getPageCount(),
+            })}
           </span>
           <button
             onClick={() => table.nextPage()}
@@ -329,6 +323,8 @@ export function DataTableColumnHeader<TData, TValue>({
   title,
   className,
 }: DataTableColumnHeaderProps<TData, TValue>) {
+  const t = useTranslations("dataTable");
+
   if (!column.getCanSort()) {
     return <div className={cn(className)}>{title}</div>;
   }
@@ -343,7 +339,7 @@ export function DataTableColumnHeader<TData, TValue>({
         className
       )}
       onClick={() => column.toggleSorting(sorted === "asc")}
-      aria-label={`Sort by ${title}`}
+      aria-label={t("sortBy", { title })}
     >
       {title}
       {sorted === "asc" ? (

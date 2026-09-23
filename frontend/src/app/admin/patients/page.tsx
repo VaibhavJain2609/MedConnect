@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ColumnDef } from "@tanstack/react-table";
 import { Plus, Search } from "lucide-react";
@@ -32,6 +33,8 @@ function CreatePatientModal({
   onSuccess,
   clinicId,
 }: CreatePatientModalProps) {
+  const t = useTranslations("adminPatients.createModal");
+  const tCommon = useTranslations("common");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -68,7 +71,7 @@ function CreatePatientModal({
       const message =
         err instanceof Error
           ? err.message
-          : "Failed to create patient. Please try again.";
+          : t("errorGeneric");
       setError(message);
     } finally {
       setLoading(false);
@@ -90,7 +93,7 @@ function CreatePatientModal({
           onClick={(e) => e.stopPropagation()}
         >
           <h2 className="text-lg font-semibold text-dreams-textPrimary">
-            New Patient
+            {t("title")}
           </h2>
 
           {error && (
@@ -102,40 +105,40 @@ function CreatePatientModal({
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-dreams-textPrimary mb-1">
-                Full Name <span className="text-red-500">*</span>
+                {t("fullName")} <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 required
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="Enter full name"
+                placeholder={t("fullNamePlaceholder")}
                 className="w-full h-10 px-3 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-dreams-textPrimary mb-1">
-                Phone
+                {t("phone")}
               </label>
               <input
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                placeholder="Enter phone number"
+                placeholder={t("phonePlaceholder")}
                 className="w-full h-10 px-3 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-dreams-textPrimary mb-1">
-                Email
+                {t("email")}
               </label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter email address"
+                placeholder={t("emailPlaceholder")}
                 className="w-full h-10 px-3 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
               />
             </div>
@@ -147,7 +150,7 @@ function CreatePatientModal({
                 disabled={loading}
                 className="px-4 py-2 text-sm font-medium text-dreams-textSecondary border border-dreams-border rounded-lg hover:bg-dreams-lightBg transition-colors disabled:opacity-50"
               >
-                Cancel
+                {tCommon("cancel")}
               </button>
               <button
                 type="submit"
@@ -157,10 +160,10 @@ function CreatePatientModal({
                 {loading ? (
                   <>
                     <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                    Creating...
+                    {t("creating")}
                   </>
                 ) : (
-                  "Create Patient"
+                  t("submit")
                 )}
               </button>
             </div>
@@ -176,6 +179,9 @@ function CreatePatientModal({
 // ---------------------------------------------------------------------------
 
 export default function AdminPatientsPage() {
+  const t = useTranslations("adminPatients");
+  const tCommon = useTranslations("common");
+  const tPagination = useTranslations("pagination");
   const [viewMode, setViewMode] = useViewMode("admin-patients-view", "grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -208,7 +214,7 @@ export default function AdminPatientsPage() {
     {
       accessorKey: "id",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Patient ID" />
+        <DataTableColumnHeader column={column} title={t("table.patientId")} />
       ),
       cell: ({ row }) => (
         <span className="font-medium text-dreams-blue">
@@ -219,7 +225,7 @@ export default function AdminPatientsPage() {
     {
       accessorKey: "name",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Patient Name" />
+        <DataTableColumnHeader column={column} title={t("table.patientName")} />
       ),
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
@@ -235,7 +241,7 @@ export default function AdminPatientsPage() {
     {
       accessorKey: "status",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Status" />
+        <DataTableColumnHeader column={column} title={t("table.status")} />
       ),
       cell: ({ row }) => (
         <Badge variant={row.getValue("status")}>
@@ -246,25 +252,25 @@ export default function AdminPatientsPage() {
     {
       accessorKey: "lastVisit",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Last Visit" />
+        <DataTableColumnHeader column={column} title={t("table.lastVisit")} />
       ),
     },
     {
       accessorKey: "gender",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Gender" />
+        <DataTableColumnHeader column={column} title={t("table.gender")} />
       ),
     },
     {
       accessorKey: "doctor",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Doctor" />
+        <DataTableColumnHeader column={column} title={t("table.doctor")} />
       ),
     },
     {
       accessorKey: "department",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Department" />
+        <DataTableColumnHeader column={column} title={t("table.department")} />
       ),
     },
     {
@@ -275,7 +281,7 @@ export default function AdminPatientsPage() {
           onClick={() => setSelectedPatientId(row.original.id)}
           className="px-3 py-1.5 text-xs font-medium text-dreams-blue border border-dreams-blue rounded-md hover:bg-blue-50 transition-colors"
         >
-          View Profile
+          {t("viewProfile")}
         </button>
       ),
     },
@@ -292,9 +298,9 @@ export default function AdminPatientsPage() {
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center py-12 space-y-4">
-        <p className="text-red-600 font-medium">Failed to load patients</p>
+        <p className="text-red-600 font-medium">{t("loadError")}</p>
         <p className="text-dreams-textSecondary text-sm">
-          {error instanceof Error ? error.message : "An error occurred"}
+          {error instanceof Error ? error.message : tCommon("errorGeneric")}
         </p>
       </div>
     );
@@ -303,16 +309,16 @@ export default function AdminPatientsPage() {
   return (
     <div className="space-y-6">
       {/* Breadcrumb */}
-      <Breadcrumb items={[{ label: "Patients" }]} />
+      <Breadcrumb items={[{ label: t("breadcrumb") }]} />
 
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-dreams-textPrimary">
-            Patients
+            {t("title")}
           </h1>
           <p className="text-dreams-textSecondary mt-1">
-            Manage patient records and information
+            {t("subtitle")}
           </p>
         </div>
 
@@ -323,7 +329,7 @@ export default function AdminPatientsPage() {
             className="flex items-center gap-2 px-4 py-2 bg-dreams-blue text-white rounded-lg hover:opacity-90 transition-opacity"
           >
             <Plus className="h-5 w-5" />
-            <span>New Patient</span>
+            <span>{t("newPatient")}</span>
           </button>
         </div>
       </div>
@@ -335,7 +341,7 @@ export default function AdminPatientsPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Search by name or ID..."
+            placeholder={t("searchPlaceholder")}
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
@@ -354,10 +360,10 @@ export default function AdminPatientsPage() {
           }}
           className="h-10 px-4 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
         >
-          <option value="all">All Status</option>
-          <option value="inProgress">In Patient</option>
-          <option value="completed">Out Patient</option>
-          <option value="pending">Scheduled</option>
+          <option value="all">{t("filters.allStatus")}</option>
+          <option value="inProgress">{t("filters.inPatient")}</option>
+          <option value="completed">{t("filters.outPatient")}</option>
+          <option value="pending">{t("filters.scheduled")}</option>
         </select>
       </div>
 
@@ -374,17 +380,17 @@ export default function AdminPatientsPage() {
                 status={patient.status}
                 statusLabel={patient.statusLabel}
                 infoItems={[
-                  { label: "Last Visit", value: patient.lastVisit },
-                  { label: "Gender", value: patient.gender },
-                  { label: "Location", value: patient.location },
+                  { label: t("fields.lastVisit"), value: patient.lastVisit },
+                  { label: t("fields.gender"), value: patient.gender },
+                  { label: t("fields.location"), value: patient.location },
                 ]}
                 onCtaClick={() => setSelectedPatientId(patient.id)}
-                ctaLabel="View Profile"
+                ctaLabel={t("viewProfile")}
               />
             ))
           ) : (
             <div className="col-span-full text-center py-12">
-              <p className="text-dreams-textSecondary">No patients found</p>
+              <p className="text-dreams-textSecondary">{t("empty")}</p>
             </div>
           )}
         </div>
@@ -404,7 +410,8 @@ export default function AdminPatientsPage() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-dreams-textSecondary">
-            Page {page} of {totalPages} · {data?.total ?? 0} patients
+            {tPagination("pageOf", { page, totalPages })}{" "}
+            {t("patientsSuffix", { count: data?.total ?? 0 })}
           </p>
           <div className="flex gap-2">
             <button
@@ -412,14 +419,14 @@ export default function AdminPatientsPage() {
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               className="px-4 py-2 text-sm rounded-lg border border-dreams-border bg-white disabled:opacity-40 hover:bg-dreams-lightBg transition-colors"
             >
-              Previous
+              {tPagination("previous")}
             </button>
             <button
               disabled={page >= totalPages}
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               className="px-4 py-2 text-sm rounded-lg border border-dreams-border bg-white disabled:opacity-40 hover:bg-dreams-lightBg transition-colors"
             >
-              Next
+              {tPagination("next")}
             </button>
           </div>
         </div>

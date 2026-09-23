@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { AlertTriangle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -20,14 +21,15 @@ import { Skeleton } from "@/components/ui/skeleton";
  * content block) used across portal pages.
  */
 export function RouteLoading() {
+  const t = useTranslations("routeBoundaries");
   return (
     <div
       className="space-y-6 p-6"
       role="status"
       aria-busy="true"
-      aria-label="Loading page"
+      aria-label={t("loadingAria")}
     >
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("loading")}</span>
       <Skeleton className="h-8 w-56" />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
@@ -55,8 +57,9 @@ export function RouteError({
   error,
   reset,
   homeHref = "/",
-  homeLabel = "Go home",
+  homeLabel,
 }: RouteErrorProps) {
+  const t = useTranslations("routeBoundaries");
   useEffect(() => {
     console.error("Route error:", error);
   }, [error]);
@@ -69,10 +72,10 @@ export function RouteError({
         </div>
         <div className="space-y-2">
           <h2 className="text-xl font-bold text-dreams-textPrimary">
-            Something went wrong
+            {t("errorTitle")}
           </h2>
           <p className="text-sm text-dreams-textSecondary">
-            An error occurred while loading this page.
+            {t("errorDesc")}
           </p>
         </div>
 
@@ -84,14 +87,14 @@ export function RouteError({
 
         <div className="flex gap-3">
           <Button onClick={reset} className="flex-1">
-            Try again
+            {t("tryAgain")}
           </Button>
           <Button
             variant="outline"
             className="flex-1"
             onClick={() => (window.location.href = homeHref)}
           >
-            {homeLabel}
+            {homeLabel ?? t("goHome")}
           </Button>
         </div>
       </div>

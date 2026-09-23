@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -33,24 +34,26 @@ import {
   type BrandCompositionInput,
 } from "@/lib/api/medicines-emr";
 
-// Form validation schema
-const formSchema = z.object({
-  brand_name: z.string().min(1, "Brand name is required").max(255),
-  manufacturer_id: z.string().uuid("Please select a manufacturer"),
+// Form validation schema shape (messages are translated inside the component)
+const formSchemaShape = {
+  brand_name: z.string().min(1).max(255),
+  manufacturer_id: z.string().uuid(),
   drug_type: z.enum(["allopathy", "ayurveda", "homeopathy"]),
   is_discontinued: z.boolean().default(false),
   launch_date: z.string().optional(),
   discontinuation_date: z.string().optional(),
   ndhm_code: z.string().max(50).optional(),
-  compositions: z.array(
-    z.object({
-      salt_strength_id: z.string().uuid(),
-      sequence: z.number().int().positive(),
-    })
-  ).min(1, "At least one composition is required"),
-});
+  compositions: z
+    .array(
+      z.object({
+        salt_strength_id: z.string().uuid(),
+        sequence: z.number().int().positive(),
+      })
+    )
+    .min(1),
+};
 
-type FormData = z.infer<typeof formSchema>;
+type FormData = z.infer<z.ZodObject<typeof formSchemaShape>>;
 
 interface CompositionEntry {
   id: string; // Temporary ID for UI list management
@@ -62,8 +65,22 @@ interface CompositionEntry {
 }
 
 export default function AddMedicinePage() {
+  const t = useTranslations("adminMedicines.form");
+  const tCommon = useTranslations("common");
   const router = useRouter();
   const { toast } = useToast();
+  const formSchema = useMemo(
+    () =>
+      z.object({
+        ...formSchemaShape,
+        brand_name: z.string().min(1, t("brandNameRequired")).max(255),
+        manufacturer_id: z.string().uuid(t("manufacturerRequired")),
+        compositions: z
+          .array(formSchemaShape.compositions.element)
+          .min(1, t("compositionRequired")),
+      }),
+    [t]
+  );
   const [compositions, setCompositions] = useState<CompositionEntry[]>([]);
   const [selectedSaltId, setSelectedSaltId] = useState<string>("");
   const [selectedSaltName, setSelectedSaltName] = useState<string>("");
@@ -120,14 +137,14 @@ export default function AddMedicinePage() {
     },
     onSuccess: () => {
       toast({
-        title: "Success",
-        description: "Brand created successfully",
+        title: t("successTitle"),
+        description: t("brandCreated"),
       });
       router.push("/admin/medicines");
     },
     onError: (error: Error) => {
       toast({
-        title: "Error",
+        title: t("errorTitle"),
         description: error.message,
         variant: "destructive",
       });
@@ -141,8 +158,8 @@ export default function AddMedicinePage() {
     setNewManufacturerName(manufacturerName);
     setValue("manufacturer_id", tempId);
     toast({
-      title: "Manufacturer Added",
-      description: `"${manufacturerName}" will be created when you save the brand`,
+      title: t("manufacturerAddedTitle"),
+      description: t("manufacturerAddedDesc", { name: manufacturerName }),
     });
   };
 
@@ -154,8 +171,8 @@ export default function AddMedicinePage() {
     setSelectedSaltName(saltName);
     setSelectedStrengthId("");
     toast({
-      title: "Salt Added",
-      description: `"${saltName}" will be created when you save the brand`,
+      title: t("saltAddedTitle"),
+      description: t("saltAddedDesc", { name: saltName }),
     });
   };
 
@@ -163,8 +180,8 @@ export default function AddMedicinePage() {
   const handleAddComposition = () => {
     if (!selectedSaltId || !selectedStrengthId) {
       toast({
-        title: "Validation Error",
-        description: "Please select both salt and strength",
+        title: t("validationError"),
+        description: t("selectBoth"),
         variant: "destructive",
       });
       return;
@@ -220,8 +237,8 @@ export default function AddMedicinePage() {
   const onSubmit = (data: FormData) => {
     if (compositions.length === 0) {
       toast({
-        title: "Validation Error",
-        description: "Please add at least one composition",
+        title: t("validationError"),
+        description: t("addOneComposition"),
         variant: "destructive",
       });
       return;
@@ -239,11 +256,11 @@ export default function AddMedicinePage() {
           className="mb-4"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Medicines
+          {t("backToMedicines")}
         </Button>
-        <h1 className="text-3xl font-bold">Add New Medicine</h1>
+        <h1 className="text-3xl font-bold">{t("newTitle")}</h1>
         <p className="text-muted-foreground mt-2">
-          Create a new brand (commercial medicine) in the database
+          {t("newSubtitle")}
         </p>
       </div>
 
@@ -252,16 +269,16 @@ export default function AddMedicinePage() {
           {/* Basic Information */}
           <Card>
             <CardHeader>
-              <CardTitle>Basic Information</CardTitle>
-              <CardDescription>Enter the brand details</CardDescription>
+              <CardTitle>{t("basicInfo")}</CardTitle>
+              <CardDescription>{t("basicInfoDescNew")}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label htmlFor="brand_name">Brand Name *</Label>
+                <Label htmlFor="brand_name">{t("brandName")}</Label>
                 <Input
                   id="brand_name"
                   {...register("brand_name")}
-                  placeholder="e.g., Crocin 500"
+                  placeholder={t("brandNamePlaceholder")}
                 />
                 {errors.brand_name && (
                   <p className="text-sm text-destructive mt-1">{errors.brand_name.message}</p>
@@ -269,7 +286,7 @@ export default function AddMedicinePage() {
               </div>
 
               <div>
-                <Label htmlFor="manufacturer_id">Manufacturer * (type to search or create new)</Label>
+                <Label htmlFor="manufacturer_id">{t("manufacturerNew")}</Label>
                 <Autocomplete
                   options={manufacturers.map((m: Manufacturer) => ({
                     value: m.manufacturer_id,
@@ -278,8 +295,8 @@ export default function AddMedicinePage() {
                   value={watchManufacturerId}
                   onValueChange={(value) => setValue("manufacturer_id", value)}
                   onSearchChange={setManufacturerSearchQuery}
-                  placeholder="Type manufacturer name..."
-                  emptyText="No manufacturers found."
+                  placeholder={t("manufacturerPlaceholder")}
+                  emptyText={t("noManufacturers")}
                   allowCreate={true}
                   onCreateNew={handleCreateManufacturer}
                 />
@@ -291,7 +308,7 @@ export default function AddMedicinePage() {
               </div>
 
               <div>
-                <Label htmlFor="drug_type">Drug Type *</Label>
+                <Label htmlFor="drug_type">{t("drugType")}</Label>
                 <Select
                   value={watchDrugType}
                   onValueChange={(value: "allopathy" | "ayurveda" | "homeopathy") =>
@@ -302,9 +319,9 @@ export default function AddMedicinePage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="allopathy">Allopathy</SelectItem>
-                    <SelectItem value="ayurveda">Ayurveda</SelectItem>
-                    <SelectItem value="homeopathy">Homeopathy</SelectItem>
+                    <SelectItem value="allopathy">{t("drugTypes.allopathy")}</SelectItem>
+                    <SelectItem value="ayurveda">{t("drugTypes.ayurveda")}</SelectItem>
+                    <SelectItem value="homeopathy">{t("drugTypes.homeopathy")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -318,13 +335,13 @@ export default function AddMedicinePage() {
                   }
                 />
                 <Label htmlFor="is_discontinued" className="font-normal cursor-pointer">
-                  Mark as discontinued
+                  {t("markDiscontinued")}
                 </Label>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="launch_date">Launch Date</Label>
+                  <Label htmlFor="launch_date">{t("launchDate")}</Label>
                   <Input
                     id="launch_date"
                     type="date"
@@ -334,7 +351,7 @@ export default function AddMedicinePage() {
 
                 {watchIsDiscontinued && (
                   <div>
-                    <Label htmlFor="discontinuation_date">Discontinuation Date</Label>
+                    <Label htmlFor="discontinuation_date">{t("discontinuationDate")}</Label>
                     <Input
                       id="discontinuation_date"
                       type="date"
@@ -345,11 +362,11 @@ export default function AddMedicinePage() {
               </div>
 
               <div>
-                <Label htmlFor="ndhm_code">NDHM Code (Optional)</Label>
+                <Label htmlFor="ndhm_code">{t("ndhmCode")}</Label>
                 <Input
                   id="ndhm_code"
                   {...register("ndhm_code")}
-                  placeholder="ABDM integration code"
+                  placeholder={t("ndhmPlaceholder")}
                 />
               </div>
             </CardContent>
@@ -358,9 +375,9 @@ export default function AddMedicinePage() {
           {/* Composition */}
           <Card>
             <CardHeader>
-              <CardTitle>Salt Composition *</CardTitle>
+              <CardTitle>{t("compositionTitle")}</CardTitle>
               <CardDescription>
-                Add one or more salt strengths (for combination drugs)
+                {t("compositionDescNew")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -368,7 +385,7 @@ export default function AddMedicinePage() {
               <div className="space-y-2">
                 <div className="flex gap-2">
                   <div className="flex-1">
-                    <Label>Select Salt (type to search or create new)</Label>
+                    <Label>{t("selectSalt")}</Label>
                     <Autocomplete
                       options={(saltsData?.salts || []).map((salt: Salt) => ({
                         value: salt.salt_id,
@@ -380,22 +397,22 @@ export default function AddMedicinePage() {
                         setSelectedStrengthId("");
                       }}
                       onSearchChange={setSaltSearchQuery}
-                      placeholder="Type salt name (e.g., Paracetamol)..."
-                      emptyText="No salts found."
+                      placeholder={t("saltPlaceholder")}
+                      emptyText={t("noSalts")}
                       allowCreate={true}
                       onCreateNew={handleCreateSalt}
                     />
                   </div>
 
                   <div className="flex-1">
-                    <Label>Select Strength</Label>
+                    <Label>{t("selectStrength")}</Label>
                     <Select
                       value={selectedStrengthId}
                       onValueChange={setSelectedStrengthId}
                       disabled={!selectedSaltId}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder={!selectedSaltId ? "Select salt first" : "Select strength"} />
+                        <SelectValue placeholder={!selectedSaltId ? t("selectSaltFirst") : t("selectStrengthPlaceholder")} />
                       </SelectTrigger>
                       <SelectContent>
                         {saltStrengths.map((strength: SaltStrength) => (
@@ -414,7 +431,7 @@ export default function AddMedicinePage() {
                       disabled={!selectedSaltId || !selectedStrengthId}
                     >
                       <Plus className="h-4 w-4 mr-2" />
-                      Add
+                      {t("add")}
                     </Button>
                   </div>
                 </div>
@@ -464,13 +481,13 @@ export default function AddMedicinePage() {
               onClick={() => router.push("/admin/medicines")}
               disabled={createMutation.isPending}
             >
-              Cancel
+              {tCommon("cancel")}
             </Button>
             <Button type="submit" disabled={createMutation.isPending}>
               {createMutation.isPending && (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               )}
-              Create Brand
+              {t("createBrand")}
             </Button>
           </div>
         </div>

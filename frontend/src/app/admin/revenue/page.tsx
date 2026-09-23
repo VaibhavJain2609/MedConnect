@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
@@ -43,6 +44,8 @@ function formatINR(amount: string | number): string {
 }
 
 export default function RevenuePage() {
+  const t = useTranslations("adminRevenue");
+  const tNav = useTranslations("nav");
   const queryClient = useQueryClient();
   const today = new Date();
   const todayStr = today.toISOString().split("T")[0];
@@ -85,7 +88,7 @@ export default function RevenuePage() {
       await queryClient.invalidateQueries({ queryKey: ["revenue-daily"] });
       await queryClient.invalidateQueries({ queryKey: ["revenue-monthly"] });
     } catch {
-      alert("Failed to mark as paid.");
+      alert(t("markPaidError"));
     } finally {
       setMarkingPaid(null);
     }
@@ -95,17 +98,17 @@ export default function RevenuePage() {
 
   return (
     <div className="space-y-6">
-      <Breadcrumb items={[{ label: "Dashboard", href: "/admin/dashboard" }, { label: "Revenue" }]} />
+      <Breadcrumb items={[{ label: tNav("adminDashboard"), href: "/admin/dashboard" }, { label: tNav("adminRevenue") }]} />
 
       <div>
-        <h1 className="text-3xl font-bold text-dreams-textPrimary">Revenue</h1>
-        <p className="text-dreams-textSecondary mt-1">Billing and revenue overview</p>
+        <h1 className="text-3xl font-bold text-dreams-textPrimary">{tNav("adminRevenue")}</h1>
+        <p className="text-dreams-textSecondary mt-1">{t("subtitle")}</p>
       </div>
 
       {/* Summary cards */}
       <div className="grid gap-4 md:grid-cols-3">
         <div className="bg-white rounded-lg shadow-card p-6">
-          <p className="text-sm text-dreams-textSecondary">Today&apos;s Revenue</p>
+          <p className="text-sm text-dreams-textSecondary">{t("todaysRevenue")}</p>
           {loadingDaily ? (
             <div className="h-8 w-24 bg-gray-100 animate-pulse rounded mt-2" />
           ) : (
@@ -114,7 +117,7 @@ export default function RevenuePage() {
                 {formatINR(daily?.total_paid ?? "0")}
               </p>
               <p className="text-sm text-dreams-textSecondary mt-1">
-                {daily?.bill_count ?? 0} bill{(daily?.bill_count ?? 0) !== 1 ? "s" : ""}
+                {t("bills", { count: daily?.bill_count ?? 0 })}
               </p>
             </>
           )}
@@ -130,14 +133,14 @@ export default function RevenuePage() {
                 {formatINR(monthly?.total_paid ?? "0")}
               </p>
               <p className="text-sm text-dreams-textSecondary mt-1">
-                {monthly?.bill_count ?? 0} bill{(monthly?.bill_count ?? 0) !== 1 ? "s" : ""}
+                {t("bills", { count: monthly?.bill_count ?? 0 })}
               </p>
             </>
           )}
         </div>
 
         <div className="bg-white rounded-lg shadow-card p-6">
-          <p className="text-sm text-dreams-textSecondary">Outstanding</p>
+          <p className="text-sm text-dreams-textSecondary">{t("outstanding")}</p>
           {loadingUnpaid ? (
             <div className="h-8 w-24 bg-gray-100 animate-pulse rounded mt-2" />
           ) : (
@@ -146,7 +149,7 @@ export default function RevenuePage() {
                 {formatINR(unpaid?.total_unpaid_amount ?? "0")}
               </p>
               <p className="text-sm text-dreams-textSecondary mt-1">
-                {unpaid?.total ?? 0} pending invoice{(unpaid?.total ?? 0) !== 1 ? "s" : ""}
+                {t("pendingInvoices", { count: unpaid?.total ?? 0 })}
               </p>
             </>
           )}
@@ -156,7 +159,7 @@ export default function RevenuePage() {
       {/* Monthly breakdown */}
       <div className="bg-white rounded-lg shadow-card">
         <div className="px-6 py-4 border-b border-dreams-border">
-          <h2 className="text-lg font-semibold text-dreams-textPrimary">Daily Breakdown — {monthName}</h2>
+          <h2 className="text-lg font-semibold text-dreams-textPrimary">{t("breakdownTitle", { month: monthName })}</h2>
         </div>
         <div className="p-6">
           {loadingMonthly ? (
@@ -166,14 +169,14 @@ export default function RevenuePage() {
               ))}
             </div>
           ) : monthly?.daily_breakdown?.length === 0 ? (
-            <p className="text-dreams-textSecondary text-center py-8">No paid bills this month yet.</p>
+            <p className="text-dreams-textSecondary text-center py-8">{t("emptyMonth")}</p>
           ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-dreams-border">
-                  <th className="text-left py-2 pr-4 text-dreams-textSecondary font-medium">Date</th>
-                  <th className="text-right py-2 pr-4 text-dreams-textSecondary font-medium">Bills</th>
-                  <th className="text-right py-2 text-dreams-textSecondary font-medium">Revenue</th>
+                  <th className="text-left py-2 pr-4 text-dreams-textSecondary font-medium">{t("colDate")}</th>
+                  <th className="text-right py-2 pr-4 text-dreams-textSecondary font-medium">{t("colBills")}</th>
+                  <th className="text-right py-2 text-dreams-textSecondary font-medium">{t("colRevenue")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -195,7 +198,7 @@ export default function RevenuePage() {
       {/* Unpaid invoices */}
       <div className="bg-white rounded-lg shadow-card">
         <div className="px-6 py-4 border-b border-dreams-border">
-          <h2 className="text-lg font-semibold text-dreams-textPrimary">Unpaid Invoices</h2>
+          <h2 className="text-lg font-semibold text-dreams-textPrimary">{t("unpaidTitle")}</h2>
         </div>
         <div className="p-6">
           {loadingUnpaid ? (
@@ -205,16 +208,16 @@ export default function RevenuePage() {
               ))}
             </div>
           ) : unpaid?.data?.length === 0 ? (
-            <p className="text-dreams-textSecondary text-center py-8">No unpaid invoices. 🎉</p>
+            <p className="text-dreams-textSecondary text-center py-8">{t("emptyUnpaid")}</p>
           ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-dreams-border">
-                  <th className="text-left py-2 pr-4 text-dreams-textSecondary font-medium">Patient</th>
-                  <th className="text-left py-2 pr-4 text-dreams-textSecondary font-medium">Clinic</th>
-                  <th className="text-right py-2 pr-4 text-dreams-textSecondary font-medium">Amount</th>
-                  <th className="text-right py-2 pr-4 text-dreams-textSecondary font-medium">Date</th>
-                  <th className="text-right py-2 text-dreams-textSecondary font-medium">Action</th>
+                  <th className="text-left py-2 pr-4 text-dreams-textSecondary font-medium">{t("colPatient")}</th>
+                  <th className="text-left py-2 pr-4 text-dreams-textSecondary font-medium">{t("colClinic")}</th>
+                  <th className="text-right py-2 pr-4 text-dreams-textSecondary font-medium">{t("colAmount")}</th>
+                  <th className="text-right py-2 pr-4 text-dreams-textSecondary font-medium">{t("colDate")}</th>
+                  <th className="text-right py-2 text-dreams-textSecondary font-medium">{t("colAction")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -232,7 +235,7 @@ export default function RevenuePage() {
                         disabled={markingPaid === bill.id}
                         className="px-3 py-1 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
                       >
-                        {markingPaid === bill.id ? "Saving…" : "Mark Paid"}
+                        {markingPaid === bill.id ? t("saving") : t("markPaid")}
                       </button>
                     </td>
                   </tr>

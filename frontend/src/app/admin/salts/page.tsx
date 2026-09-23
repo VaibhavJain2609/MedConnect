@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Search, Plus, Trash2, Edit, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,9 @@ import {
 } from "@/lib/api/medicines-emr";
 
 export default function AdminSaltsPage() {
+  const t = useTranslations("adminSalts");
+  const tCommon = useTranslations("common");
+  const tPagination = useTranslations("pagination");
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
@@ -77,11 +81,11 @@ export default function AdminSaltsPage() {
       queryClient.invalidateQueries({ queryKey: ["admin-salts-list"] });
       setShowCreateDialog(false);
       resetForm();
-      toast({ title: "Salt created", description: "The salt was added successfully." });
+      toast({ title: t("toasts.created"), description: t("toasts.createdDesc") });
     },
     onError: (err) => {
       toast({
-        title: "Failed to create salt",
+        title: t("toasts.createFailed"),
         description: getApiErrorMessage(err),
         variant: "destructive",
       });
@@ -96,11 +100,11 @@ export default function AdminSaltsPage() {
       setShowEditDialog(false);
       setEditingSalt(null);
       resetForm();
-      toast({ title: "Salt updated" });
+      toast({ title: t("toasts.updated") });
     },
     onError: (err) => {
       toast({
-        title: "Failed to update salt",
+        title: t("toasts.updateFailed"),
         description: getApiErrorMessage(err),
         variant: "destructive",
       });
@@ -113,11 +117,11 @@ export default function AdminSaltsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-salts-list"] });
       setDeletingSalt(null);
-      toast({ title: "Salt deleted" });
+      toast({ title: t("toasts.deleted") });
     },
     onError: (err) => {
       toast({
-        title: "Failed to delete salt",
+        title: t("toasts.deleteFailed"),
         description: getApiErrorMessage(err),
         variant: "destructive",
       });
@@ -165,20 +169,20 @@ export default function AdminSaltsPage() {
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Salts Management</h1>
-          <p className="text-muted-foreground">Manage active pharmaceutical ingredients (APIs)</p>
+          <h1 className="text-3xl font-bold">{t("title")}</h1>
+          <p className="text-muted-foreground">{t("subtitle")}</p>
         </div>
         <Button onClick={() => setShowCreateDialog(true)}>
           <Plus className="h-4 w-4 mr-2" />
-          Add Salt
+          {t("addSalt")}
         </Button>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Salts List</CardTitle>
+          <CardTitle>{t("listTitle")}</CardTitle>
           <CardDescription>
-            {data?.total || 0} total salts
+            {t("totalCount", { count: data?.total || 0 })}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -187,7 +191,7 @@ export default function AdminSaltsPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search salts..."
+                placeholder={t("searchPlaceholder")}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
@@ -202,17 +206,17 @@ export default function AdminSaltsPage() {
             </div>
           ) : error ? (
             <div className="text-center py-8 text-destructive">
-              Error loading salts: {(error as Error).message}
+              {t("loadError", { message: (error as Error).message })}
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Salt Name</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Strengths</TableHead>
-                  <TableHead>Properties</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t("table.saltName")}</TableHead>
+                  <TableHead>{t("table.description")}</TableHead>
+                  <TableHead>{t("table.strengths")}</TableHead>
+                  <TableHead>{t("table.properties")}</TableHead>
+                  <TableHead className="text-right">{t("table.actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -223,8 +227,8 @@ export default function AdminSaltsPage() {
                     <TableCell>{salt.strengths?.length || 0}</TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        {salt.prescription_required && <Badge variant="outline">Rx</Badge>}
-                        {salt.habit_forming && <Badge variant="destructive">Habit</Badge>}
+                        {salt.prescription_required && <Badge variant="outline">{t("rxBadge")}</Badge>}
+                        {salt.habit_forming && <Badge variant="destructive">{t("habitBadge")}</Badge>}
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
@@ -255,15 +259,15 @@ export default function AdminSaltsPage() {
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page === 1}
               >
-                Previous
+                {tPagination("previous")}
               </Button>
-              <span>Page {page} of {data.pages}</span>
+              <span>{tPagination("pageOf", { page, totalPages: data.pages })}</span>
               <Button
                 variant="outline"
                 onClick={() => setPage(p => Math.min(data.pages, p + 1))}
                 disabled={page === data.pages}
               >
-                Next
+                {tPagination("next")}
               </Button>
             </div>
           )}
@@ -274,35 +278,35 @@ export default function AdminSaltsPage() {
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create New Salt</DialogTitle>
-            <DialogDescription>Add a new active pharmaceutical ingredient</DialogDescription>
+            <DialogTitle>{t("createDialog.title")}</DialogTitle>
+            <DialogDescription>{t("createDialog.desc")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
-              <Label htmlFor="salt_name">Salt Name *</Label>
+              <Label htmlFor="salt_name">{t("form.saltName")}</Label>
               <Input
                 id="salt_name"
                 value={formData.salt_name}
                 onChange={(e) => setFormData({ ...formData, salt_name: e.target.value })}
-                placeholder="e.g., Paracetamol"
+                placeholder={t("form.saltNamePlaceholder")}
               />
             </div>
             <div>
-              <Label htmlFor="description">Description</Label>
+              <Label htmlFor="description">{t("form.description")}</Label>
               <Textarea
                 id="description"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Optional description"
+                placeholder={t("form.descriptionPlaceholder")}
               />
             </div>
             <div>
-              <Label htmlFor="chemical_formula">Chemical Formula</Label>
+              <Label htmlFor="chemical_formula">{t("form.chemicalFormula")}</Label>
               <Input
                 id="chemical_formula"
                 value={formData.chemical_formula}
                 onChange={(e) => setFormData({ ...formData, chemical_formula: e.target.value })}
-                placeholder="e.g., C8H9NO2"
+                placeholder={t("form.formulaPlaceholder")}
               />
             </div>
             <div className="flex items-center space-x-2">
@@ -313,7 +317,7 @@ export default function AdminSaltsPage() {
                   setFormData({ ...formData, prescription_required: !!checked })
                 }
               />
-              <Label htmlFor="prescription_required">Prescription Required</Label>
+              <Label htmlFor="prescription_required">{t("form.prescriptionRequired")}</Label>
             </div>
             <div className="flex items-center space-x-2">
               <Checkbox
@@ -323,16 +327,16 @@ export default function AdminSaltsPage() {
                   setFormData({ ...formData, habit_forming: !!checked })
                 }
               />
-              <Label htmlFor="habit_forming">Habit Forming</Label>
+              <Label htmlFor="habit_forming">{t("form.habitForming")}</Label>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
-              Cancel
+              {tCommon("cancel")}
             </Button>
             <Button onClick={handleCreate} disabled={createMutation.isPending}>
               {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create
+              {t("create")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -342,12 +346,12 @@ export default function AdminSaltsPage() {
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Salt</DialogTitle>
-            <DialogDescription>Update salt information</DialogDescription>
+            <DialogTitle>{t("editDialog.title")}</DialogTitle>
+            <DialogDescription>{t("editDialog.desc")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
-              <Label htmlFor="edit_salt_name">Salt Name *</Label>
+              <Label htmlFor="edit_salt_name">{t("form.saltName")}</Label>
               <Input
                 id="edit_salt_name"
                 value={formData.salt_name}
@@ -355,7 +359,7 @@ export default function AdminSaltsPage() {
               />
             </div>
             <div>
-              <Label htmlFor="edit_description">Description</Label>
+              <Label htmlFor="edit_description">{t("form.description")}</Label>
               <Textarea
                 id="edit_description"
                 value={formData.description}
@@ -363,7 +367,7 @@ export default function AdminSaltsPage() {
               />
             </div>
             <div>
-              <Label htmlFor="edit_chemical_formula">Chemical Formula</Label>
+              <Label htmlFor="edit_chemical_formula">{t("form.chemicalFormula")}</Label>
               <Input
                 id="edit_chemical_formula"
                 value={formData.chemical_formula}
@@ -378,7 +382,7 @@ export default function AdminSaltsPage() {
                   setFormData({ ...formData, prescription_required: !!checked })
                 }
               />
-              <Label htmlFor="edit_prescription_required">Prescription Required</Label>
+              <Label htmlFor="edit_prescription_required">{t("form.prescriptionRequired")}</Label>
             </div>
             <div className="flex items-center space-x-2">
               <Checkbox
@@ -388,16 +392,16 @@ export default function AdminSaltsPage() {
                   setFormData({ ...formData, habit_forming: !!checked })
                 }
               />
-              <Label htmlFor="edit_habit_forming">Habit Forming</Label>
+              <Label htmlFor="edit_habit_forming">{t("form.habitForming")}</Label>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEditDialog(false)}>
-              Cancel
+              {tCommon("cancel")}
             </Button>
             <Button onClick={handleUpdate} disabled={updateMutation.isPending}>
               {updateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Update
+              {t("update")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -410,20 +414,19 @@ export default function AdminSaltsPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Salt</AlertDialogTitle>
+            <AlertDialogTitle>{t("deleteDialog.title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Delete salt &quot;{deletingSalt?.name}&quot;? This will fail if the salt
-              has any strengths.
+              {t("deleteDialog.desc", { name: deletingSalt?.name ?? "" })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{tCommon("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deletingSalt && deleteMutation.mutate(deletingSalt.id)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={deleteMutation.isPending}
             >
-              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+              {deleteMutation.isPending ? t("deleteDialog.deleting") : t("deleteDialog.confirm")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
