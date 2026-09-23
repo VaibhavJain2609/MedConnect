@@ -26,7 +26,7 @@ POSTGRES_USER ?= medconnect
 POSTGRES_PASSWORD ?= medconnect
 
 SERVICE ?=            # set SERVICE=backend (etc.) for per-service logs
-PYTEST ?= $(if $(wildcard backend/.venv/bin/pytest),backend/.venv/bin/pytest,pytest)
+PYTEST ?= $(if $(wildcard backend/.venv/bin/pytest),$(abspath backend/.venv/bin/pytest),pytest)
 # Backend interpreter for the OpenAPI export — the backend venv from
 # `make backend-install` if present, else system python3. Override: PY=...
 PY ?= $(if $(wildcard backend/.venv/bin/python),backend/.venv/bin/python,python3)
