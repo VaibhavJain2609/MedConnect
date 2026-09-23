@@ -53,6 +53,7 @@ from app.routers import encounters_pdf
 from app.routers import lab_results
 from app.routers import lab_orders
 from app.routers import family
+from app.routers import messages
 from app.routers.admin import visits as admin_visits
 from app.routers.admin import health as admin_health
 from app.routers.admin import catalog as admin_catalog
@@ -349,6 +350,7 @@ app.include_router(encounters_pdf.router)
 app.include_router(lab_results.router)
 app.include_router(lab_orders.router)
 app.include_router(family.router)
+app.include_router(messages.router)
 app.include_router(admin_visits.router)
 app.include_router(admin_health.router)
 app.include_router(admin_catalog.router, prefix="/api/v1")

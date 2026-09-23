@@ -25,6 +25,7 @@ import {
   Link2,
   RefreshCcw,
   Webhook,
+  MessageSquare,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
@@ -69,6 +70,7 @@ const navSections: NavSection[] = [
       { href: "/doctor/dashboard", labelKey: "doctorDashboard", icon: LayoutDashboard },
       { href: "/doctor/analytics", labelKey: "doctorAnalytics", icon: BarChart3, clinicalOnly: true },
       { href: "/doctor/appointments", labelKey: "appointments", icon: Calendar },
+      { href: "/doctor/messages", labelKey: "doctorMessages", icon: MessageSquare },
       { href: "/doctor/notifications", labelKey: "notifications", icon: Bell },
     ],
   },
