@@ -8,3 +8,42 @@
 # CVE-2024-XXXXX exp:2026-06-01
 # # Reason: <why this doesn't apply here — e.g. unused code path, patched
 # # upstream with no release yet, mitigated by network policy>
+
+# --- backend image (python:3.12.12-slim / debian 13.3), first real scan
+# 2026-09-28. All entries below are Debian-unfixed ("affected") OS-package
+# CVEs in tools the container never exercises: it runs a single uvicorn
+# process as non-root `app` behind the ALB+WAF — no logins, no suid mount
+# helpers, no systemd, no ncurses/perl runtime. Recheck after the next
+# python:3.12.x-slim base bump.
+
+CVE-2026-76642 exp:2026-10-28
+# util-linux family (bsdutils, libmount1, mount, login, ...): external mount
+# helper handling. Container performs no mounts; binaries unused.
+CVE-2026-78408 exp:2026-10-28
+# util-linux nsenter --join-cgroup root leak. Container joins no cgroups;
+# nsenter unused.
+CVE-2026-78409 exp:2026-10-28
+# util-linux X-mount.subdir detached-tree mount issue. No mounts performed.
+CVE-2026-78410 exp:2026-10-28
+# util-linux restricted bind-mount pinning. No mounts performed.
+CVE-2026-12064 exp:2026-10-28
+# curl/libcurl SSH host-verification bypass. curl only runs the container
+# HEALTHCHECK against http://localhost:8000/health — no SSH, no remote URLs.
+CVE-2026-8286 exp:2026-10-28
+# curl insecure connection establishment (TLS). Same localhost-only use.
+CVE-2026-8458 exp:2026-10-28
+# libcurl unauthorized connection reuse. Same localhost-only use.
+CVE-2026-8927 exp:2026-10-28
+# curl uncleared proxy credential disclosure. No proxy configured in image.
+CVE-2025-69720 exp:2026-10-28
+# ncurses buffer overflow (libncursesw6, libtinfo6, ncurses-base). ncurses is
+# not used by the app; present only as a debian base transitive dep.
+CVE-2026-16742 exp:2026-10-28
+# systemd-homed local privilege escalation (libsystemd0, libudev1). systemd
+# does not run inside the container.
+CVE-2026-9538 exp:2026-10-28
+# perl-Archive-Tar DoS (perl-base). No perl code executes in the image;
+# perl-base ships with the debian base.
+CVE-2026-54369 exp:2026-10-28
+# libacl symlink traversal privilege escalation. ACL tooling unused; app
+# reads/writes only within its non-root container filesystem.
