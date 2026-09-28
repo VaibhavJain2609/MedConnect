@@ -27,7 +27,10 @@ WORKDIR /app
 
 # curl is kept for the container HEALTHCHECK. psycopg2-binary and asyncpg
 # ship their own libpq, so no system DB libraries are needed here.
-RUN apt-get update && apt-get install -y --no-install-recommends curl && \
+# `upgrade` refreshes the pinned base's OS packages (openssl etc.) so the
+# Trivy CRITICAL/HIGH gate in cd.yml doesn't fail on stale deb versions.
+RUN apt-get update && apt-get upgrade -y --no-install-recommends && \
+    apt-get install -y --no-install-recommends curl && \
     rm -rf /var/lib/apt/lists/*
 
 RUN addgroup --system app && adduser --system --ingroup app app
