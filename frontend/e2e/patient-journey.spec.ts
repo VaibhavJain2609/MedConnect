@@ -31,11 +31,12 @@ test.describe("patient journey", { tag: "@auth" }, () => {
       page.getByRole("button", { name: /book appointment/i })
     ).toBeVisible();
 
-    // Appointment cards render the doctor's name. The default tab is
-    // "Upcoming" — seeded appointments are morning slots, so as the day
-    // progresses they all migrate to "Past". Wait for the query to settle
-    // (card or empty state), then check whichever tab has entries.
-    const doctorName = page.getByText(/dr\. (priya sharma|arjun mehta)/i);
+    // Appointment cards render the doctor's name (without a "Dr." prefix —
+    // the card shows the bare full_name). The default tab is "Upcoming" —
+    // seeded appointments are morning slots, so as the day progresses they
+    // all migrate to "Past". Wait for the query to settle (card or empty
+    // state), then check whichever tab has entries.
+    const doctorName = page.getByText(/\b(priya sharma|arjun mehta)\b/i);
     await expect(
       doctorName.first().or(page.getByText("No upcoming appointments"))
     ).toBeVisible();

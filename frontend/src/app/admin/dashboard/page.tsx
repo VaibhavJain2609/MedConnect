@@ -196,6 +196,7 @@ export default function AdminDashboardPage() {
         <select
           value={dateRange}
           onChange={(e) => setDateRange(e.target.value)}
+          aria-label={t("range.label")}
           className="h-10 px-4 rounded-lg border border-dreams-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dreams-blue"
         >
           <option value="7d">{t("range.7d")}</option>

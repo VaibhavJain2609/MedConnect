@@ -75,8 +75,13 @@ const nextConfig = {
       "img-src 'self' data: blob:",
       "font-src 'self' data:",
       `connect-src ${connectSrc}`,
-      // 'none' is consistent with X-Frame-Options: DENY below.
-      "frame-ancestors 'none'",
+      // 'self', not 'none': keycloak-js's silent check-sso iframe lands back
+      // on same-origin /silent-check-sso.html, which must be frameable by
+      // its own origin or init() never resolves (checkSsoSilently has no
+      // timeout — 'none' here hung every cold page load on the spinner).
+      // Foreign origins still can't frame us — clickjacking protection is
+      // intact.
+      "frame-ancestors 'self'",
       // keycloak-js silent check-sso runs inside a hidden iframe that loads
       // the Keycloak authorize endpoint, then redirects back to
       // /silent-check-sso.html — both origins must be frame-src'd or the
@@ -104,7 +109,9 @@ const nextConfig = {
     ].join('; ');
     const headers = [
       { key: 'X-Content-Type-Options', value: 'nosniff' },
-      { key: 'X-Frame-Options', value: 'DENY' },
+      // SAMEORIGIN, not DENY — the silent check-sso iframe frames our own
+      // /silent-check-sso.html, and DENY blocks even same-origin framing.
+      { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
       { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
       // Jitsi teleconsult runs on Jitsi's own domain via an external link,
       // so camera/mic stay off on our origin. No payment flows in-browser.

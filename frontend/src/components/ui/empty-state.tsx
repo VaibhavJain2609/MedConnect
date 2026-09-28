@@ -44,13 +44,17 @@ function EmptyState({
   const iconNode =
     icon == null ? (
       <Inbox className="h-6 w-6 text-dreams-textSecondary" />
-    ) : typeof icon === "function" ? (
-      React.createElement(icon, {
+    ) : React.isValidElement(icon) ? (
+      // Already-rendered node (<Pill />) — use as-is.
+      icon
+    ) : (
+      // Component reference (icon={Pill}). Lucide icons are forwardRef
+      // objects, not functions — checking `typeof icon === "function"`
+      // misses them and React crashes rendering the raw object.
+      React.createElement(icon as LucideIcon, {
         className: "h-6 w-6 text-dreams-textSecondary",
         "aria-hidden": true,
       })
-    ) : (
-      icon
     );
 
   return (

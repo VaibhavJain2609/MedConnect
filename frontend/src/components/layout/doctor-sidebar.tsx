@@ -235,7 +235,7 @@ export function DoctorSidebar({
         {visibleSections.map((section) => (
           <div key={section.labelKey}>
             {(isOpen || mobile) && (
-              <h3 className="mb-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              <h3 className="mb-2 px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">
                 {t(`sections.${section.labelKey}`)}
               </h3>
             )}

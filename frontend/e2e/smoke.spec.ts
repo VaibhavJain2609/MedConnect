@@ -20,6 +20,13 @@ import { test, expect } from "@playwright/test";
 const KEYCLOAK_AUTH_URL =
   /\/realms\/[^/]+\/protocol\/openid-connect\/(auth|registrations)/;
 
+// The silent check-sso iframe on page init also hits the auth endpoint
+// (with prompt=none + redirect to silent-check-sso.html). It's an app-init
+// probe, not a user redirect — exclude it or waitForRequest captures it
+// instead of the login/register navigation we're asserting on.
+const isInteractiveAuthRequest = (url: string) =>
+  KEYCLOAK_AUTH_URL.test(url) && !url.includes("prompt=none");
+
 test.describe("public pages (unauthenticated)", () => {
   test("landing page renders marketing content", async ({ page }) => {
     await page.goto("/");
@@ -41,7 +48,9 @@ test.describe("public pages (unauthenticated)", () => {
   test("/login redirects to the Keycloak realm", async ({ page }) => {
     // Arm the listener before navigating — keycloak.login() fires the
     // redirect as soon as the login page's useEffect runs.
-    const redirect = page.waitForRequest(KEYCLOAK_AUTH_URL);
+    const redirect = page.waitForRequest((req) =>
+      isInteractiveAuthRequest(req.url())
+    );
     await page.goto("/login");
     const request = await redirect;
     expect(request.url()).toContain("openid-connect");
@@ -61,7 +70,9 @@ test.describe("public pages (unauthenticated)", () => {
   });
 
   test("/signup redirects to Keycloak registration", async ({ page }) => {
-    const redirect = page.waitForRequest(KEYCLOAK_AUTH_URL);
+    const redirect = page.waitForRequest((req) =>
+      isInteractiveAuthRequest(req.url())
+    );
     await page.goto("/signup");
     const request = await redirect;
     // keycloak.register() targets the registrations endpoint specifically.

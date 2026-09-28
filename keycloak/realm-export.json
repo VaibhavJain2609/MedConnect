@@ -31,12 +31,14 @@
       }
     ]
   },
-  "defaultRoles": ["patient"],
+  "defaultRoles": [
+    "patient"
+  ],
   "clients": [
     {
       "clientId": "medconnect-frontend",
       "name": "MedConnect Frontend",
-      "description": "directAccessGrants is enabled so the Playwright e2e suite can mint real tokens via the password grant (frontend/e2e/fixtures/auth.ts). This realm file is compose-local-dev only — the k8s realm ConfigMap does not enable it.",
+      "description": "directAccessGrants is enabled so the Playwright e2e suite can mint real tokens via the password grant (frontend/e2e/fixtures/auth.ts). This realm file is compose-local-dev only \u2014 the k8s realm ConfigMap does not enable it.",
       "enabled": true,
       "publicClient": true,
       "redirectUris": [
@@ -65,6 +67,7 @@
         "client.offline.session.max.lifespan": "0"
       },
       "defaultClientScopes": [
+        "basic",
         "profile",
         "email",
         "roles"
@@ -143,7 +146,7 @@
     {
       "clientId": "medconnect-backend-admin",
       "name": "MedConnect Backend Admin (service account)",
-      "description": "Dedicated service-account client (client_credentials grant) for backend Admin REST calls. Replaces the master-realm `admin-cli` password grant still used by backend/app/utils/keycloak_admin.py — the app-side migration to client_credentials is a tracked follow-up; until it lands, admin-cli remains in use. NOTE: this file is the docker-compose local-dev realm only (compose runs `start-dev` and the k8s Deployment mounts a hardened ConfigMap realm over /opt/keycloak/data/import), so its permissive settings — sslRequired=none, open registration, no verifyEmail, no brute-force protection — never reach staging/prod.",
+      "description": "Service-account client (client_credentials grant) for backend Admin REST calls. Replaces the master-realm admin-cli password grant; app-side migration is a tracked follow-up. Compose local-dev realm only.",
       "enabled": true,
       "publicClient": false,
       "standardFlowEnabled": false,
@@ -175,9 +178,15 @@
       "firstName": "Demo",
       "lastName": "Admin",
       "credentials": [
-        { "type": "password", "value": "demo-password", "temporary": false }
+        {
+          "type": "password",
+          "value": "demo-password",
+          "temporary": false
+        }
       ],
-      "realmRoles": ["admin"],
+      "realmRoles": [
+        "admin"
+      ],
       "requiredActions": []
     },
     {
@@ -189,9 +198,15 @@
       "firstName": "Priya",
       "lastName": "Sharma",
       "credentials": [
-        { "type": "password", "value": "demo-password", "temporary": false }
+        {
+          "type": "password",
+          "value": "demo-password",
+          "temporary": false
+        }
       ],
-      "realmRoles": ["doctor"],
+      "realmRoles": [
+        "doctor"
+      ],
       "requiredActions": []
     },
     {
@@ -203,9 +218,15 @@
       "firstName": "Arjun",
       "lastName": "Mehta",
       "credentials": [
-        { "type": "password", "value": "demo-password", "temporary": false }
+        {
+          "type": "password",
+          "value": "demo-password",
+          "temporary": false
+        }
       ],
-      "realmRoles": ["doctor"],
+      "realmRoles": [
+        "doctor"
+      ],
       "requiredActions": []
     },
     {
@@ -217,9 +238,15 @@
       "firstName": "Rohan",
       "lastName": "Verma",
       "credentials": [
-        { "type": "password", "value": "demo-password", "temporary": false }
+        {
+          "type": "password",
+          "value": "demo-password",
+          "temporary": false
+        }
       ],
-      "realmRoles": ["patient"],
+      "realmRoles": [
+        "patient"
+      ],
       "requiredActions": []
     },
     {
@@ -231,9 +258,15 @@
       "firstName": "Ananya",
       "lastName": "Iyer",
       "credentials": [
-        { "type": "password", "value": "demo-password", "temporary": false }
+        {
+          "type": "password",
+          "value": "demo-password",
+          "temporary": false
+        }
       ],
-      "realmRoles": ["patient"],
+      "realmRoles": [
+        "patient"
+      ],
       "requiredActions": []
     },
     {
@@ -245,9 +278,15 @@
       "firstName": "Kabir",
       "lastName": "Singh",
       "credentials": [
-        { "type": "password", "value": "demo-password", "temporary": false }
+        {
+          "type": "password",
+          "value": "demo-password",
+          "temporary": false
+        }
       ],
-      "realmRoles": ["patient"],
+      "realmRoles": [
+        "patient"
+      ],
       "requiredActions": []
     }
   ]

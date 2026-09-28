@@ -102,8 +102,11 @@ services:
     healthcheck:
       # The upstream Keycloak image deliberately ships no curl/wget, so this
       # uses bash's /dev/tcp to issue a real HTTP HEAD request against the
-      # management-port readiness endpoint — not just a TCP connect.
-      test: [ "CMD-SHELL", "bash -c '{ printf \"HEAD /health/ready HTTP/1.1\\r\\nconnection: close\\r\\n\\r\\n\" >&0; grep -q \"HTTP/1.1 200\"; } 0<>/dev/tcp/localhost/9000'" ]
+      # management-port readiness endpoint — not just a TCP connect. The
+      # Host header is mandatory: Quarkus rejects HTTP/1.x requests without
+      # it, which leaves the container permanently "unhealthy" and blocks
+      # depends_on: service_healthy downstreams (backend).
+      test: [ "CMD-SHELL", "bash -c '{ printf \"HEAD /health/ready HTTP/1.1\\r\\nhost: localhost:9000\\r\\nconnection: close\\r\\n\\r\\n\" >&0; grep -q \"HTTP/1.1 200\"; } 0<>/dev/tcp/localhost/9000'" ]
       interval: 10s
       timeout: 5s
       retries: 15

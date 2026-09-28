@@ -40,7 +40,9 @@
       }
     ]
   },
-  "defaultRoles": ["patient"],
+  "defaultRoles": [
+    "patient"
+  ],
   "clients": [
     {
       "clientId": "medconnect-frontend",
@@ -73,6 +75,7 @@
         "client.offline.session.max.lifespan": "0"
       },
       "defaultClientScopes": [
+        "basic",
         "profile",
         "email",
         "roles"
@@ -151,7 +154,7 @@
     {
       "clientId": "medconnect-backend-admin",
       "name": "MedConnect Backend Admin (service account)",
-      "description": "Dedicated service-account client (client_credentials grant) for backend Admin REST calls. Replaces the master-realm `admin-cli` password grant still used by backend/app/utils/keycloak_admin.py — the app-side migration to client_credentials is a tracked follow-up; until it lands, admin-cli remains in use. Client secret is provisioned out-of-band (Secrets Manager -> ExternalSecret), not stored in this export.",
+      "description": "Service-account client (client_credentials grant) for backend Admin REST calls. Replaces the master-realm admin-cli password grant; secret is provisioned out-of-band, not stored in this export.",
       "enabled": true,
       "publicClient": false,
       "standardFlowEnabled": false,
