@@ -8,12 +8,12 @@
 # Pinning policy: base images are pinned to a specific patch tag (never
 # `latest` or bare major). Bump deliberately after reviewing changelogs.
 
-FROM node:20.19.0-alpine AS deps
+FROM node:26.10.0-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci
 
-FROM node:20.19.0-alpine AS dev
+FROM node:26.10.0-alpine AS dev
 WORKDIR /app
 ENV NODE_ENV=development
 COPY --from=deps /app/node_modules ./node_modules
@@ -41,7 +41,7 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
 
 RUN npm run build
 
-FROM node:20.19.0-alpine AS runner
+FROM node:26.10.0-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 # `apk upgrade` refreshes the pinned base's OS packages (openssl etc.) for
