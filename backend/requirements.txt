@@ -16,7 +16,7 @@ structlog==24.4.0
 sentry-sdk[fastapi]==2.19.2
 pgvector==0.3.6
 pandas==2.2.0
-reportlab==4.2.5
+reportlab==5.0.1
 arq==0.26.1
 pywebpush==2.5.0
 prometheus-fastapi-instrumentator==8.1.0  # 8.x required for starlette>=1.0
