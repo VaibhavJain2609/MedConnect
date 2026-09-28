@@ -44,6 +44,12 @@ RUN npm run build
 FROM node:20.19.0-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+# `apk upgrade` refreshes the pinned base's OS packages (openssl etc.) for
+# the Trivy CRITICAL/HIGH gate in cd.yml. npm is removed outright — the
+# runner only executes `node server.js`, so shipping npm just carries its
+# bundled deps (tar, brace-expansion, ...) into the scan surface.
+RUN apk upgrade --no-cache && \
+    rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
