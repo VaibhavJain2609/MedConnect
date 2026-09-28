@@ -19,7 +19,7 @@ terraform {
       source = "hashicorp/kubernetes"
       # Same reasoning as helm above — pinned off v3 to keep the `exec { }`
       # block syntax this file uses.
-      version = "~> 2.31"
+      version = "~> 3.2"
     }
   }
 }
