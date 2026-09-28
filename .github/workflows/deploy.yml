@@ -89,10 +89,11 @@ jobs:
           : "${ACM_CERT_ARN:?ACM_CERT_ARN_STAGING/ACM_CERT_ARN_PROD repository variable is not set}"
           : "${WAF_ACL_ARN:?WAF_ACL_ARN_STAGING/WAF_ACL_ARN_PROD repository variable is not set}"
           : "${AWS_REGION:?AWS_REGION repository variable is not set}"
-          # The ClusterSecretStore name is defined in the base manifests —
-          # read it back out of the render instead of duplicating it here.
-          SECRET_STORE_NAME=$(yq eval 'select(.kind == "ClusterSecretStore") | .metadata.name' /tmp/rendered.yaml | head -1)
-          : "${SECRET_STORE_NAME:?could not read ClusterSecretStore name from rendered manifests}"
+          # The ClusterSecretStore is cluster-scoped and deliberately NOT in
+          # the overlay render (base/kustomization.yaml) — it lives in the
+          # cluster-admin-applied bootstrap set. Read its name from there.
+          SECRET_STORE_NAME=$(yq eval 'select(.kind == "ClusterSecretStore") | .metadata.name' infra/k8s/bootstrap/cluster-secret-store.yaml | head -1)
+          : "${SECRET_STORE_NAME:?could not read ClusterSecretStore name from bootstrap manifests}"
           sed -i \
             -e "s|PLACEHOLDER_ACM_CERT_ARN_[A-Z]*|${ACM_CERT_ARN}|g" \
             -e "s|PLACEHOLDER_WAF_ACL_ARN_[A-Z]*|${WAF_ACL_ARN}|g" \
