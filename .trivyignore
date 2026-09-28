@@ -47,3 +47,29 @@ CVE-2026-9538 exp:2026-10-28
 CVE-2026-54369 exp:2026-10-28
 # libacl symlink traversal privilege escalation. ACL tooling unused; app
 # reads/writes only within its non-root container filesystem.
+
+# --- keycloak image (quay.io/keycloak/keycloak:26.7.4, newest 26.x — no
+# patched release exists yet), first real scan 2026-09-28. Vendor-bundled
+# jars we cannot bump without forking the image. Keycloak serves plain HTTP
+# behind the ALB (TLS terminates there) and is not publicly reachable except
+# through the WAF-fronted auth hostname.
+
+CVE-2026-75595 exp:2026-10-28
+# io.netty:netty-handler SNI routing bypass. Keycloak's own TLS listener is
+# not exposed — ALB terminates TLS and forwards HTTP inside the cluster.
+CVE-2026-84939 exp:2026-10-28
+# freemarker path traversal. Exploitation requires supplying crafted theme
+# templates — admin-realm-only capability, not user-reachable.
+CVE-2025-59250 exp:2026-10-28
+# mssql-jdbc improper input validation. Keycloak connects to Postgres only;
+# the SQL Server JDBC driver is bundled but never loaded.
+CVE-2026-13506 exp:2026-10-28
+# bcprov-jdk18on denial of service. Requires feeding crafted cert/signature
+# input through Keycloak's crypto paths.
+CVE-2026-8763 exp:2026-10-28
+# bcprov-jdk18on additional DoS vector. Same reasoning as CVE-2026-13506.
+CVE-2026-86145 exp:2026-10-28
+# pcre2 out-of-bounds write (RHEL9 system lib, will_not_fix). Keycloak does
+# not route user input through pcre2 bindings.
+CVE-2026-89161 exp:2026-10-28
+# pcre2 memory corruption. Same reasoning as CVE-2026-86145.
