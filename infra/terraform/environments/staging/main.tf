@@ -45,25 +45,25 @@ resource "random_password" "keycloak_admin" {
 module "rds" {
   source = "../../modules/rds"
 
-  identifier                 = "medconnect-${local.environment}-db"
-  environment                = local.environment
-  instance_class             = var.rds_instance_class
-  allocated_storage          = var.rds_allocated_storage
-  max_allocated_storage      = var.rds_max_allocated_storage
-  multi_az                   = false
-  deletion_protection        = false
-  skip_final_snapshot        = true
+  identifier            = "medconnect-${local.environment}-db"
+  environment           = local.environment
+  instance_class        = var.rds_instance_class
+  allocated_storage     = var.rds_allocated_storage
+  max_allocated_storage = var.rds_max_allocated_storage
+  multi_az              = false
+  deletion_protection   = false
+  skip_final_snapshot   = true
   # Free Plan cap: backup retention >1 day is rejected with
   # FreeTierRestrictionError; Performance Insights is also unavailable on
   # free-tier accounts — re-enable both when the account is upgraded.
   backup_retention_period      = 1
   performance_insights_enabled = false
-  master_username            = local.db_username
-  master_password            = random_password.rds_master.result
-  vpc_id                     = data.terraform_remote_state.shared.outputs.vpc_id
-  subnet_ids                 = data.terraform_remote_state.shared.outputs.private_subnet_ids
-  allowed_security_group_ids = [data.terraform_remote_state.shared.outputs.cluster_security_group_id]
-  tags                       = var.tags
+  master_username              = local.db_username
+  master_password              = random_password.rds_master.result
+  vpc_id                       = data.terraform_remote_state.shared.outputs.vpc_id
+  subnet_ids                   = data.terraform_remote_state.shared.outputs.private_subnet_ids
+  allowed_security_group_ids   = [data.terraform_remote_state.shared.outputs.cluster_security_group_id]
+  tags                         = var.tags
 }
 
 module "elasticache" {
