@@ -37,7 +37,7 @@ jobs:
     timeout-minutes: 20
     environment: ${{ inputs.environment }}
     steps:
-      - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA
+      - uses: actions/checkout@v7 # pin: resolve tag to full commit SHA
 
       - uses: aws-actions/configure-aws-credentials@v4 # pin: resolve tag to full commit SHA
         with:
