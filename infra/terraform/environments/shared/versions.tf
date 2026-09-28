@@ -13,7 +13,7 @@ terraform {
       # with flattened object-type attributes — a real breaking change,
       # caught by `terraform validate` failing against v3.2.0 with "Blocks
       # of type kubernetes are not expected here."
-      version = "~> 2.13"
+      version = "~> 3.3"
     }
     kubernetes = {
       source = "hashicorp/kubernetes"
