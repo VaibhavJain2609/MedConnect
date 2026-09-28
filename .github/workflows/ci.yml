@@ -236,7 +236,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA
 
-      - uses: docker/setup-buildx-action@v3 # pin: resolve tag to full commit SHA
+      - uses: docker/setup-buildx-action@v4 # pin: resolve tag to full commit SHA
 
       - name: Build ${{ matrix.context }} (no push)
         if: matrix.context != 'frontend'
