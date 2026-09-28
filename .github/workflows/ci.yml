@@ -86,7 +86,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA
 
-      - uses: actions/setup-python@v5 # pin: resolve tag to full commit SHA
+      - uses: actions/setup-python@v7 # pin: resolve tag to full commit SHA
         with:
           python-version: "3.12"
           cache: pip
@@ -188,7 +188,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA
 
-      - uses: actions/setup-python@v5 # pin: resolve tag to full commit SHA
+      - uses: actions/setup-python@v7 # pin: resolve tag to full commit SHA
         with:
           python-version: "3.12"
           cache: pip
