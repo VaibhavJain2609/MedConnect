@@ -74,7 +74,7 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2 # pin: resolve tag to full commit SHA
 
       - name: Trivy rescan ${{ matrix.repo }}@${{ github.sha }}
-        uses: aquasecurity/trivy-action@0.28.0 # pin: resolve tag to full commit SHA
+        uses: aquasecurity/trivy-action@v0.36.0 # pin: resolve tag to full commit SHA
         with:
           image-ref: ${{ steps.ecr-login.outputs.registry }}/${{ matrix.repo }}:${{ github.sha }}
           severity: CRITICAL,HIGH

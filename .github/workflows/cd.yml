@@ -113,7 +113,7 @@ jobs:
       # .trivyignore documents each accepted-risk CVE with a reason and a
       # recheck date — see that file for the current list.
       - name: Scan backend image
-        uses: aquasecurity/trivy-action@v0.32.0 # pin: resolve tag to full commit SHA
+        uses: aquasecurity/trivy-action@v0.36.0 # pin: resolve tag to full commit SHA
         with:
           image-ref: ${{ steps.vars.outputs.backend_image }}
           severity: CRITICAL,HIGH
@@ -121,7 +121,7 @@ jobs:
           trivyignores: .trivyignore
 
       - name: Scan frontend image
-        uses: aquasecurity/trivy-action@v0.32.0 # pin: resolve tag to full commit SHA
+        uses: aquasecurity/trivy-action@v0.36.0 # pin: resolve tag to full commit SHA
         with:
           image-ref: ${{ steps.vars.outputs.frontend_image }}
           severity: CRITICAL,HIGH
@@ -129,7 +129,7 @@ jobs:
           trivyignores: .trivyignore
 
       - name: Scan keycloak image
-        uses: aquasecurity/trivy-action@v0.32.0 # pin: resolve tag to full commit SHA
+        uses: aquasecurity/trivy-action@v0.36.0 # pin: resolve tag to full commit SHA
         with:
           image-ref: ${{ steps.vars.outputs.keycloak_image }}
           severity: CRITICAL,HIGH
