@@ -50,11 +50,22 @@ export async function initKeycloak(): Promise<boolean> {
       onLoad: "check-sso",
       pkceMethod: "S256",
       checkLoginIframe: false,
-      silentCheckSsoRedirectUri: window.location.origin + "/silent-check-sso.html",
       redirectUri: window.location.origin + "/auth/callback",
       ...(e2eToken && e2eRefreshToken
-        ? { token: e2eToken, refreshToken: e2eRefreshToken }
-        : {}),
+        ? // e2e token path: skip silentCheckSsoRedirectUri entirely. Its
+          // mere presence makes keycloak-js run the 3rd-party-cookie
+          // probe iframe before init resolves, and that iframe's
+          // document.requestStorageAccess() never settles in headless
+          // Chromium — init times out after 10s and every @auth spec is
+          // bounced to the hosted login page. With it omitted (and
+          // checkLoginIframe already off) the probe short-circuits and
+          // init takes the token branch: setToken() + a real
+          // updateToken() refresh-grant against the token endpoint.
+          { token: e2eToken, refreshToken: e2eRefreshToken }
+        : {
+            silentCheckSsoRedirectUri:
+              window.location.origin + "/silent-check-sso.html",
+          }),
     });
 
     initialized = true;

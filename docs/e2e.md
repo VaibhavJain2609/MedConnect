@@ -193,25 +193,46 @@ API credentials needed.
 
 ## Verified locally vs. CI-only
 
-The following was validated on a developer machine without the docker
-stack (Docker daemon down): `npx playwright test --list` (all 16 tests
-load — catches spec/config import errors), `tsc --noEmit` on both the app
-and the e2e sources, and the four non-`@auth` tests running live against
-`next dev` — `smoke.spec.ts` (3 tests) and the public `a11y` audit all
-pass with Keycloak unreachable.
+The full suite (all 16 tests, including every `@auth` spec) has passed
+once for real on a developer machine: compose postgres + keycloak +
+a host-networked redis, alembic + `seed_demo_data.py`, uvicorn on :8000,
+`next dev` served on an alternate port, `npx playwright test`. The run
+validated the complete @auth path end-to-end — direct-grant minting,
+token injection into `keycloak.init()`, real JWKS validation,
+auto-provisioning, and refresh via `updateToken()` — plus the seeded
+queue check-in flow and the seeded-name assertions.
 
-Everything else still **needs a real CI run** (or a local
-`docker compose up` + `make seed`) before it's proven:
+The first real run surfaced and fixed several genuine bugs (all landed in
+the round-16 e2e commit):
 
-- All `@auth` specs — token minting via direct grant, `keycloak.init()`
-  accepting the injected tokens, JWKS validation, auto-provisioning, and
-  refresh against the real token endpoint have only been validated
-  statically (fixture env vars ↔ workflow env, localStorage keys ↔
-  `src/lib/auth.ts`, realm users/subs ↔ `seed_demo_data.py`).
-- `queue.spec.ts` — the header-capture + `POST /api/v1/queue` check-in
-  flow and the seeded-name assertions (`Ananya Iyer`, `Kabir Singh`,
-  `Rohan Verma`) were verified against the routers/schemas/seed script
-  but never executed.
+- `frame-ancestors 'none'` / `X-Frame-Options: DENY` made
+  `/silent-check-sso.html` unframeable even same-origin → the silent
+  check-sso iframe never loaded → `keycloak.init()` hung forever
+  (checkSsoSilently has no timeout) → every cold page load spun
+  indefinitely. Now `frame-ancestors 'self'` + `X-Frame-Options:
+  SAMEORIGIN`.
+- `silentCheckSsoRedirectUri` on the e2e path triggered keycloak-js's
+  3rd-party-cookie probe iframe, which never settles in headless
+  Chromium — it's now omitted when injected tokens are present
+  (`src/lib/auth.ts`).
+- `smoke.spec.ts` captured the silent-SSO iframe's `auth?prompt=none`
+  request instead of the interactive login/register redirect — filtered
+  by `prompt=none`.
+- Backend CORS only allows `FRONTEND_URL` + :3000 — a dev server on any
+  other port gets axios `Network Error` on every API call. Set
+  `FRONTEND_URL` to the port you serve.
+- The keycloak compose healthcheck sent HTTP/1.1 without a `Host`
+  header; Quarkus rejects those → container stayed `unhealthy` forever,
+  blocking `depends_on: service_healthy` downstreams. Fixed with an
+  explicit `host:` header line.
+- `next.config.js`'s CSP `headers()` reads `NEXT_PUBLIC_*` at *build*
+  time — the e2e workflow now exports them for `npm run build`, or the
+  production bundle's `connect-src`/`frame-src` lack the API + Keycloak
+  origins.
+- Realm `medconnect-frontend` gained the `basic` default client scope.
+
+Still unproven:
+
 - The `next start` `webServer` path — CI builds then serves the
   production bundle; only the `next dev` path has been exercised. Watch
   the first CI run for production-only differences (e.g. no StrictMode
@@ -220,3 +241,18 @@ Everything else still **needs a real CI run** (or a local
   `patient-journey.spec.ts` (morning slots migrate to "Past" as the day
   progresses) — the spec self-heals by switching tabs, but the nightly
   cron timing is unproven.
+
+### Local port conflicts
+
+If 5432/6379/8080/3000 are held by other projects on your machine,
+`docker-compose.e2e-local.yml` (opt-in helper override) remaps Keycloak to
+:18080; serve the frontend on another port (`npx next dev -p 3300`) and
+run with `PLAYWRIGHT_BASE_URL=http://localhost:3300
+E2E_KEYCLOAK_URL=http://localhost:18080`. Two extra steps are then
+required:
+
+- `FRONTEND_URL=http://localhost:3300` on the backend (CORS allowlist).
+- Add `http://localhost:3300/*` to the `medconnect-frontend` client's
+  `redirectUris` and `http://localhost:3300` to `webOrigins` on the live
+  realm (Admin REST `PUT /admin/realms/medconnect/clients/{id}`) — the
+  realm import only applies on a fresh Keycloak volume.

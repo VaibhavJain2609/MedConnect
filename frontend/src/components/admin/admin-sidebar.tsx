@@ -240,7 +240,7 @@ export function AdminSidebar({
           {navSections.map((section) => (
             <div key={section.labelKey}>
               {isOpen && (
-                <h3 className="mb-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <h3 className="mb-2 px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">
                   {t(`sections.${section.labelKey}`)}
                 </h3>
               )}
@@ -305,7 +305,7 @@ export function AdminSidebar({
         <nav className="flex-1 space-y-6 p-4 overflow-y-auto">
           {navSections.map((section) => (
             <div key={section.labelKey}>
-              <h3 className="mb-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              <h3 className="mb-2 px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">
                 {t(`sections.${section.labelKey}`)}
               </h3>
               <div className="space-y-1">

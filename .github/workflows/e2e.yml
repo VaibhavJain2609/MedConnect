@@ -133,8 +133,16 @@ jobs:
         if: ${{ vars.E2E_BASE_URL == '' }}
         working-directory: frontend
         # webServer runs `next start` in CI — the production build must
-        # exist before Playwright launches it. NEXT_PUBLIC_* defaults
-        # (localhost:8000 / localhost:8080) are the right values here.
+        # exist before Playwright launches it. NEXT_PUBLIC_* must be set
+        # HERE (not just defaulted in code): next.config.js's CSP
+        # headers() reads them at build time, and without the API +
+        # Keycloak origins in connect-src/frame-src every cross-origin
+        # XHR/iframe to :8000/:8080 is blocked in the browser.
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8000
+          NEXT_PUBLIC_KEYCLOAK_URL: http://localhost:8080
+          NEXT_PUBLIC_KEYCLOAK_REALM: medconnect
+          NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: medconnect-frontend
         run: npm run build
 
       - name: Install Playwright browser

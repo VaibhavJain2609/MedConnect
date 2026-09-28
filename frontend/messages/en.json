@@ -955,6 +955,7 @@
     "subtitle": "Overview of your healthcare platform",
     "loadError": "Failed to load dashboard data",
     "range": {
+      "label": "Date range",
       "7d": "Last 7 days",
       "30d": "Last 30 days",
       "90d": "Last 90 days"

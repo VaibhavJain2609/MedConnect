@@ -65,7 +65,12 @@ const nextConfig = {
         source: '/:path*',
         headers: [
           { key: 'X-Content-Type-Options', value: 'nosniff' },
-          { key: 'X-Frame-Options', value: 'DENY' },
+          // SAMEORIGIN, not DENY — keycloak-js's silent check-sso flow loads
+          // our own /silent-check-sso.html inside a hidden iframe, and DENY
+          // blocks even same-origin framing, which hangs keycloak.init()
+          // forever (checkSsoSilently has no timeout). Cross-origin framing
+          // stays blocked by frame-ancestors 'self' below.
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'Permissions-Policy', value: 'geolocation=(), microphone=(), camera=()' },
           { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
@@ -78,8 +83,18 @@ const nextConfig = {
               "img-src 'self' data: blob:",
               "font-src 'self' data:",
               `connect-src ${connectSrc}`,
-              // 'none' is consistent with X-Frame-Options: DENY above.
-              "frame-ancestors 'none'",
+              // keycloak-js loads hidden iframes pointed at the Keycloak
+              // origin (the 3rd-party-cookie probe and the silent
+              // check-sso redirect). frame-src falls back to default-src,
+              // so without this entry 'self' blocks them — init() then
+              // waits the full messageReceiveTimeout (10s) and rejects,
+              // leaving every cold load looking unauthenticated.
+              `frame-src 'self' ${cspOrigin(process.env.NEXT_PUBLIC_KEYCLOAK_URL)}`.trim(),
+              // 'self', not 'none': the silent check-sso iframe lands back on
+              // same-origin /silent-check-sso.html, which must be frameable
+              // by its own origin or init() never resolves. Foreign origins
+              // still can't frame us — clickjacking protection is intact.
+              "frame-ancestors 'self'",
               "object-src 'none'",
               "base-uri 'self'",
             ].join('; '),
