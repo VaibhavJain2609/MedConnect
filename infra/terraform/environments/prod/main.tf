@@ -3,7 +3,7 @@ data "aws_caller_identity" "current" {}
 data "terraform_remote_state" "shared" {
   backend = "s3"
   config = {
-    bucket = "medconnect-terraform-state"
+    bucket = "medconnect-terraform-state-214920155636"
     key    = "shared/terraform.tfstate"
     region = "ap-south-1"
   }

@@ -5,7 +5,7 @@
 # bucket/table and is namespaced by `key`.
 terraform {
   backend "s3" {
-    bucket         = "medconnect-terraform-state"
+    bucket         = "medconnect-terraform-state-214920155636"
     key            = "shared/terraform.tfstate"
     region         = "ap-south-1"
     dynamodb_table = "medconnect-terraform-locks"

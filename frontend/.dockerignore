@@ -15,8 +15,11 @@ out
 .env.*
 !.env.example
 
-# Tests & coverage — not needed to build or run
-tests
+# Tests & coverage. `tests/` MUST stay in the context: src/**/__tests__/*.tsx
+# import ../../tests/utils/test-utils and tests/mocks/* — `next build`
+# type-checks those imports, so excluding this dir breaks the image build
+# (verified: production build fails TS2307 without it). The builder stage
+# uses it only for type-checking; the runtime image never sees it.
 coverage
 jest.config.js
 

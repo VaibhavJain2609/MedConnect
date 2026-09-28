@@ -50,15 +50,15 @@
       "enabled": true,
       "publicClient": true,
       "redirectUris": [
-        "https://medconnect.example.com/*"
+        "https://prod.medconnect.jainvaibhav.me/*"
       ],
       "webOrigins": [
-        "https://medconnect.example.com",
+        "https://prod.medconnect.jainvaibhav.me",
         "+"
       ],
-      "baseUrl": "https://medconnect.example.com/",
-      "adminUrl": "https://medconnect.example.com/",
-      "rootUrl": "https://medconnect.example.com/",
+      "baseUrl": "https://prod.medconnect.jainvaibhav.me/",
+      "adminUrl": "https://prod.medconnect.jainvaibhav.me/",
+      "rootUrl": "https://prod.medconnect.jainvaibhav.me/",
       "standardFlowEnabled": true,
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,

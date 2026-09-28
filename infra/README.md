@@ -16,9 +16,9 @@ lock table. Terraform can't create its own backend, so create these once
 with the AWS CLI before the first `terraform init` anywhere in this repo:
 
 ```bash
-aws s3api create-bucket --bucket medconnect-terraform-state \
+aws s3api create-bucket --bucket medconnect-terraform-state-214920155636 \
   --region ap-south-1 --create-bucket-configuration LocationConstraint=ap-south-1
-aws s3api put-bucket-versioning --bucket medconnect-terraform-state \
+aws s3api put-bucket-versioning --bucket medconnect-terraform-state-214920155636 \
   --versioning-configuration Status=Enabled
 aws dynamodb create-table --table-name medconnect-terraform-locks \
   --attribute-definitions AttributeName=LockID,AttributeType=S \
@@ -28,7 +28,7 @@ aws dynamodb create-table --table-name medconnect-terraform-locks \
 
 If you use a different bucket/table name or region, update the `bucket` /
 `dynamodb_table` / `region` values in all three `environments/*/backend.tf`
-files to match — they currently hardcode `medconnect-terraform-state` /
+files to match — they currently hardcode `medconnect-terraform-state-214920155636` /
 `medconnect-terraform-locks` / `ap-south-1`.
 
 ## 2. Apply order

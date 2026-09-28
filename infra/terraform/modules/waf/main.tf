@@ -12,7 +12,7 @@ locals {
 # creates for the Ingress, not a CloudFront distribution.
 resource "aws_wafv2_web_acl" "this" {
   name        = var.name
-  description = "MedConnect ${var.environment} — replicates Nginx's rate limiting plus baseline managed rule coverage"
+  description = "MedConnect ${var.environment} - replicates Nginx rate limiting plus baseline managed rule coverage"
   scope       = "REGIONAL"
 
   default_action {

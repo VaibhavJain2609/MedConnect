@@ -24,13 +24,13 @@ patches:
     patch: |-
       - op: replace
         path: /data/KEYCLOAK_PUBLIC_URL
-        value: https://auth.medconnect.example.com
+        value: https://auth-prod.medconnect.jainvaibhav.me
       - op: replace
         path: /data/KC_HOSTNAME
-        value: auth.medconnect.example.com
+        value: auth-prod.medconnect.jainvaibhav.me
       - op: replace
         path: /data/NEXT_PUBLIC_API_URL
-        value: https://medconnect.example.com/api
+        value: https://prod.medconnect.jainvaibhav.me/api
       # Internal cluster DNS for the keycloak Service — namespace-qualified to
       # this overlay's namespace. Deliberately NOT the bare `http://keycloak:8080`
       # literal, which Settings.check_production_config() rejects under
@@ -40,10 +40,10 @@ patches:
         value: http://keycloak.medconnect-prod.svc.cluster.local:8080
       - op: replace
         path: /data/FRONTEND_URL
-        value: https://medconnect.example.com
+        value: https://prod.medconnect.jainvaibhav.me
       - op: replace
         path: /data/BACKEND_URL
-        value: https://medconnect.example.com
+        value: https://prod.medconnect.jainvaibhav.me
 
   - target:
       kind: Ingress
@@ -57,10 +57,10 @@ patches:
         value: PLACEHOLDER_WAF_ACL_ARN_PROD
       - op: replace
         path: /spec/rules/0/host
-        value: auth.medconnect.example.com
+        value: auth-prod.medconnect.jainvaibhav.me
       - op: replace
         path: /spec/rules/1/host
-        value: medconnect.example.com
+        value: prod.medconnect.jainvaibhav.me
 
   # ExternalSecrets: bind to the shared cluster-admin-applied ClusterSecretStore
   # (infra/k8s/bootstrap/cluster-secret-store.yaml) and point dataFrom at this

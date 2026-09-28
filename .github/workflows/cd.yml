@@ -202,7 +202,7 @@ jobs:
       environment: staging
       namespace: medconnect-staging
       overlay_path: infra/k8s/overlays/staging
-      app_hostname: staging.medconnect.example.com
+      app_hostname: medconnect.jainvaibhav.me
       backend_image: ${{ needs.build-and-push.outputs.backend_image }}
       frontend_image: ${{ needs.build-and-push.outputs.frontend_image }}
       keycloak_image: ${{ needs.build-and-push.outputs.keycloak_image }}
@@ -215,7 +215,7 @@ jobs:
       environment: production
       namespace: medconnect-prod
       overlay_path: infra/k8s/overlays/prod
-      app_hostname: medconnect.example.com
+      app_hostname: prod.medconnect.jainvaibhav.me
       backend_image: ${{ needs.build-and-push.outputs.backend_image }}
       frontend_image: ${{ needs.build-and-push.outputs.frontend_image }}
       keycloak_image: ${{ needs.build-and-push.outputs.keycloak_image }}
