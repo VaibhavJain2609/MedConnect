@@ -75,20 +75,21 @@ module "iam_oidc_github" {
 }
 
 # Grants the GitHub Actions role kubectl access scoped to just the two
-# MedConnect namespaces — not cluster-admin. Edit policy covers everything
-# the CD pipeline does (apply Deployments/Jobs/Services, roll back, read
-# logs for the smoke-test step); it cannot touch cluster-scoped objects
-# (Nodes, ClusterRoles, the ClusterSecretStore) or other namespaces.
+# MedConnect namespaces — not cluster-admin. Admin policy covers everything
+# the CD pipeline does (apply Deployments/Jobs/Services + namespaced CRDs
+# like ExternalSecrets/ServiceMonitors, roll back, read logs for the
+# smoke-test step); it cannot touch cluster-scoped objects (Nodes,
+# ClusterRoles, the ClusterSecretStore) or other namespaces.
 resource "aws_eks_access_entry" "github_actions" {
   cluster_name  = module.eks.cluster_name
   principal_arn = module.iam_oidc_github.role_arn
   type          = "STANDARD"
 }
 
-resource "aws_eks_access_policy_association" "github_actions_edit" {
+resource "aws_eks_access_policy_association" "github_actions_admin" {
   cluster_name  = module.eks.cluster_name
   principal_arn = module.iam_oidc_github.role_arn
-  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSEditPolicy"
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSAdminPolicy"
 
   access_scope {
     type       = "namespace"
