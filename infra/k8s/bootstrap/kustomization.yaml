@@ -2,8 +2,8 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 # Cluster-scoped / namespace-creating resources that the CD pipeline's IAM
-# role CANNOT apply — environments/shared/main.tf grants GitHub Actions only
-# AmazonEKSEditPolicy scoped to the medconnect-staging / medconnect-prod
+# role CANNOT apply — environments/shared/main.tf grants GitHub Actions
+# AmazonEKSAdminPolicy scoped to the medconnect-staging / medconnect-prod
 # namespaces, which excludes cluster-scoped kinds (Namespace,
 # ClusterSecretStore). A cluster-admin applies this once per cluster:
 #
@@ -18,3 +18,4 @@ kind: Kustomization
 resources:
   - namespaces.yaml
   - cluster-secret-store.yaml
+  - github-actions-rbac.yaml

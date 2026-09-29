@@ -1,0 +1,48 @@
+# EKS managed access policies (Edit and even Admin) do NOT cover custom
+# resources — kubectl apply dies on GET for ExternalSecrets/ServiceMonitors.
+# ClusterAdmin would fix it but also grants kube-system etc.; instead grant
+# just the CRD kinds the CD pipeline manages, namespace-scoped.
+#
+# Subject is the eks-auth username for the OIDC-assumed CI role — the session
+# name "GitHubActions" is configure-aws-credentials' default
+# (deploy.yml does not set role-session-name); if that ever changes, this
+# binding must be updated to match.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: github-actions-deploy-crs
+rules:
+  - apiGroups: ["external-secrets.io"]
+    resources: ["externalsecrets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["monitoring.coreos.com"]
+    resources: ["servicemonitors", "podmonitors", "prometheusrules"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: github-actions-deploy-crs
+  namespace: medconnect-staging
+subjects:
+  - kind: User
+    name: arn:aws:sts::214920155636:assumed-role/medconnect-github-actions/GitHubActions
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: github-actions-deploy-crs
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: github-actions-deploy-crs
+  namespace: medconnect-prod
+subjects:
+  - kind: User
+    name: arn:aws:sts::214920155636:assumed-role/medconnect-github-actions/GitHubActions
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: github-actions-deploy-crs
+  apiGroup: rbac.authorization.k8s.io
