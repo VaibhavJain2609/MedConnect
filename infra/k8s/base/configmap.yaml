@@ -26,6 +26,12 @@ data:
   KEYCLOAK_URL: http://keycloak.medconnect.svc.cluster.local:8080
   # Overlay-specific: public hostnames, patched per environment.
   KEYCLOAK_PUBLIC_URL: PLACEHOLDER_KEYCLOAK_PUBLIC_URL
+  # TLS terminates at the ALB — Keycloak itself serves plain HTTP on :8080.
+  # Without KC_HTTP_ENABLED a bare KC_HOSTNAME makes KC demand HTTPS key
+  # material at boot; proxy-headers lets it trust the ALB's X-Forwarded-*
+  # so issuer/redirect URIs come out as https.
+  KC_HTTP_ENABLED: "true"
+  KC_PROXY_HEADERS: xforwarded
   KC_HOSTNAME: PLACEHOLDER_KEYCLOAK_HOSTNAME
   NEXT_PUBLIC_API_URL: PLACEHOLDER_API_PUBLIC_URL
   # FRONTEND_URL feeds CORS allowed_origins + CSP connect-src and prescription
