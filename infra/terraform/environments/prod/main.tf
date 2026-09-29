@@ -37,10 +37,10 @@ module "rds" {
   instance_class          = var.rds_instance_class
   allocated_storage       = var.rds_allocated_storage
   max_allocated_storage   = var.rds_max_allocated_storage
-  multi_az                = true
-  deletion_protection     = true
-  skip_final_snapshot     = false
-  backup_retention_period = 30
+  multi_az                = var.rds_multi_az
+  deletion_protection     = var.rds_deletion_protection
+  skip_final_snapshot     = var.rds_skip_final_snapshot
+  backup_retention_period = var.rds_backup_retention_period
   # UTC; 20:00-21:00 UTC ≈ 01:30-02:30 IST — the lowest-traffic hour for an
   # India-facing app. Staging leaves this null (AWS picks).
   backup_window              = "20:00-21:00"
@@ -121,7 +121,8 @@ locals {
 module "secrets" {
   source = "../../modules/secrets"
 
-  environment = local.environment
+  environment             = local.environment
+  recovery_window_in_days = var.secrets_recovery_window_in_days
   secrets = {
     rds              = local.rds_secret
     redis            = local.redis_secret

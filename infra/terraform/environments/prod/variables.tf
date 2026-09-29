@@ -29,6 +29,32 @@ variable "redis_num_cache_nodes" {
   default     = 2
 }
 
+variable "rds_multi_az" {
+  type    = bool
+  default = true
+}
+
+variable "rds_deletion_protection" {
+  type    = bool
+  default = true
+}
+
+variable "rds_skip_final_snapshot" {
+  type    = bool
+  default = false
+}
+
+variable "rds_backup_retention_period" {
+  type    = number
+  default = 30
+}
+
+variable "secrets_recovery_window_in_days" {
+  description = "0 allows immediate hard-delete — keep the 30d default for real production, override in tfvars for throwaway test deployments"
+  type        = number
+  default     = 30
+}
+
 variable "keycloak_admin_username" {
   type    = string
   default = "admin"

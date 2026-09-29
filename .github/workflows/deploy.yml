@@ -110,6 +110,20 @@ jobs:
             exit 1
           fi
 
+      # The migration Job's envFrom needs medconnect-config plus the Secrets
+      # materialized by the ExternalSecrets — on a fresh namespace none of
+      # those exist yet, so the Job's pod dies with CreateContainerConfigError
+      # before it can run. Apply everything-except-Jobs first and wait for
+      # the ExternalSecrets to sync before the Job starts.
+      - name: Apply manifests (config + secrets before migration)
+        run: |
+          yq eval-all 'select(.kind != "Job")' /tmp/rendered.yaml > /tmp/pre-migration.yaml
+          kubectl apply -f /tmp/pre-migration.yaml
+          kubectl wait externalsecret backend-secrets keycloak-secrets \
+            -n "${{ inputs.namespace }}" \
+            --for=jsonpath='{.status.conditions[?(@.type=="Ready")].status}'=True \
+            --timeout=180s
+
       # infra/k8s/base/migrations/job.yaml documents why this Job must be
       # deleted before every re-apply: Job specs are immutable, and
       # `kubectl apply` on an unchanged one is a no-op — neither works for
