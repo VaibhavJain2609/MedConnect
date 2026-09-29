@@ -23,6 +23,10 @@ spec:
       restartPolicy: Never
       securityContext:
         runAsNonRoot: true
+        # Numeric UID matching the backend image's `app` user — kubelet can't
+        # verify runAsNonRoot against a non-numeric USER directive.
+        runAsUser: 101
+        runAsGroup: 101
       containers:
         - name: alembic-migrate
           image: medconnect-backend:latest

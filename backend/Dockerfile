@@ -33,7 +33,9 @@ RUN apt-get update && apt-get upgrade -y --no-install-recommends && \
     apt-get install -y --no-install-recommends curl && \
     rm -rf /var/lib/apt/lists/*
 
-RUN addgroup --system app && adduser --system --ingroup app app
+# Fixed UID/GID: k8s pod securityContext.runAsUser must match (kubelet cannot
+# verify runAsNonRoot against the non-numeric `app` username).
+RUN addgroup --system --gid 101 app && adduser --system --uid 101 --ingroup app app
 
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"

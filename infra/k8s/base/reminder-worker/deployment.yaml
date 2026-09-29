@@ -24,6 +24,9 @@ spec:
       serviceAccountName: backend-sa
       securityContext:
         runAsNonRoot: true
+        # Same backend image — UID 101 (`app`), see backend/deployment.yaml.
+        runAsUser: 101
+        runAsGroup: 101
         seccompProfile:
           type: RuntimeDefault
       # tmp emptyDir backs /tmp for the readOnlyRootFilesystem container —

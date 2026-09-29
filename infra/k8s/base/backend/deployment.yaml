@@ -17,6 +17,10 @@ spec:
       serviceAccountName: backend-sa
       securityContext:
         runAsNonRoot: true
+        # Numeric UID matching the image's `app` user — kubelet can't verify
+        # runAsNonRoot against a non-numeric USER directive.
+        runAsUser: 101
+        runAsGroup: 101
         seccompProfile:
           type: RuntimeDefault
       # Spread replicas across AZs and nodes — ScheduleAnyway (not

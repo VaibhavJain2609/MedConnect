@@ -16,6 +16,9 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
+        # Numeric UID matching the image's `nextjs` user (uid/gid 1001).
+        runAsUser: 1001
+        runAsGroup: 1001
       containers:
         - name: frontend
           image: medconnect-frontend:latest
