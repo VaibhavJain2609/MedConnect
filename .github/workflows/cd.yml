@@ -59,7 +59,7 @@ jobs:
           echo "frontend_image=${{ steps.ecr-login.outputs.registry }}/medconnect-frontend:${deploy_sha}" >> "$GITHUB_OUTPUT"
           echo "keycloak_image=${{ steps.ecr-login.outputs.registry }}/medconnect-keycloak:${deploy_sha}" >> "$GITHUB_OUTPUT"
 
-      - uses: docker/setup-buildx-action@v3 # pin: resolve tag to full commit SHA
+      - uses: docker/setup-buildx-action@v4 # pin: resolve tag to full commit SHA
 
       # ---- Stage 1: build all images into the local daemon (NO push) ----
       # Trivy scans the local image below; nothing reaches the immutable ECR
