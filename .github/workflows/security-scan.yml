@@ -28,7 +28,7 @@ jobs:
         # 'javascript' CodeQL language — there is no separate 'typescript').
         language: [javascript, python]
     steps:
-      - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA
+      - uses: actions/checkout@v7 # pin: resolve tag to full commit SHA
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3 # pin: resolve tag to full commit SHA
@@ -62,7 +62,7 @@ jobs:
       matrix:
         repo: [medconnect-backend, medconnect-frontend, medconnect-keycloak]
     steps:
-      - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA
+      - uses: actions/checkout@v7 # pin: resolve tag to full commit SHA
         # checkout only for .trivyignore
 
       - uses: aws-actions/configure-aws-credentials@v4 # pin: resolve tag to full commit SHA

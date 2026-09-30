@@ -36,7 +36,7 @@ jobs:
       # Check out the exact commit CI validated (workflow_run's head_sha);
       # github.sha on a workflow_run event is the default-branch head, which
       # can move past the commit that was actually tested.
-      - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA
+      - uses: actions/checkout@v7 # pin: resolve tag to full commit SHA
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 

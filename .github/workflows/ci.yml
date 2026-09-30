@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA (supply-chain hardening)
+      - uses: actions/checkout@v7 # pin: resolve tag to full commit SHA (supply-chain hardening)
         with:
           fetch-depth: 0
       - uses: gitleaks/gitleaks-action@v2 # pin: resolve tag to full commit SHA
@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA
+      - uses: actions/checkout@v7 # pin: resolve tag to full commit SHA
       - uses: actions/dependency-review-action@v4 # pin: resolve tag to full commit SHA
         with:
           fail-on-severity: high
@@ -86,7 +86,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA
+      - uses: actions/checkout@v7 # pin: resolve tag to full commit SHA
 
       - uses: actions/setup-python@v5 # pin: resolve tag to full commit SHA
         with:
@@ -142,7 +142,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA
+      - uses: actions/checkout@v7 # pin: resolve tag to full commit SHA
 
       - uses: actions/setup-node@v4 # pin: resolve tag to full commit SHA
         with:
@@ -188,7 +188,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA
+      - uses: actions/checkout@v7 # pin: resolve tag to full commit SHA
 
       - uses: actions/setup-python@v5 # pin: resolve tag to full commit SHA
         with:
@@ -236,7 +236,7 @@ jobs:
           - context: postgres
             scope: postgres
     steps:
-      - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA
+      - uses: actions/checkout@v7 # pin: resolve tag to full commit SHA
 
       - uses: docker/setup-buildx-action@v3 # pin: resolve tag to full commit SHA
 
@@ -275,7 +275,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA
+      - uses: actions/checkout@v7 # pin: resolve tag to full commit SHA
       - uses: hashicorp/setup-terraform@v3 # pin: resolve tag to full commit SHA
         with:
           terraform_version: "1.9.8"
@@ -288,7 +288,7 @@ jobs:
       matrix:
         environment: [shared, staging, prod]
     steps:
-      - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA
+      - uses: actions/checkout@v7 # pin: resolve tag to full commit SHA
       - uses: hashicorp/setup-terraform@v3 # pin: resolve tag to full commit SHA
         with:
           terraform_version: "1.9.8"
@@ -306,7 +306,7 @@ jobs:
       matrix:
         overlay: [staging, prod]
     steps:
-      - uses: actions/checkout@v4 # pin: resolve tag to full commit SHA
+      - uses: actions/checkout@v7 # pin: resolve tag to full commit SHA
 
       - name: Render overlay
         run: kubectl kustomize infra/k8s/overlays/${{ matrix.overlay }} > /tmp/rendered.yaml
