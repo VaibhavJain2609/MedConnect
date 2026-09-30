@@ -30,7 +30,7 @@ patches:
         value: https://auth-prod.medconnect.jainvaibhav.me
       - op: replace
         path: /data/NEXT_PUBLIC_API_URL
-        value: https://prod.medconnect.jainvaibhav.me/api
+        value: https://prod.medconnect.jainvaibhav.me
       # Internal cluster DNS for the keycloak Service — namespace-qualified to
       # this overlay's namespace. Deliberately NOT the bare `http://keycloak:8080`
       # literal, which Settings.check_production_config() rejects under
