@@ -172,7 +172,7 @@ async def populate_interactions(db: AsyncSession, dry_run: bool = False):
 
                 # Create interaction
                 try:
-                    interaction = await InteractionService.create_interaction(
+                    await InteractionService.create_interaction(
                         db=db,
                         salt_id_1=salt1.salt_id,
                         salt_id_2=salt2.salt_id,

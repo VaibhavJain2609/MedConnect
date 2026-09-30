@@ -1,7 +1,6 @@
 """Tests for drug interaction detection (MD-18)."""
 
 import pytest
-from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.medicine.salts import Salt

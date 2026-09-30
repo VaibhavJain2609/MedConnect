@@ -6,6 +6,13 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.medical_record import MedicalRecord
+    from app.models.prescription import Prescription
+    from app.models.prescription_template import PrescriptionTemplate
+    from app.models.user import User
 
 
 class Doctor(Base):

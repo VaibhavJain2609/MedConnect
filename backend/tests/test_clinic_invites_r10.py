@@ -21,7 +21,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.clinic import Clinic, ClinicMembership
-from app.models.clinic_invite import ClinicInvite, ClinicJoinRequest
+from app.models.clinic_invite import ClinicInvite
 from app.models.notification import Notification
 from app.models.user import User
 from tests.conftest import make_auth_header

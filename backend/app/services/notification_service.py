@@ -1,11 +1,10 @@
 import uuid
-from datetime import datetime
 from typing import Optional, Sequence
 
 from sqlalchemy import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.notification import Notification, NotificationType
+from app.models.notification import Notification
 
 
 async def create_notification(

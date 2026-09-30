@@ -6,6 +6,11 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.clinic import Clinic, ClinicBranch
+    from app.models.doctor import Doctor
 
 # TIMEZONE ASSUMPTION (documented, revisit before multi-region launch):
 # start_time / end_time are stored as NAIVE wall-clock times representing the

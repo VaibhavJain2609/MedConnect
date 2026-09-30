@@ -14,7 +14,7 @@ The task is invoked directly with the conftest session factory — it only
 needs ``ctx["db_session_factory"]``; ``now`` is injected for determinism.
 """
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 import pytest

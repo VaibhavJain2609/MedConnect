@@ -16,7 +16,7 @@ from app.models.medical_record import MedicalRecord
 from app.models.notification import NotificationType
 from app.models.user import User
 from app.schemas.common import PaginatedResponse, PaginationMeta
-from app.schemas.record import RecordResponse, VALID_RECORD_TYPES, _validate_document_url
+from app.schemas.record import RecordResponse, _validate_document_url
 from app.schemas.user import MedicalHistoryUpdate, PatientProfileUpdate
 from app.services.audit_service import log_change
 from app.services.erasure_service import request_patient_erasure
@@ -610,7 +610,7 @@ async def search_doctors(
             Doctor.deleted_at.is_(None),
             User.deleted_at.is_(None),
             User.is_active.is_(True),
-            Doctor.verified == True,
+            Doctor.verified.is_(True),
             or_(
                 func.lower(User.full_name).like(search_term),
                 func.lower(Doctor.specialization).like(search_term),

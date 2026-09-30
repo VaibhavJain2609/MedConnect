@@ -347,7 +347,7 @@ async def test_channel_filtering_honours_prefs_and_platform_switch(
             },
         )
     )
-    rx = await _make_prescription(
+    await _make_prescription(
         db, patient_user.id, doctor_profile.id, date.today() + timedelta(days=2)
     )
 

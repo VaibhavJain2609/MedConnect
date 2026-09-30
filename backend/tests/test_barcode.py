@@ -13,9 +13,8 @@ import pytest
 import pytest_asyncio
 from uuid import uuid4
 
-from sqlalchemy import select
 
-from app.models.medicine.commercial import Brand, BrandComposition
+from app.models.medicine.commercial import Brand
 from app.models.medicine.packaging import BrandPackaging, PackForm
 
 pytestmark = pytest.mark.asyncio

@@ -21,7 +21,6 @@ from app.models.clinic import Clinic, ClinicMembership
 from app.models.doctor import Doctor
 from app.models.patient_link import PatientClinicLink
 from app.models.user import User
-from tests.conftest import create_test_token
 
 pytestmark = pytest.mark.asyncio
 

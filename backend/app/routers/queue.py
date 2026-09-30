@@ -7,7 +7,7 @@ patient check-in (add_to_queue) and status advancement — so no endpoint here
 may assume the member is a doctor.
 """
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status

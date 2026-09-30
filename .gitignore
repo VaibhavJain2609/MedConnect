@@ -63,3 +63,6 @@ analysis/
 # backend/scripts/export_openapi.py; the committed artifact is
 # frontend/src/lib/api/schema.d.ts (CI verifies it stays in sync).
 frontend/openapi.json
+
+# jest coverage output (test:ci)
+frontend/coverage/

@@ -1,6 +1,5 @@
 """Schemas for clinic webhook endpoints + delivery log."""
 from datetime import datetime
-from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 

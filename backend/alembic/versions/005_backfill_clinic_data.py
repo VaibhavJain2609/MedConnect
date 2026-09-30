@@ -10,7 +10,6 @@ and prescriptions, and marks existing verified doctors as onboarding_step=comple
 """
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID
 
 revision = "005_backfill_clinic_data"
 down_revision = "004_add_clinic_models"

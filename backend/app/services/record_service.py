@@ -3,7 +3,6 @@ from uuid import UUID
 
 from sqlalchemy import and_, func, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
 
 from app.models.doctor import Doctor
 from app.models.medical_record import MedicalRecord

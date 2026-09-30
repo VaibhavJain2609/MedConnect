@@ -6,6 +6,12 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.doctor import Doctor
+    from app.models.prescription import Prescription
+    from app.models.user import User
 
 
 class MedicalRecord(Base):

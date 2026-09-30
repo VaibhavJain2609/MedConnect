@@ -1,5 +1,4 @@
 """Tests for rate limiting middleware (MD-141)."""
-import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

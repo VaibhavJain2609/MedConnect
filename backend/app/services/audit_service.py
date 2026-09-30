@@ -1,5 +1,4 @@
 from contextvars import ContextVar
-from typing import Any
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession

@@ -219,7 +219,6 @@ async def get_patient_profile(
 
     # Determine whether clinic access has been revoked (for UI indication)
     from sqlalchemy import select as _select
-    from datetime import datetime, timezone
     access_status = "active"
     revoked_at = None
     clinic_link = await db.execute(
@@ -970,7 +969,6 @@ async def list_prescriptions(
     Returns medical records of type 'prescription' with patient info.
     """
     from sqlalchemy import and_, select
-    from sqlalchemy.orm import joinedload
     from app.models.medical_record import MedicalRecord
 
     _, doctor = doctor_info
@@ -1083,7 +1081,7 @@ async def get_prescription(
     """
     Get a single prescription with patient and doctor info (for print view).
     """
-    from sqlalchemy import select, or_
+    from sqlalchemy import select
     from app.models.prescription import Prescription
 
     user, doctor = doctor_info

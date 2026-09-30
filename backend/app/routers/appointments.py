@@ -9,11 +9,10 @@ from sqlalchemy import cast, func, select, update
 from sqlalchemy.dialects.postgresql import INTERVAL
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
 
 from app.config import settings
 from app.database import get_db
-from app.dependencies import get_active_clinic, get_current_doctor, get_current_user, require_active_clinic, require_admin, require_patient
+from app.dependencies import get_active_clinic, get_current_user, require_active_clinic, require_patient
 from app.idempotency import IdempotentRoute, idempotent
 from app.models.appointment import Appointment
 from app.models.clinic import Clinic, ClinicBranch, ClinicMembership

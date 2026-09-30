@@ -18,7 +18,6 @@ plain coroutine that only needs ``ctx["db_session_factory"]``.
 import uuid
 from datetime import datetime, timedelta, timezone
 
-import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 

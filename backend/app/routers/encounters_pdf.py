@@ -143,11 +143,6 @@ def _build_pdf(
         leading=14,
         textColor=colors.HexColor("#374151"),
     )
-    style_label = ParagraphStyle(
-        "Label",
-        parent=style_normal,
-        textColor=colors.HexColor("#6B7280"),
-    )
     style_footer = ParagraphStyle(
         "Footer",
         parent=style_normal,

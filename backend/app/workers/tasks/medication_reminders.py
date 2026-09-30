@@ -24,7 +24,6 @@ count — dismissing the banner must not trigger a resend of the same slot.
 
 PHI note: never log names, bodies, or other PHI — identifiers only.
 """
-import uuid
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 

@@ -6,9 +6,8 @@ import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.notification import Notification, NotificationPreferences, NotificationType
+from app.models.notification import Notification, NotificationType
 from app.models.user import User
-from tests.conftest import create_test_token
 
 
 @pytest_asyncio.fixture(scope="function")

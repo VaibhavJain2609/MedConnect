@@ -13,7 +13,7 @@ Covers:
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 
 import pytest
 import pytest_asyncio
@@ -27,6 +27,7 @@ from app.models.patient_link import PatientClinicLink
 from app.models.record_access import RecordAccessConsent
 from app.models.user import User
 from tests.conftest import make_auth_header
+import httpx
 
 pytestmark = pytest.mark.asyncio
 

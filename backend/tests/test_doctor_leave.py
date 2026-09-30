@@ -190,12 +190,12 @@ async def test_list_scoped_to_owning_doctor(client, db: AsyncSession):
     ).status_code == 201
 
     res = await client.get(LEAVES_URL)
-    dates = [l["date"] for l in res.json()["data"]]
+    dates = [leave["date"] for leave in res.json()["data"]]
     assert dates == ["2026-03-01"]
 
     _auth(client, user_a)
     res = await client.get(LEAVES_URL)
-    dates = [l["date"] for l in res.json()["data"]]
+    dates = [leave["date"] for leave in res.json()["data"]]
     assert dates == ["2026-01-26", "2026-02-14"]
 
 

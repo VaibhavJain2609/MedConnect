@@ -8,9 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import (
     Salt,
     SaltStrength,
-    ChemicalClass,
-    TherapeuticClass,
-    ActionClass,
     SaltSideEffect,
     SaltContraindication,
 )

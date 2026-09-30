@@ -1,7 +1,6 @@
 """Test duplicate prevention constraints for MD-29."""
 
 import pytest
-from uuid import uuid4
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 

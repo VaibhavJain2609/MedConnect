@@ -3232,6 +3232,122 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/messages/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Threads
+         * @description List threads. With X-Clinic-Id → that clinic's inbox (membership
+         *     enforced by get_active_clinic). Without → the caller's own patient
+         *     threads. No admin/global view — blast radius stays per-participant.
+         */
+        get: operations["list_threads_api_v1_messages_threads_get"];
+        put?: never;
+        /**
+         * Create Thread
+         * @description Start a thread with a clinic — requires an APPROVED PatientClinicLink.
+         */
+        post: operations["create_thread_api_v1_messages_threads_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/messages/threads/{thread_id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Close Thread
+         * @description Close a thread — allowed by either participant. Idempotent.
+         */
+        patch: operations["close_thread_api_v1_messages_threads__thread_id__close_patch"];
+        trace?: never;
+    };
+    "/api/v1/messages/threads/{thread_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Messages
+         * @description Message history for a participant. Reading marks the caller's side
+         *     seen (moves the read cursor past the latest message).
+         */
+        get: operations["list_messages_api_v1_messages_threads__thread_id__messages_get"];
+        put?: never;
+        /**
+         * Post Message
+         * @description Reply in a thread. Participants only; closed threads reject with 409.
+         */
+        post: operations["post_message_api_v1_messages_threads__thread_id__messages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/messages/threads/{thread_id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Reopen Thread
+         * @description Reopen a closed thread — patient only (clinic staff get 403 via
+         *     require_patient).
+         */
+        patch: operations["reopen_thread_api_v1_messages_threads__thread_id__reopen_patch"];
+        trace?: never;
+    };
+    "/api/v1/messages/threads/unread-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Unread Count
+         * @description Unread badge counts for the caller's side.
+         *
+         *     Patient (no X-Clinic-Id): across their own threads. Clinic staff
+         *     (X-Clinic-Id): across that clinic's threads, using the shared clinic
+         *     read cursor.
+         */
+        get: operations["unread_count_api_v1_messages_threads_unread_count_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/notifications": {
         parameters: {
             query?: never;
@@ -3631,6 +3747,38 @@ export interface paths {
         };
         /** Get Link Code */
         get: operations["get_link_code_api_v1_patients_link_code_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/me/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export My Data
+         * @description DPDP right to access — download a full JSON dump of the caller's own data.
+         *
+         *     Sections: profile, medical_history, medical_records, prescriptions,
+         *     appointments, vitals, lab_results, queue_history, notifications,
+         *     family_members, clinic_consents. Strictly own-scoped (patient_id /
+         *     user_id / owner_user_id == caller). Document file binaries are not
+         *     embedded — ``document_url`` references only (see ``documents_note``).
+         *
+         *     Rate-limited well below generic read limits (see
+         *     ``_ENDPOINT_LIMITS`` in ``app/middleware/rate_limit.py``) because this
+         *     is a full-PHI dump. Each export writes an EXPORT audit row (same
+         *     convention as the admin CSV exports) and a self-notification so the
+         *     account owner can spot an unexpected export.
+         */
+        get: operations["export_my_data_api_v1_patients_me_export_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5943,6 +6091,12 @@ export interface components {
             facility_name?: string | null;
             /** License Number */
             license_number?: string | null;
+            /** Qualifications */
+            qualifications?: string | null;
+            /** Registration Number */
+            registration_number?: string | null;
+            /** Signature Url */
+            signature_url?: string | null;
             /** Specialization */
             specialization?: string | null;
         };
@@ -5959,6 +6113,12 @@ export interface components {
             id: string;
             /** License Number */
             license_number: string | null;
+            /** Qualifications */
+            qualifications?: string | null;
+            /** Registration Number */
+            registration_number?: string | null;
+            /** Signature Url */
+            signature_url?: string | null;
             /** Specialization */
             specialization: string | null;
             /**
@@ -6435,6 +6595,11 @@ export interface components {
             /** Times Of Day */
             times_of_day?: string[] | null;
         };
+        /** MessageCreate */
+        MessageCreate: {
+            /** Body */
+            body: string;
+        };
         /**
          * NotificationPreferencesResponse
          * @description Bare preferences map returned by GET/PUT /notifications/preferences.
@@ -6597,6 +6762,8 @@ export interface components {
         };
         /** PatientProfileUpdate */
         PatientProfileUpdate: {
+            /** Date Of Birth */
+            date_of_birth?: string | null;
             /** Emergency Contact Name */
             emergency_contact_name?: string | null;
             /** Emergency Contact Phone */
@@ -6605,6 +6772,8 @@ export interface components {
             language_pref?: string | null;
             /** Phone */
             phone?: string | null;
+            /** Sex */
+            sex?: string | null;
         };
         /** PatientRecordCreate */
         PatientRecordCreate: {
@@ -7306,6 +7475,18 @@ export interface components {
              * Format: uuid
              */
             therapeutic_class_id: string;
+        };
+        /** ThreadCreate */
+        ThreadCreate: {
+            /** Body */
+            body: string;
+            /**
+             * Clinic Id
+             * Format: uuid
+             */
+            clinic_id: string;
+            /** Subject */
+            subject: string;
         };
         /**
          * UnifiedSearchResponse
@@ -13705,6 +13886,237 @@ export interface operations {
             };
         };
     };
+    list_threads_api_v1_messages_threads_get: {
+        parameters: {
+            query?: {
+                status_filter?: string | null;
+            };
+            header?: {
+                "X-Clinic-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_thread_api_v1_messages_threads_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThreadCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    close_thread_api_v1_messages_threads__thread_id__close_patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Clinic-Id"?: string | null;
+            };
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_messages_api_v1_messages_threads__thread_id__messages_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Clinic-Id"?: string | null;
+            };
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_message_api_v1_messages_threads__thread_id__messages_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Clinic-Id"?: string | null;
+            };
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_thread_api_v1_messages_threads__thread_id__reopen_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unread_count_api_v1_messages_threads_unread_count_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Clinic-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_notifications_api_v1_notifications_get: {
         parameters: {
             query?: {
@@ -14278,6 +14690,26 @@ export interface operations {
         };
     };
     get_link_code_api_v1_patients_link_code_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    export_my_data_api_v1_patients_me_export_get: {
         parameters: {
             query?: never;
             header?: never;

@@ -20,7 +20,6 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 import pytest
-import pytest_asyncio
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,7 +28,6 @@ from app.models.appointment import Appointment
 from app.models.clinic import Clinic, ClinicMembership
 from app.models.doctor import Doctor
 from app.models.encounter import Encounter
-from app.models.patient_link import PatientClinicLink
 from app.models.user import User
 from tests.conftest import make_auth_header
 

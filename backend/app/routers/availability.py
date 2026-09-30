@@ -275,7 +275,7 @@ async def list_my_leaves(
         .order_by(DoctorLeave.date.asc())
     )
     leaves = res.scalars().all()
-    return {"data": [_serialize_leave(l) for l in leaves]}
+    return {"data": [_serialize_leave(leave) for leave in leaves]}
 
 
 @router.post("/me/leaves", status_code=status.HTTP_201_CREATED)

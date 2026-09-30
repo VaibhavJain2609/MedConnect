@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_active_clinic, get_verified_doctor, require_active_clinic, require_patient
+from app.dependencies import get_verified_doctor, require_active_clinic, require_patient
 from app.models.clinic import Clinic
 from app.models.doctor import Doctor
 from app.models.patient_link import PatientClinicLink

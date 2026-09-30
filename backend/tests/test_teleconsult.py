@@ -20,7 +20,7 @@ from app.models.appointment import Appointment
 from app.models.clinic import Clinic, ClinicMembership
 from app.models.doctor import Doctor
 from app.models.user import User
-from tests.conftest import create_test_token, make_auth_header
+from tests.conftest import make_auth_header
 
 pytestmark = pytest.mark.asyncio
 

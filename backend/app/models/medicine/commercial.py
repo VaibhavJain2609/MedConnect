@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from .salts import SaltStrength
     from .packaging import BrandPackaging
     from .audit import PrescriptionAudit
+    from .clinical_safety import BrandSideEffect
 
 
 class Manufacturer(MedicineBase):

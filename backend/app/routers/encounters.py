@@ -36,7 +36,6 @@ from app.routers.appointments import (
 )
 from app.schemas.encounter import (
     EncounterCreate,
-    EncounterResponse,
     EncounterUpdate,
     FollowUpCreate,
 )

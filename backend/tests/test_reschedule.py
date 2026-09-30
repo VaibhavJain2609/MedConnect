@@ -26,7 +26,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.appointment import Appointment
 from app.models.clinic import Clinic
-from app.models.doctor import Doctor
 from app.models.notification import Notification
 from app.models.patient_link import PatientClinicLink
 from app.models.user import User

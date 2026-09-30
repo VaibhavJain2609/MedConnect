@@ -129,8 +129,8 @@ async def autocomplete_medicines(
     """
     from sqlalchemy import select, case
     from sqlalchemy.orm import selectinload, joinedload
-    from app.models.medicine.commercial import Brand, BrandComposition, Manufacturer
-    from app.models.medicine.salts import SaltStrength, Salt
+    from app.models.medicine.commercial import Brand, BrandComposition
+    from app.models.medicine.salts import SaltStrength
 
     cache_key = medicine_cache.make_key("autocomplete", q.strip().lower())
     cached = await medicine_cache.get_cached(cache_key)
@@ -159,7 +159,7 @@ async def autocomplete_medicines(
         )
         .where(
             Brand.brand_name.ilike(f"%{q}%"),
-            Brand.is_discontinued == False
+            Brand.is_discontinued.is_(False)
         )
         .order_by(rank_expr, Brand.brand_name)
         .limit(20)  # Fetch 20 to have better results after ranking

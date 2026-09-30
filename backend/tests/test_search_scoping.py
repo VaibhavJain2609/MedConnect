@@ -27,7 +27,6 @@ from app.models.medical_record import MedicalRecord
 from app.models.prescription import Prescription
 from app.models.patient_link import PatientClinicLink
 from app.models.user import User
-from tests.conftest import create_test_token
 
 pytestmark = pytest.mark.asyncio
 
@@ -246,7 +245,7 @@ async def test_doctor_patient_search_returns_only_accessible(
     does not."""
     linked = await make_patient(db, "Aarav Scopecheck")
     await link_patient_to_doctors_clinic(db, doctor_user, linked, "approved")
-    stranger = await make_patient(db, "Aarav Scopecheck")
+    await make_patient(db, "Aarav Scopecheck")
 
     resp = await doctor_client.get(
         SEARCH_URL, params={"q": "scopecheck", "type": "patient"}
@@ -360,7 +359,7 @@ async def test_admin_clinic_search_includes_inactive(
 async def test_patient_clinic_search_excludes_inactive(
     patient_client: AsyncClient, db: AsyncSession
 ):
-    inactive = await make_clinic(db, "Hiddenwing Clinic", is_active=False)
+    await make_clinic(db, "Hiddenwing Clinic", is_active=False)
     active = await make_clinic(db, "Hiddenwing Annex", is_active=True)
 
     resp = await patient_client.get(SEARCH_URL, params={"q": "hiddenwing"})

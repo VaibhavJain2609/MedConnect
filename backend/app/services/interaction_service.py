@@ -1,7 +1,7 @@
 """Drug interaction detection service for MD-18."""
 
 from uuid import UUID
-from sqlalchemy import select, or_, and_, func, case
+from sqlalchemy import select, or_, and_, case
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 

@@ -16,15 +16,6 @@ from sqlalchemy import text
 from app.database import medicine_engine, MedicineBase
 
 # Import all models to register them with MedicineBase
-from app.models.medicine.commercial import Manufacturer, Brand, BrandComposition
-from app.models.medicine.salts import Salt, SaltStrength
-from app.models.medicine.classifications import ChemicalClass, TherapeuticClass, ActionClass
-from app.models.medicine.packaging import PackForm, BrandPackaging
-from app.models.medicine.clinical_safety import SideEffect, Contraindication, SaltSideEffect, SaltContraindication, DrugInteraction
-from app.models.medicine.indications import Use, SaltUse
-from app.models.medicine.alternatives import SaltAlternative
-from app.models.medicine.dosing import DosingGuideline
-from app.models.medicine.audit import MedicineSearchLog, PrescriptionAudit
 
 
 async def init_medicine_db():

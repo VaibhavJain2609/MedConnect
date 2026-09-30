@@ -14,7 +14,6 @@ import uuid
 
 import pytest
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.models.reminder_log  # noqa: F401 — register for drop_all teardown
 from app.config import settings
@@ -22,7 +21,7 @@ from app.models.doctor import Doctor
 from app.models.lab_result import LabResult
 from app.models.user import User
 from app.services.providers.ocr import LabValueCandidate
-from tests.conftest import create_test_token, make_auth_header
+from tests.conftest import make_auth_header
 
 pytestmark = pytest.mark.asyncio
 

@@ -1,12 +1,10 @@
 """Tests for admin brand management endpoints."""
 
 import pytest
-from datetime import date
 from uuid import uuid4
 
-from app.models.medicine.commercial import Brand, Manufacturer, BrandComposition
+from app.models.medicine.commercial import Brand, BrandComposition
 from app.models.medicine.salts import Salt, SaltStrength
-from app.models.medicine.classifications import TherapeuticClass
 
 
 pytestmark = pytest.mark.asyncio

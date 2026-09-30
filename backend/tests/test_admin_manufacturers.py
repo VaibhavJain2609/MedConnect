@@ -219,7 +219,7 @@ class TestDeleteManufacturer:
         medicine_db.add(manufacturer)
         await medicine_db.flush()
 
-        from app.models.medicine.commercial import Brand, BrandComposition
+        from app.models.medicine.commercial import BrandComposition
         brand = Brand(
             brand_name="Test Brand",
             manufacturer_id=manufacturer.manufacturer_id,

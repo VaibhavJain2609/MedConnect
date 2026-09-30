@@ -45,7 +45,10 @@ describe('next.config.js security headers', () => {
   it('emits the baseline hardening set on every response', async () => {
     const headers = await headerMap();
     expect(headers.get('X-Content-Type-Options')).toBe('nosniff');
-    expect(headers.get('X-Frame-Options')).toBe('DENY');
+    // SAMEORIGIN, not DENY — keycloak-js's silent check-sso flow loads our
+    // own /silent-check-sso.html in a hidden iframe; cross-origin framing
+    // stays blocked via frame-ancestors 'self'.
+    expect(headers.get('X-Frame-Options')).toBe('SAMEORIGIN');
     expect(headers.get('Referrer-Policy')).toBe(
       'strict-origin-when-cross-origin'
     );
@@ -67,7 +70,7 @@ describe('next.config.js security headers', () => {
     expect(csp).toContain("script-src 'self' 'unsafe-eval' 'unsafe-inline'");
     expect(csp).toContain("style-src 'self' 'unsafe-inline'");
     expect(csp).toContain("img-src 'self' data: blob:");
-    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("frame-ancestors 'self'");
     expect(csp).toContain("object-src 'none'");
     expect(csp).toContain("base-uri 'self'");
     expect(csp).toContain("form-action 'self'");

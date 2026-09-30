@@ -19,7 +19,6 @@ import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-import pytest
 
 from app.config import settings
 from app.services import notification_channels

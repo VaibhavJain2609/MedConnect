@@ -12,7 +12,6 @@ from app.schemas.clinic import (
     AdminClinicDetailResponse,
     AdminClinicListItem,
     ClinicBranchCreate,
-    ClinicBranchListResponse,
     ClinicBranchResponse,
     ClinicCreate,
     ClinicMemberListResponse,

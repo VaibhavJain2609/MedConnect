@@ -23,14 +23,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_doctor, get_current_user, require_admin
+from app.dependencies import get_current_user
 from app.idempotency import IdempotentRoute, idempotent
 from app.models.appointment import Appointment
-from app.models.billing import BILLING_STATUSES, PAYMENT_METHODS, Billing, BillingItem
+from app.models.billing import BILLING_STATUSES, Billing, BillingItem
 from app.models.clinic import Clinic, ClinicMembership
 from app.models.doctor import Doctor
 from app.models.user import User
-from app.schemas.billing import BillingCreate, BillingListResponse, BillingResponse, BillingUpdate
+from app.schemas.billing import BillingCreate, BillingUpdate
 from app.utils.pdf import fmt_date as _fmt_date
 
 router = APIRouter(
@@ -575,11 +575,6 @@ def _build_receipt_pdf(
         fontName="Helvetica-Bold",
         textColor=colors.HexColor("#4169E1"),
         alignment=1,
-    )
-    style_label = ParagraphStyle(
-        "Label",
-        parent=style_normal,
-        textColor=colors.HexColor("#6B7280"),
     )
     style_footer = ParagraphStyle(
         "Footer",

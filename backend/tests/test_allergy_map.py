@@ -17,7 +17,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
-from tests.conftest import grant_doctor_patient_relationship, make_auth_header
+from tests.conftest import grant_doctor_patient_relationship
 
 URL = "/api/v1/interactions/check-allergies"
 

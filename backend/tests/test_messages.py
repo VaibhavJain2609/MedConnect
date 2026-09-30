@@ -421,7 +421,7 @@ async def test_patient_can_close_own_thread(
 async def test_status_filter(
     client, patient_user, clinic, approved_link, clinic_membership
 ):
-    t1 = await _create_thread(client, patient_user, clinic.id, "Open one")
+    await _create_thread(client, patient_user, clinic.id, "Open one")
     t2 = await _create_thread(client, patient_user, clinic.id, "Closed one")
     await client.patch(f"{API}/threads/{t2['id']}/close", headers=_hdr(patient_user))
 

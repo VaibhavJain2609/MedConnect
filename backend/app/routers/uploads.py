@@ -25,7 +25,6 @@ from app.models.doctor import Doctor
 from app.models.medical_record import MedicalRecord
 from app.models.patient_link import PatientClinicLink
 from app.models.user import User
-from app.services import access_service
 from app.services.storage_service import (
     MAX_UPLOAD_BYTES,
     generate_presigned_upload,

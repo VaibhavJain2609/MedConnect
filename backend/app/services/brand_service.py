@@ -10,7 +10,6 @@ from app.models import (
     Manufacturer,
     BrandComposition,
     SaltStrength,
-    Salt,
     BrandSideEffect,
     BrandPackaging,
 )
@@ -84,7 +83,7 @@ class BrandService:
 
         # Discontinued filter
         if not include_discontinued:
-            count_query = count_query.where(Brand.is_discontinued == False)
+            count_query = count_query.where(Brand.is_discontinued.is_(False))
 
         # Get total count
         total = await db.scalar(count_query)
@@ -108,7 +107,7 @@ class BrandService:
             query = query.where(Brand.manufacturer_id == manufacturer_id)
 
         if not include_discontinued:
-            query = query.where(Brand.is_discontinued == False)
+            query = query.where(Brand.is_discontinued.is_(False))
 
         # Apply pagination
         query = query.order_by(Brand.brand_name).limit(limit).offset(offset)
@@ -136,7 +135,7 @@ class BrandService:
             )
             .where(
                 Brand.packaging.any(BrandPackaging.barcode == barcode),
-                Brand.is_discontinued == False,
+                Brand.is_discontinued.is_(False),
             )
             .order_by(Brand.brand_name)
         )
@@ -187,7 +186,7 @@ class BrandService:
                 Brand.brand_id.in_(select(matching_brands_subquery.c.brand_id)),
                 Brand.brand_id.in_(select(brands_with_correct_count.c.brand_id)),
                 Brand.brand_id != brand_id,
-                Brand.is_discontinued == False,
+                Brand.is_discontinued.is_(False),
             )
             .order_by(Brand.brand_name)
             .limit(20)

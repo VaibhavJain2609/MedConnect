@@ -7,6 +7,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.orm import relationship as orm_relationship
 
 from app.database import Base
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 # Dependents are data profiles owned by a patient account — NOT full users.
 # Validated at the API layer (app/schemas/family.py); kept in sync here for

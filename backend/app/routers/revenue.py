@@ -7,15 +7,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_active_clinic, get_current_user, require_admin
+from app.dependencies import get_current_user
 from app.models.billing import Billing
-from app.models.clinic import Clinic, ClinicMembership
+from app.models.clinic import ClinicMembership
 from app.models.user import User
-from app.schemas.billing import (
-    DailyRevenueResponse,
-    MonthlyRevenueResponse,
-    UnpaidSummaryResponse,
-)
 
 router = APIRouter(prefix="/api/v1/revenue", tags=["revenue"])
 

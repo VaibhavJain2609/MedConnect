@@ -7,11 +7,9 @@ _audit_filters; these tests cover the response shape, filter parity, the
 
 import csv
 import io
-import json
 import uuid
 from datetime import datetime, timedelta, timezone
 
-import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
