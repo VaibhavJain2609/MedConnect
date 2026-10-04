@@ -5,7 +5,7 @@
 # Pinning policy: base images are pinned to a specific patch tag (never
 # `latest` or bare major). Bump deliberately after reviewing changelogs.
 
-FROM python:3.12.12-slim AS builder
+FROM python:3.14.7-slim AS builder
 
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
@@ -21,7 +21,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-FROM python:3.12.12-slim AS runtime
+FROM python:3.14.7-slim AS runtime
 
 WORKDIR /app
 
