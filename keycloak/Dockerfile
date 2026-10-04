@@ -1,7 +1,7 @@
 # Pinned to a specific patch release — the previous tag (24.0) is EOL.
 # Latest 26.x at time of pinning; bump deliberately after reviewing
 # https://www.keycloak.org/docs/latest/release_notes/
-FROM quay.io/keycloak/keycloak:26.7.4
+FROM quay.io/keycloak/keycloak:26.8.0
 
 # NOTE: the realm-export.json baked into the image here is the docker-compose
 # local-dev realm (compose runs `command: start-dev`; permissive settings —
